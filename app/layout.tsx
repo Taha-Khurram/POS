@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Inter } from "next/font/google";
-import { Nav } from "@/components/site/nav";
-import { Footer } from "@/components/site/footer";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -38,20 +36,24 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
+/**
+ * The only root layout: html, body, fonts. Chrome belongs to the route groups —
+ * `(site)` adds Nav and Footer, `(app)` swaps to the light register shell, and
+ * `(admin)` renders the console. Keeping one root layout means one font load and
+ * no full page reload when moving between groups.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       className={`${jakarta.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full">
         {/* Reveal animations start hidden, so show everything if JS never runs */}
         <noscript>
           <style>{`[data-reveal]{opacity:1!important;transform:none!important;filter:none!important}`}</style>
         </noscript>
-        <Nav />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        {children}
       </body>
     </html>
   );

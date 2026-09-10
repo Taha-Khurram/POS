@@ -34,6 +34,17 @@
   --color-mint-400: #34d399;
   --color-sun-400: #fbbf24;
 
+  /* Register surfaces — the counter is lit, not dark. Dark glass does not
+     belong under a tube light at 2 pm, so /app runs its own light scale while
+     the marketing site and /admin keep the ink-* stack. */
+  --color-paper-50: #ffffff;
+  --color-paper-100: #f4f5f8;
+  --color-paper-200: #e6e8ee;
+  --color-paper-300: #cfd3dd;
+  --color-graphite-500: #64708a;
+  --color-graphite-700: #3b4557;
+  --color-graphite-900: #171b26;
+
   /* Type */
   --font-display: var(--font-jakarta), "Segoe UI", system-ui, sans-serif;
   --font-sans: var(--font-inter), "Segoe UI", system-ui, sans-serif;
@@ -208,6 +219,29 @@
   .section {
     position: relative;
     padding-block: clamp(64px, 8vw, 112px);
+  }
+
+  /* ---------------- Register shell (/app) ----------------
+     Overrides the dark body for the counter. `color-scheme: light` matters as
+     much as the colours — it is what stops the browser rendering form controls
+     and scrollbars dark inside an otherwise white screen. */
+
+  .pos-root {
+    color-scheme: light;
+    min-height: 100%;
+    background-color: var(--color-paper-100);
+    color: var(--color-graphite-900);
+  }
+
+  .pos-root :is(h1, h2, h3, h4) {
+    color: var(--color-graphite-900);
+    letter-spacing: -0.02em;
+  }
+
+  .pos-card {
+    background-color: var(--color-paper-50);
+    border: 1px solid var(--color-paper-200);
+    border-radius: 16px;
   }
 
   /* ---------------- Type ---------------- */
