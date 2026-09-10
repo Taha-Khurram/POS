@@ -39,10 +39,7 @@ export function DashboardMock() {
         {/* ---------- App chrome ---------- */}
         <div className="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
-            <FloMark className="h-5 w-5" />
-            <span className="font-display text-[0.8125rem] font-bold text-mist-50">
-              Flo
-            </span>
+            <FloMark className="h-5 w-auto" />
           </div>
 
           <div className="hidden items-center gap-0.5 rounded-full border border-white/8 bg-white/[0.03] p-0.5 md:flex">

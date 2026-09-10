@@ -75,10 +75,10 @@ export function Nav() {
             aria-label="Flo — home"
             className="group flex shrink-0 items-center gap-2.5 rounded-full pl-2 pr-3 py-1"
           >
-            <FloMark className="h-7 w-7 transition-transform duration-500 ease-[var(--ease-out-back)] group-hover:rotate-[-8deg] group-hover:scale-110" />
-            <span className="font-display text-[1.0625rem] font-bold tracking-tight text-mist-50">
-              Flo
-            </span>
+            <FloMark
+              priority
+              className="h-7 w-auto transition-transform duration-500 ease-[var(--ease-out-back)] group-hover:scale-110"
+            />
           </Link>
 
           <ul className="hidden items-center gap-8 lg:flex">

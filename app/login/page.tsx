@@ -26,7 +26,7 @@ export default function LoginPage() {
       <div className="shell">
         <div className="mx-auto w-full max-w-[26rem]">
           <div className="text-center" style={entrance(60)}>
-            <FloMark className="mx-auto h-10 w-10" />
+            <FloMark priority className="mx-auto h-10 w-auto" />
             <h1 className="mt-5 font-display text-[1.75rem] font-bold">
               Welcome back
             </h1>

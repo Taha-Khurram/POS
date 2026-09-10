@@ -32,10 +32,7 @@ export function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
           <div>
             <Link href="/" className="flex items-center gap-2.5">
-              <FloMark className="h-7 w-7" />
-              <span className="font-display text-[1.0625rem] font-bold tracking-tight text-mist-50">
-                Flo
-              </span>
+              <FloMark className="h-7 w-auto" />
             </Link>
             <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
               Point of sale for Pakistani shops and restaurants — FBR-ready

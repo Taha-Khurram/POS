@@ -247,10 +247,7 @@ function MiniDashboard() {
     <div className="panel overflow-hidden rounded-xl shadow-[0_40px_90px_-40px_rgb(4_4_10/0.95)]">
       <div className="flex items-center justify-between border-b border-white/6 px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <FloMark className="h-3.5 w-3.5" />
-          <span className="font-display text-[0.5625rem] font-bold text-mist-50">
-            Flo
-          </span>
+          <FloMark className="h-3.5 w-auto" />
         </div>
         <div className="flex items-center gap-2 text-[0.4375rem] text-mist-500">
           <span className="rounded-full bg-white/8 px-1.5 py-[2px] text-mist-200">
