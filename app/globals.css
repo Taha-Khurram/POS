@@ -407,6 +407,57 @@
   .nav-link:hover { color: var(--color-mist-50); }
   .nav-link:hover::after { transform: scaleX(1); }
 
+  /* Current route — the underline stays drawn */
+  .nav-link[aria-current="page"] { color: var(--color-mist-50); }
+  .nav-link[aria-current="page"]::after { transform: scaleX(1); }
+
+  /* ---------------- Forms ---------------- */
+
+  .label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-mist-200);
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.03);
+    padding: 0.75rem 0.95rem;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    color: var(--color-mist-50);
+    transition:
+      border-color 0.3s var(--ease-out-soft),
+      background-color 0.3s var(--ease-out-soft),
+      box-shadow 0.3s var(--ease-out-soft);
+  }
+
+  .field::placeholder { color: var(--color-mist-500); }
+
+  .field:focus {
+    outline: none;
+    border-color: rgb(165 180 252 / 0.55);
+    background: rgb(255 255 255 / 0.05);
+    box-shadow: 0 0 0 4px rgb(99 102 241 / 0.14);
+  }
+
+  /* Select arrow, since `appearance: none` removes the UA one */
+  select.field {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--color-mist-400) 50%),
+      linear-gradient(135deg, var(--color-mist-400) 50%, transparent 50%);
+    background-position: right 1.05rem center, right 0.8rem center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  select.field option { background: var(--color-ink-800); }
+
   /* ---------------- Ambient light ---------------- */
 
   .glow {

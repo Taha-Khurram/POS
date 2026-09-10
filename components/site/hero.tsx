@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Starfield } from "./starfield";
 import { DashboardMock } from "./dashboard-mock";
 
@@ -56,12 +58,12 @@ export function Hero() {
             className="mt-9 flex flex-wrap items-center justify-center gap-3"
             style={entrance(420)}
           >
-            <a href="#demo" className="btn btn-primary">
+            <Link href="/demo" className="btn btn-primary">
               Book a demo
-            </a>
-            <a href="#pricing" className="btn btn-ghost">
-              Try it free
-            </a>
+            </Link>
+            <Link href="/pricing" className="btn btn-ghost">
+              See pricing
+            </Link>
           </div>
         </div>
 

@@ -4,7 +4,7 @@ import { FloMark } from "./flo-mark";
 
 export function Capabilities() {
   return (
-    <section id="pricing" className="section pt-0">
+    <section className="section pt-0">
       <div className="shell relative">
         <Reveal as="h2" className="heading mx-auto max-w-lg text-center">
           All-in-one platform capabilities

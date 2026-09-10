@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Reveal } from "@/components/motion/reveal";
 
 const PILLARS = [
@@ -25,7 +27,7 @@ const STUBS = [
 
 export function UnifiedPlatform() {
   return (
-    <section id="products" className="section">
+    <section className="section">
       <div
         aria-hidden
         className="glow left-1/2 top-24 h-72 w-[36rem] -translate-x-1/2 bg-iris-700/15"
@@ -135,6 +137,12 @@ export function UnifiedPlatform() {
             </div>
           </Reveal>
         </div>
+
+        <Reveal className="mt-12 flex justify-center" delay={160}>
+          <Link href="/products" className="btn btn-ghost">
+            Explore the platform
+          </Link>
+        </Reveal>
       </div>
     </section>
   );

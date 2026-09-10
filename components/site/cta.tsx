@@ -1,8 +1,10 @@
+import Link from "next/link";
+
 import { Reveal } from "@/components/motion/reveal";
 
 export function Cta() {
   return (
-    <section id="demo" className="relative isolate overflow-hidden pt-8 pb-28 sm:pb-36">
+    <section className="relative isolate overflow-hidden pt-8 pb-28 sm:pb-36">
       {/* ---------- Light pool ---------- */}
       <div aria-hidden className="absolute inset-0 -z-10">
         <div className="absolute inset-x-0 bottom-0 h-[78%] bg-[radial-gradient(80%_100%_at_50%_100%,#312e81_0%,#1b1b45_38%,#0a0a16_70%,transparent_100%)]" />
@@ -52,10 +54,17 @@ export function Cta() {
           running on your own menu.
         </Reveal>
 
-        <Reveal className="mt-10 flex justify-center" delay={300} scale={0.94}>
-          <a href="#demo" className="btn btn-primary px-10 py-4 text-base">
+        <Reveal
+          className="mt-10 flex flex-wrap items-center justify-center gap-3"
+          delay={300}
+          scale={0.94}
+        >
+          <Link href="/demo" className="btn btn-primary px-10 py-4 text-base">
             Book a demo
-          </a>
+          </Link>
+          <Link href="/pricing" className="btn btn-ghost px-8 py-4 text-base">
+            Compare plans
+          </Link>
         </Reveal>
       </div>
     </section>

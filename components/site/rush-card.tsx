@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Reveal } from "@/components/motion/reveal";
 
 /**
@@ -14,7 +16,7 @@ const TAGS = [
 
 export function RushCard() {
   return (
-    <section id="solutions" className="relative pb-4">
+    <section className="relative pb-4">
       <div className="shell">
         <Reveal
           className="panel rim relative overflow-hidden rounded-[24px] sm:rounded-[32px]"
@@ -39,6 +41,9 @@ export function RushCard() {
                 isn&rsquo;t — orders land, cards clear, and the line keeps
                 moving.
               </p>
+              <Link href="/solutions" className="btn btn-ghost btn-sm mt-6">
+                See Flo by industry
+              </Link>
             </div>
 
             {/* Hanging tags */}

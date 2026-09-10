@@ -50,7 +50,7 @@ const ROW_TWO: Pillar[] = [
 
 export function Foundation() {
   return (
-    <section id="careers" className="section">
+    <section className="section">
       <div
         aria-hidden
         className="glow left-1/2 top-1/3 h-80 w-[40rem] -translate-x-1/2 bg-iris-700/12"

@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FloMark } from "./flo-mark";
 
 const LINKS = [
-  { label: "Solutions", href: "#solutions" },
-  { label: "Products", href: "#products" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Careers", href: "#careers" },
-  { label: "Resources", href: "#resources" },
+  { label: "Solutions", href: "/solutions" },
+  { label: "Products", href: "/products" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Careers", href: "/careers" },
+  { label: "Resources", href: "/resources" },
 ];
 
 export function Nav() {
+  const pathname = usePathname();
   const [condensed, setCondensed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -40,6 +42,18 @@ export function Nav() {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
+  // A route change should never leave the sheet hanging open behind the page.
+  // Adjusted during render rather than in an effect, so the sheet is already
+  // closed on the frame the new route paints.
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setMenuOpen(false);
+  }
+
+  const isCurrent = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-4 sm:pt-5">
       <nav
@@ -57,7 +71,8 @@ export function Nav() {
       >
         <div className="flex items-center justify-between gap-3">
           <Link
-            href="#top"
+            href="/"
+            aria-label="Flo — home"
             className="group flex shrink-0 items-center gap-2.5 rounded-full pl-2 pr-3 py-1"
           >
             <FloMark className="h-7 w-7 transition-transform duration-500 ease-[var(--ease-out-back)] group-hover:rotate-[-8deg] group-hover:scale-110" />
@@ -69,17 +84,24 @@ export function Nav() {
           <ul className="hidden items-center gap-8 lg:flex">
             {LINKS.map((link) => (
               <li key={link.label}>
-                <a href={link.href} className="nav-link">
+                <Link
+                  href={link.href}
+                  className="nav-link"
+                  aria-current={isCurrent(link.href) ? "page" : undefined}
+                >
                   {link.label}
-                </a>
+                </Link>
               </li>
             ))}
           </ul>
 
           <div className="flex items-center gap-2">
-            <a href="#login" className="btn btn-primary btn-sm hidden sm:inline-flex">
+            <Link
+              href="/login"
+              className="btn btn-primary btn-sm hidden sm:inline-flex"
+            >
               Log in
-            </a>
+            </Link>
 
             <button
               type="button"
@@ -124,10 +146,15 @@ export function Nav() {
           <ul className="mt-3 grid gap-1 border-t border-white/8 px-2 pt-3 pb-2">
             {LINKS.map((link, index) => (
               <li key={link.label}>
-                <a
+                <Link
                   href={link.href}
+                  aria-current={isCurrent(link.href) ? "page" : undefined}
                   onClick={() => setMenuOpen(false)}
-                  className="block rounded-2xl px-4 py-3 font-display text-[0.9375rem] text-mist-300 transition-colors duration-300 hover:bg-white/5 hover:text-mist-50"
+                  className={`block rounded-2xl px-4 py-3 font-display text-[0.9375rem] transition-colors duration-300 hover:bg-white/5 hover:text-mist-50 ${
+                    isCurrent(link.href)
+                      ? "bg-white/5 text-mist-50"
+                      : "text-mist-300"
+                  }`}
                   style={{
                     animation: `float-in 0.5s var(--ease-out-soft) ${
                       index * 55
@@ -135,17 +162,17 @@ export function Nav() {
                   }}
                 >
                   {link.label}
-                </a>
+                </Link>
               </li>
             ))}
             <li className="px-2 pt-2 pb-1 sm:hidden">
-              <a
-                href="#login"
+              <Link
+                href="/login"
                 onClick={() => setMenuOpen(false)}
                 className="btn btn-primary w-full"
               >
                 Log in
-              </a>
+              </Link>
             </li>
           </ul>
         </div>
