@@ -2,6 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 
 import { createClient } from "@/utils/supabase/server";
 
@@ -41,23 +42,29 @@ function asMember<T extends readonly string[]>(
  *
  * Note the claim is `tenant_role`, not `role`: Supabase already uses `role` for
  * the Postgres role the request runs as.
+ *
+ * Wrapped in `cache()` so the gates below can be called from a layout, a page,
+ * and a `generateMetadata()` in the same request without re-verifying the token
+ * three times.
  */
-export async function getSessionContext(): Promise<SessionContext | null> {
-  const supabase = createClient(await cookies());
-  const { data, error } = await supabase.auth.getClaims();
+export const getSessionContext = cache(
+  async (): Promise<SessionContext | null> => {
+    const supabase = createClient(await cookies());
+    const { data, error } = await supabase.auth.getClaims();
 
-  const claims = data?.claims;
-  if (error || !claims || typeof claims.sub !== "string") return null;
+    const claims = data?.claims;
+    if (error || !claims || typeof claims.sub !== "string") return null;
 
-  return {
-    userId: claims.sub,
-    email: asString(claims.email),
-    tenantId: asString(claims.tenant_id),
-    tenantRole: asMember(claims.tenant_role, TENANT_ROLES),
-    branchId: asString(claims.branch_id),
-    platformRole: asMember(claims.platform_role, PLATFORM_ROLES),
-  };
-}
+    return {
+      userId: claims.sub,
+      email: asString(claims.email),
+      tenantId: asString(claims.tenant_id),
+      tenantRole: asMember(claims.tenant_role, TENANT_ROLES),
+      branchId: asString(claims.branch_id),
+      platformRole: asMember(claims.platform_role, PLATFORM_ROLES),
+    };
+  },
+);
 
 /**
  * Gate for `/app`. Signed out goes to the login page with a return path; a
@@ -73,6 +80,13 @@ export async function requireSession(returnTo: string): Promise<SessionContext> 
 /**
  * Gate for `/admin`. `notFound()` rather than a 403 — the console should not be
  * discoverable by a tenant who guesses the URL (§3.7).
+ *
+ * Call this in the layout AND in every page and `generateMetadata()` beneath
+ * it. A layout gate alone is not enough: Next renders the page concurrently
+ * with the layout, so a page that does not gate itself still serialises its
+ * markup and its title into the 404 response — which tells the prober exactly
+ * what they were looking for. Layouts also do not re-render on client
+ * navigation, so they cannot be the only check.
  */
 export async function requirePlatformAdmin(): Promise<
   SessionContext & { platformRole: PlatformRole }

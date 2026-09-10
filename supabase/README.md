@@ -6,6 +6,7 @@ Plain SQL migrations, applied in filename order. Load the
 ```
 migrations/0001_init.sql        platform tables, RLS, access-token hook
 migrations/0002_seed_plans.sql  Standard (Rs 5,000) and Premium (Rs 10,000)
+migrations/0003_storage.sql     private payment-proofs bucket, no policies
 tests/rls.test.sql              pgTAP tenant-isolation gate — runs in CI
 config.toml                     local stack; signup off, MFA on, hook enabled
 ```
@@ -22,11 +23,11 @@ supabase gen types typescript --local > lib/database.types.ts
 The CLI is not a project dependency — install it once
 (`npm i -g supabase`, `scoop install supabase`, or `brew install supabase/tap/supabase`).
 
-## Hosted project — five steps that are not in any migration
+## Hosted project — four steps that no migration can do
 
-These cannot be applied from SQL and have to be done once per project in the
-Dashboard. The first two are the actual locks in §3.3; everything in the
-migrations is defence in depth behind them.
+These have to be done once per project in the Dashboard. The first two are the
+actual locks in §3.3; everything in the migrations is defence in depth behind
+them.
 
 1. **Authentication → Sign In / Providers → disable "Allow new users to sign
    up."** With this off, `POST /auth/v1/signup` returns 422 even when called
@@ -39,10 +40,7 @@ migrations is defence in depth behind them.
    `platform_admins`, this is why.
 3. **Authentication → MFA → enable TOTP, and enrol your own account.** This
    console can activate paid accounts and read every client's sales.
-4. **Storage → create a private `payment-proofs` bucket** for the screenshots
-   uploaded at `/order/[ref]`. Never public; the verification queue reads them
-   through a signed URL.
-5. **Project Settings → API keys → copy the service-role key** into
+4. **Project Settings → API keys → copy the service-role key** into
    `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in the host's environment.
    Not `NEXT_PUBLIC_*`, and not in git.
 

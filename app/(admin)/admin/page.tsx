@@ -2,12 +2,22 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { monthlyEquivalent, rupees } from "@/lib/format";
+import { requirePlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
-export const metadata: Metadata = {
-  title: "Console",
-  description: "Active clients, renewals, and the verification queue.",
-};
+/**
+ * Gated, not a static export: metadata resolves even when the layout above has
+ * already thrown `notFound()`, so a plain `export const metadata` would put
+ * "Console — Flo" in the title of the 404 a stranger sees.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  await requirePlatformAdmin();
+
+  return {
+    title: "Console",
+    description: "Active clients, renewals, and the verification queue.",
+  };
+}
 
 type Tile = { label: string; value: string; note: string };
 
@@ -60,6 +70,10 @@ async function loadOverview() {
 }
 
 export default async function AdminOverviewPage() {
+  // The layout gates too, but this page must gate itself or its markup is
+  // serialised into the 404 body for whoever probed the URL.
+  await requirePlatformAdmin();
+
   const overview = await loadOverview();
 
   const TILES: Tile[] = [

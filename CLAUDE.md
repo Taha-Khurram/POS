@@ -56,8 +56,8 @@ and fonts only — chrome belongs to the group.
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
   non-static path purely to refresh the session cookie; don't insert logic
-  between creating that client and `auth.getUser()`. Route protection is a
-  layout-level check, never proxy logic.
+  between creating that client and `auth.getUser()`. Route protection is never
+  proxy logic.
 - `supabase/` — `migrations/` (plain SQL, applied in filename order),
   `tests/rls.test.sql` (pgTAP, a CI gate), `config.toml` (local stack).
 - `@/*` maps to the repo root.
@@ -150,6 +150,16 @@ symlinked into `.claude/skills/`) **before** touching anything under
 
 `supabase/tests/rls.test.sql` is the gate for all of that. It runs in CI and has
 to stay green.
+
+## Gating a route
+
+Call the gate in the layout **and** in every page and `generateMetadata()`
+beneath it. A layout gate alone is not enough for two reasons: Next renders the
+page concurrently with the layout, so an ungated page serialises its markup and
+its `<title>` into the 404 body that `notFound()` produces — which tells whoever
+probed `/admin` exactly what they found; and layouts do not re-render on client
+navigation, so they cannot be the only check. `getSessionContext()` is wrapped
+in React `cache()`, so gating three times in one request verifies the token once.
 
 ## Not built yet
 
