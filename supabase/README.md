@@ -7,7 +7,7 @@ Plain SQL migrations, applied in filename order. Load the
 migrations/0001_init.sql        platform tables, RLS, access-token hook
 migrations/0002_seed_plans.sql  Standard (Rs 5,000) and Premium (Rs 10,000)
 migrations/0003_storage.sql     private payment-proofs bucket, no policies
-tests/rls.test.sql              pgTAP tenant-isolation gate — runs in CI
+tests/rls.test.sql              pgTAP tenant-isolation check (run by hand)
 config.toml                     local stack; signup off, MFA on, hook enabled
 ```
 

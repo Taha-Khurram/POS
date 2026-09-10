@@ -15,8 +15,18 @@ npm run build   # next build
 npm run lint    # eslint (flat config, next core-web-vitals + typescript)
 ```
 
-There are no tests. `npm run build` and `npm run lint` are the verification gates.
-`tsc` has no script — type errors surface through `next dev`/`next build`.
+```bash
+npm run doctor        # Supabase preflight: env, schema, bucket, JWT claims
+npm run create-admin  # grant yourself /admin access
+```
+
+There are no tests and no CI. `npm run lint` and `npm run build` are the only
+verification gates, and both must be green at the end of every part. `tsc` has
+no script — type errors surface through `next dev`/`next build`.
+
+When something in Supabase looks broken, run `npm run doctor` before reading
+code. The costly failures there are silent — an access-token hook that is off
+makes every RLS policy see null and 404s you out of your own console.
 
 `.env.local` needs `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (publishable, not the legacy anon key),

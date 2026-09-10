@@ -3,20 +3,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { destination, safeNext } from "@/lib/redirects";
 import { createClient } from "@/utils/supabase/server";
 
 export type LoginState = { error: string | null };
-
-/**
- * Only same-origin absolute paths. Without this, `?next=https://evil.example`
- * turns the login page into an open redirect that arrives with a fresh session
- * cookie already set.
- */
-function safeNext(raw: FormDataEntryValue | null): string | null {
-  if (typeof raw !== "string") return null;
-  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
-  return raw;
-}
 
 /**
  * Sign in and land the person where they belong. A Server Action rather than a
@@ -58,5 +48,5 @@ export async function signIn(
     typeof verified?.claims?.platform_role === "string" &&
     verified.claims.platform_role.length > 0;
 
-  redirect(next ?? (isPlatformAdmin ? "/admin" : "/app"));
+  redirect(destination(next, isPlatformAdmin));
 }

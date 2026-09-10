@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getEntitlements } from "@/lib/entitlements";
 import { perCycle, rupees } from "@/lib/format";
@@ -15,6 +16,24 @@ export default async function RegisterPage() {
   // A user with no tenant is inert by design — RLS shows it nothing at all, so
   // say why rather than rendering an empty counter.
   if (!session.tenantId) {
+    // A platform admin has no tenant and never will, so tell them where they
+    // meant to go rather than leaving them on a dead end.
+    if (session.platformRole) {
+      return (
+        <div className="pos-card mx-auto max-w-lg p-6">
+          <h1 className="text-[1.375rem] font-bold">This is the shop side</h1>
+          <p className="mt-3 text-[0.9375rem] leading-relaxed text-graphite-700">
+            Your account is a platform admin, not a shop, so there is no counter
+            here. The console is at{" "}
+            <Link href="/admin" className="font-medium underline">
+              /admin
+            </Link>
+            .
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="pos-card mx-auto max-w-lg p-6">
         <h1 className="text-[1.375rem] font-bold">Account not attached yet</h1>
