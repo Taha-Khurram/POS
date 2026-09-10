@@ -23,6 +23,16 @@ supabase gen types typescript --local > lib/database.types.ts
 The CLI is not a project dependency — install it once
 (`npm i -g supabase`, `scoop install supabase`, or `brew install supabase/tap/supabase`).
 
+## Checking it
+
+```bash
+npm run doctor                                    # env, schema, bucket, admins
+npm run doctor -- you@example.com 'password'      # also checks the JWT claims
+```
+
+Run this before blaming the app. The expensive failure below is silent, and
+`doctor` is the only thing that names it.
+
 ## Hosted project — four steps that no migration can do
 
 These have to be done once per project in the Dashboard. The first two are the
@@ -46,14 +56,18 @@ them.
 
 ## Seeding your own admin account
 
-There is deliberately no code path that creates a platform admin. Do it by hand,
-once, after signing yourself up while signup is still enabled — or via
-`supabase.auth.admin.createUser` from a one-off script — then:
+No route, form, or Server Action can create a platform admin. It takes the
+service-role key and a deliberate command, after the migrations are applied:
 
-```sql
-insert into public.platform_admins (user_id, platform_role, full_name)
-values ('<your auth.users id>', 'super_admin', 'Your name');
+```bash
+npm run create-admin -- you@example.com 'your-password'
+
+# or, to keep it out of shell history
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=... npm run create-admin
 ```
 
+Idempotent — run it again to reset the password or re-assert the role. Pass
+`ADMIN_ROLE=support` for someone you hire later, who gets no billing rights.
+
 Sign out and back in afterwards: `platform_role` is stamped at token issue, so
-an existing session will not have it.
+an existing session will keep 404ing on `/admin`.

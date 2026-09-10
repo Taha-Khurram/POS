@@ -14,7 +14,12 @@ const entrance = (delay: number) => ({
   animation: `fade-up 1s var(--ease-out-soft) ${delay}ms both`,
 });
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  // Set by the `/app` and `/admin` gates, so someone who was bounced here lands
+  // back where they were headed rather than on a generic dashboard.
+  const nextParam = (await searchParams).next;
+  const next = typeof nextParam === "string" ? nextParam : undefined;
+
   return (
     <section className="relative isolate flex min-h-[calc(100vh-4rem)] items-center overflow-hidden py-28 sm:py-32">
       <div aria-hidden className="absolute inset-0 -z-10">
@@ -44,7 +49,7 @@ export default function LoginPage() {
               className="glow -right-14 -top-20 h-52 w-52 bg-iris-600/18"
             />
             <div className="relative">
-              <LoginForm />
+              <LoginForm next={next} />
             </div>
           </div>
 

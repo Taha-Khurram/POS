@@ -1,26 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useActionState } from "react";
+
+import { signIn, type LoginState } from "./actions";
+
+const INITIAL: LoginState = { error: null };
 
 /**
- * Front end only. Supabase is already wired for session cookies in
- * `utils/supabase`, so this form is the place to call
- * `supabase.auth.signInWithPassword` once accounts exist.
+ * The "keep me signed in" checkbox that used to live here has gone. Supabase
+ * session cookies persist either way, so it decided nothing — and a control
+ * that looks like a security choice but is wired to nothing is worse than no
+ * control at all.
  */
-export function LoginForm() {
-  const [pending, setPending] = useState(false);
+export function LoginForm({ next }: { next?: string }) {
+  const [state, formAction, pending] = useActionState(signIn, INITIAL);
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        setPending(true);
-        // No auth backend yet — release the button so the page is not stuck.
-        window.setTimeout(() => setPending(false), 900);
-      }}
-      className="grid gap-5"
-    >
+    <form action={formAction} className="grid gap-5">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
+
+      {state.error ? (
+        <p
+          role="alert"
+          className="rounded-xl border border-flare-400/30 bg-flare-400/10 px-4 py-3 text-[0.8125rem] text-mist-200"
+        >
+          {state.error}
+        </p>
+      ) : null}
+
       <div>
         <label className="label" htmlFor="email">
           Work email
@@ -58,16 +66,6 @@ export function LoginForm() {
           required
         />
       </div>
-
-      <label className="flex items-center gap-2.5 text-[0.8125rem] text-mist-400">
-        <input
-          type="checkbox"
-          name="remember"
-          defaultChecked
-          className="h-4 w-4 rounded border-white/15 bg-white/5 accent-iris-500"
-        />
-        Keep me signed in on this device
-      </label>
 
       <button type="submit" className="btn btn-primary w-full" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
