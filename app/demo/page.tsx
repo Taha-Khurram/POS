@@ -7,21 +7,25 @@ import { DemoForm } from "./demo-form";
 export const metadata: Metadata = {
   title: "Book a demo",
   description:
-    "See Flo running on your own menu. Thirty minutes with someone who has set up a counter before.",
+    "See Flo running on your own rate list. Thirty minutes with someone who has set up a counter in Pakistan before.",
 };
 
 const EXPECT = [
   {
-    title: "Thirty minutes, your menu",
-    copy: "Send us a menu or a spreadsheet beforehand and we will have it loaded when the call starts.",
+    title: "Thirty minutes, your rate list",
+    copy: "Send a spreadsheet, an old export, or photos of your price board and we will have it loaded before the call starts.",
   },
   {
-    title: "An operator, not a script",
-    copy: "Everyone who runs demos here has worked a counter. Ask the awkward questions.",
+    title: "In Urdu or English",
+    copy: "Everyone who runs demos here has worked a counter. Ask the awkward questions in whichever language is easier.",
   },
   {
-    title: "A real number at the end",
-    copy: "Registers, hardware, and processing priced for your floor — in writing, the same day.",
+    title: "FBR sorted on the call",
+    copy: "We will show you exactly what your receipt looks like with the fiscal invoice number and verification QR on it.",
+  },
+  {
+    title: "A real number in rupees",
+    copy: "Branches, registers, and hardware priced out — Rs 5,000 or Rs 10,000 per branch, in writing, the same day.",
   },
 ];
 
@@ -33,10 +37,10 @@ export default function DemoPage() {
         title={
           <>
             See Flo running{" "}
-            <span className="text-gradient">on your own menu</span>
+            <span className="text-gradient">on your own rate list</span>
           </>
         }
-        lede="Tell us what you run and we will set the demo up around it — no generic sandbox, no slide deck."
+        lede="Tell us what you run and we will set the demo up around it — your items, your rates, your receipt. No generic sandbox, no slide deck."
       />
 
       <section className="section pt-4">
@@ -70,8 +74,8 @@ export default function DemoPage() {
                   In a hurry?
                 </p>
                 <p className="relative mt-2 text-[0.8125rem] leading-relaxed text-white/80">
-                  Call the sales line on +1 555 0134, weekdays 8am–6pm ET, and
-                  we will do it live.
+                  Call or WhatsApp us on +92 300 111 3560, Monday to Saturday
+                  9am–9pm PKT, and we will do it live.
                 </p>
               </div>
             </Reveal>

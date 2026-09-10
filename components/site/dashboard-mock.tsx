@@ -5,25 +5,25 @@ import { Tilt } from "@/components/motion/tilt";
 import { FloMark } from "./flo-mark";
 import { SalesChart } from "./sales-chart";
 
-const TABS = ["Overview", "Orders", "Metrics", "History", "Staff"];
+const TABS = ["Overview", "Bills", "Stock", "Khata", "Staff"];
 
 const METERS = [
-  { label: "Register shifts", value: 20, tint: "#f472b6" },
-  { label: "Menu items", value: 25, tint: "#a5b4fc" },
-  { label: "Card volume", value: 40, tint: "#818cf8" },
-  { label: "Reports", value: 15, tint: "#6d6d85" },
+  { label: "Cash", value: 38, tint: "#f472b6" },
+  { label: "Card", value: 24, tint: "#a5b4fc" },
+  { label: "Raast & wallets", value: 26, tint: "#818cf8" },
+  { label: "Udhaar", value: 12, tint: "#6d6d85" },
 ];
 
 const STATS = [
-  { value: 1284, label: "Orders today", delta: "+12%", up: true },
-  { value: 26, label: "Open tabs", delta: "-4%", up: false },
+  { value: 1284, label: "Bills today", delta: "+12%", up: true },
+  { value: 26, label: "Udhaar accounts", delta: "-4%", up: false },
   { value: 103, label: "Items low", delta: "+8%", up: true },
 ];
 
 const FLOW = [
   { label: "Paid", count: 1234, tint: "#818cf8" },
-  { label: "Refunds", count: 0, tint: "#6d6d85" },
-  { label: "Open tabs", count: 24, tint: "#f472b6" },
+  { label: "Returns", count: 3, tint: "#6d6d85" },
+  { label: "On udhaar", count: 24, tint: "#f472b6" },
 ];
 
 export function DashboardMock() {
@@ -95,7 +95,7 @@ export function DashboardMock() {
               </svg>
             </IconButton>
             <span className="ml-0.5 grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-flare-400 to-sun-400 font-display text-[0.5625rem] font-bold text-ink-900">
-              CM
+              BA
             </span>
           </div>
         </div>
@@ -105,8 +105,8 @@ export function DashboardMock() {
           <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
             <div className="min-w-[240px] flex-1">
               <h3 className="font-display text-lg font-bold sm:text-xl">
-                Welcome in,{" "}
-                <span className="text-iris-300">Caroline</span>
+                Assalam-o-alaikum,{" "}
+                <span className="text-iris-300">Bilal</span>
               </h3>
 
               <div className="mt-3.5 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
@@ -142,7 +142,7 @@ export function DashboardMock() {
             {/* Order flow */}
             <div className="rounded-2xl border border-white/6 bg-white/[0.02] p-3.5">
               <h4 className="font-display text-[0.8125rem] font-semibold text-mist-200">
-                Order flow
+                Bill flow
               </h4>
               <ul className="mt-3 grid gap-2">
                 {FLOW.map((row) => (
@@ -164,8 +164,8 @@ export function DashboardMock() {
                 ))}
               </ul>
               <p className="mt-3 text-[0.5625rem] leading-relaxed text-mist-500">
-                Ticket times dropped 14% this week after the kitchen routing
-                change.
+                Billing time dropped 14% this week after the barcode scanner
+                went in.
               </p>
             </div>
 
@@ -199,15 +199,15 @@ export function DashboardMock() {
                 </div>
 
                 <p className="mt-2 text-[0.5625rem] leading-relaxed text-white/80">
-                  Six items fall below par across two locations. Reorder now to
-                  keep the bestsellers on the floor.
+                  Six items are below par across two branches. Order now so
+                  the fast movers are on the shelf before evening.
                 </p>
 
                 <div className="mt-3 grid gap-1.5">
                   {[
-                    { label: "Reorder", count: 3 },
-                    { label: "Vendors", count: 1 },
-                    { label: "Par levels", count: 4 },
+                    { label: "To order", count: 3 },
+                    { label: "Suppliers", count: 1 },
+                    { label: "Below par", count: 4 },
                   ].map((row) => (
                     <div
                       key={row.label}

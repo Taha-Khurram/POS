@@ -46,12 +46,13 @@ export function Cta() {
           className="mt-3 font-display text-[clamp(2.1rem,6.4vw,4rem)] font-bold leading-[1.05]"
           delay={100}
         >
-          Start Selling Today
+          Start Billing Today
         </Reveal>
 
         <Reveal as="p" className="lede mx-auto mt-5 max-w-md" delay={200}>
-          Ready to speed up your counter? Book a call with our team and see Flo
-          running on your own menu.
+          Send us your price list or menu and we&rsquo;ll load it before the
+          call — you&rsquo;ll see Flo ringing up your own items, in Urdu or
+          English.
         </Reveal>
 
         <Reveal

@@ -10,39 +10,79 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Products",
   description:
-    "Register, payments, inventory, staff, and reporting — the five Flo modules that run the counter and everything behind it.",
+    "Billing, payments, stock, udhaar, staff, FBR compliance, and reporting — the modules that run a Pakistani counter and everything behind it.",
 };
 
 const MODULES = [
   {
-    name: "Register",
+    name: "Billing",
     tag: "On the counter",
-    copy: "A till your team learns in a shift. Tabs, splits, modifiers, and refunds without hunting through menus.",
-    points: ["Offline-tolerant tickets", "Tabs, splits, and merges", "Kitchen and bar routing"],
+    copy: "A register your staff picks up in one shift. Fast item search in English or Urdu, weight and carton sales, returns, and holds — without hunting through menus.",
+    points: [
+      "Works offline through power cuts",
+      "Sell by piece, kilo, carton, or plate",
+      "Kitchen and bakery print routing",
+    ],
   },
   {
     name: "Payments",
-    tag: "At the reader",
-    copy: "Tap, chip, wallet, or gift card — one flow, one settlement, one place to chase a disputed charge.",
-    points: ["Next-day payouts", "Surcharge and tip rules", "Chargeback evidence packs"],
+    tag: "At the counter",
+    copy: "Cash, card, Raast QR, Easypaisa, and JazzCash settle into one day-end figure, so the drawer and the bank statement finally agree.",
+    points: [
+      "Raast and wallet QR on the receipt",
+      "Card terminals via 1LINK acquirers",
+      "Split a bill across cash and wallet",
+    ],
   },
   {
-    name: "Inventory",
-    tag: "In the back",
-    copy: "Counts that stay honest between deliveries, with waste and par levels tracked per location.",
-    points: ["Recipe-level depletion", "Par levels and reorder points", "Supplier price history"],
+    name: "Stock",
+    tag: "In the store",
+    copy: "Counts that stay honest between deliveries, with wastage, expiry, and supplier rates tracked per branch.",
+    points: [
+      "Recipe and BOM depletion",
+      "Expiry and batch tracking",
+      "Supplier rate history per item",
+    ],
+  },
+  {
+    name: "Udhaar khata",
+    tag: "For regulars",
+    copy: "The credit book, kept properly. Every balance is tied to a phone number, and reminders go out on WhatsApp instead of a phone call you keep putting off.",
+    points: [
+      "Per-customer limits and ageing",
+      "WhatsApp reminders and statements",
+      "Part payments against old bills",
+    ],
   },
   {
     name: "Staff",
     tag: "On the roster",
-    copy: "Clock-ins, permissions, and tip pools that match how the shift actually ran.",
-    points: ["PIN-level permissions", "Timesheets and breaks", "Tip pooling by rule"],
+    copy: "Attendance, permissions, and shift-wise cash accountability that match how the day actually ran.",
+    points: [
+      "PIN-level permissions and discount limits",
+      "Attendance and overtime records",
+      "Shift-wise cash and short reports",
+    ],
+  },
+  {
+    name: "FBR & tax",
+    tag: "For compliance",
+    copy: "Fiscal invoice numbers and verification QR codes printed on every bill, filed as you sell — plus the provincial service-tax returns for restaurants.",
+    points: [
+      "FBR POS integration with IRIS",
+      "Offline invoices queue and post later",
+      "PRA, SRB, and KPRA service tax",
+    ],
   },
   {
     name: "Reporting",
-    tag: "After close",
-    copy: "One number per question. Sales by hour, by item, by staff member, across every location you run.",
-    points: ["Hourly sales heatmap", "Cross-location roll-ups", "Scheduled email digests"],
+    tag: "After closing",
+    copy: "One number per question. Sales by hour, by item, by cashier, and by branch — on your phone before you reach home.",
+    points: [
+      "Hour-by-hour sales heatmap",
+      "Branch comparisons across cities",
+      "Daily WhatsApp closing summary",
+    ],
   },
 ];
 
@@ -57,7 +97,7 @@ export default function ProductsPage() {
             <span className="text-gradient">nothing it doesn&rsquo;t</span>
           </>
         }
-        lede="Five modules that share one catalog, one customer record, and one set of numbers — so the register, the stockroom, and the back office never disagree."
+        lede="Seven modules sharing one catalog, one khata, and one set of numbers — so the register, the store, the tax file, and the owner&rsquo;s phone never disagree."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -112,13 +152,14 @@ export default function ProductsPage() {
                 className="absolute -right-12 -top-14 h-48 w-48 rounded-full bg-white/20 blur-3xl"
               />
               <h2 className="relative font-display text-[1.25rem] font-bold leading-tight text-white">
-                Bring your own
+                Use the hardware
                 <br />
-                hardware — or ours.
+                you already have.
               </h2>
               <p className="relative mt-3 text-[0.8125rem] leading-relaxed text-white/80">
-                Flo runs on the tablets and readers you already own. Need a full
-                counter kit? We ship one preconfigured.
+                Flo runs on any Android tablet, billing terminal, or shop
+                computer. Need the full counter kit with printer, scanner, and
+                drawer? We ship it configured anywhere in Pakistan.
               </p>
               <Link
                 href="/demo"

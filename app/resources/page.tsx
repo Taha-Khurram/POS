@@ -8,60 +8,60 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Resources",
   description:
-    "Guides, benchmarks, and help-centre material for running a faster counter — from menu design to close-out routines.",
+    "Guides, benchmarks, and templates for running a Pakistani counter — FBR POS integration, udhaar recovery, stock counts, and Ramadan planning.",
 };
 
 const FEATURED = {
   kind: "Playbook",
-  title: "The ninety-minute rush playbook",
-  copy: "Twelve changes that shortened peak-hour tickets for the cafés we work with — menu layout, modifier order, prep staging, and the two reports worth reading every morning.",
-  meta: "18 min read · Updated March 2026",
+  title: "The Ramadan and Eid rush playbook",
+  copy: "How the shops we work with plan for six weeks that carry the year — iftar-hour staffing, sehri menus, advance mithai orders, stock cover for the Eid shutdown, and the two reports worth reading every morning.",
+  meta: "20 min read · Updated February 2026",
 };
 
 const ARTICLES = [
   {
     kind: "Guide",
-    title: "Designing a menu your register can keep up with",
-    copy: "Why the first six buttons decide your ticket time, and how to pick them from last month's data.",
-    meta: "9 min read",
+    title: "FBR POS integration, step by step",
+    copy: "Registering your outlet, getting the fiscal invoice number on your receipt, and what to do when IRIS is unreachable mid-rush.",
+    meta: "14 min read",
+  },
+  {
+    kind: "Guide",
+    title: "Udhaar without losing money",
+    copy: "Limits per customer, ageing you can actually read, and the WhatsApp reminder that gets paid instead of ignored.",
+    meta: "10 min read",
   },
   {
     kind: "Benchmark",
-    title: "What good looks like: 2026 hospitality benchmarks",
-    copy: "Ticket times, void rates, and stock variance across 1,200 counters, split by format and size.",
+    title: "What good looks like: 2026 Pakistan retail benchmarks",
+    copy: "Billing times, return rates, stock variance, and udhaar recovery across 900 counters, split by format and city.",
     meta: "12 min read",
   },
   {
     kind: "Guide",
     title: "Stock counts that take twenty minutes",
-    copy: "A weekly routine that fits between deliveries, plus the par-level maths behind it.",
+    copy: "A weekly routine for kiryana and general stores that fits between deliveries, plus the par-level maths behind it.",
     meta: "7 min read",
   },
   {
     kind: "Template",
-    title: "Close-out checklist for multi-site managers",
-    copy: "One page per site, the four numbers to reconcile, and what to escalate the same night.",
+    title: "Day-end closing sheet for branch managers",
+    copy: "One page per branch: cash, card, wallet, udhaar, and the four figures to reconcile before the shutter comes down.",
     meta: "Download",
   },
   {
-    kind: "Case study",
-    title: "Saltbox: nine stores, one catalog",
-    copy: "How a regional grocer cut price-change work from two days to one afternoon.",
-    meta: "6 min read",
-  },
-  {
     kind: "Guide",
-    title: "Migrating your catalog without a closed day",
-    copy: "The import format, the dry run, and the checks to make before the first live shift.",
+    title: "Moving off the register book and Excel",
+    copy: "The import format, the dry run, and the checks to make before your first live shift on Flo.",
     meta: "11 min read",
   },
 ];
 
 const HELP = [
-  { title: "Help centre", copy: "Setup, hardware, and day-to-day how-tos." },
+  { title: "Help centre", copy: "Setup and day-to-day how-tos in Urdu and English." },
+  { title: "WhatsApp support", copy: "Message the support line, 9am to 9pm PKT." },
   { title: "Developer docs", copy: "REST API, webhooks, and export formats." },
-  { title: "System status", copy: "Live payment and sync availability." },
-  { title: "Release notes", copy: "What shipped, every second Thursday." },
+  { title: "System status", copy: "Live payment, sync, and FBR filing status." },
 ];
 
 export default function ResourcesPage() {
@@ -75,7 +75,7 @@ export default function ResourcesPage() {
             <span className="text-gradient">behind the counter</span>
           </>
         }
-        lede="Guides, benchmarks, and templates from the teams running Flo — written for operators, not for search engines."
+        lede="Guides, benchmarks, and templates from the shops and restaurants running Flo across Pakistan — written for owners, not for search engines."
       />
 
       {/* ---------- Featured ---------- */}

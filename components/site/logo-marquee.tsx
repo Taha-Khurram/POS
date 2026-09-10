@@ -1,10 +1,10 @@
 const BRANDS = [
-  { name: "Bellwether", glyph: "circle" },
-  { name: "Trace", glyph: "compass" },
-  { name: "Recharge", glyph: "bolt" },
-  { name: "Saltbox", glyph: "square" },
-  { name: "Orbitc", glyph: "orbit" },
-  { name: "Nordvik", glyph: "diamond" },
+  { name: "Zaiqa Sweets", glyph: "circle" },
+  { name: "Sona Mart", glyph: "compass" },
+  { name: "Naan Stop", glyph: "bolt" },
+  { name: "Mehran Cash & Carry", glyph: "square" },
+  { name: "Karahi House", glyph: "orbit" },
+  { name: "Bolan Traders", glyph: "diamond" },
 ] as const;
 
 function Glyph({ kind }: { kind: (typeof BRANDS)[number]["glyph"] }) {
@@ -64,7 +64,7 @@ export function LogoMarquee() {
   const track = [...BRANDS, ...BRANDS];
 
   return (
-    <section aria-label="Merchants running on Flo" className="relative py-10 sm:py-14">
+    <section aria-label="Shops and restaurants running on Flo" className="relative py-10 sm:py-14">
       <div className="marquee-mask shell overflow-hidden">
         <div className="marquee-track items-center gap-14 sm:gap-20">
           {track.map((brand, index) => (

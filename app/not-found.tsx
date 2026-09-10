@@ -35,8 +35,8 @@ export default function NotFound() {
         </h1>
 
         <p className="lede mx-auto mt-4 max-w-md" style={entrance(260)}>
-          The page you asked for has moved or never existed. Here is the rest of
-          the counter.
+          This page has moved or never existed. Here is the rest of the
+          counter.
         </p>
 
         <div

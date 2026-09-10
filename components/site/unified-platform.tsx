@@ -3,10 +3,10 @@ import Link from "next/link";
 import { Reveal } from "@/components/motion/reveal";
 
 const PILLARS = [
-  { title: "Checkout", copy: "Ring up orders in seconds" },
-  { title: "Inventory", copy: "Keep every count honest" },
-  { title: "Insights", copy: "Know what sells, and when" },
-  { title: "Loyalty", copy: "Bring regulars back for more" },
+  { title: "Billing", copy: "Cash, card, Raast, or wallet" },
+  { title: "Stock", copy: "Every carton and kilo accounted for" },
+  { title: "Udhaar", copy: "The khata, without the notebook" },
+  { title: "FBR", copy: "Invoices filed as they are printed" },
 ];
 
 /** Traces run from the card block (left edge) into the chip's left pads. */
@@ -36,11 +36,12 @@ export function UnifiedPlatform() {
       <div className="shell relative">
         <div className="mx-auto max-w-2xl text-center">
           <Reveal as="h2" className="heading">
-            Unified commerce platform
+            One system for the whole shop
           </Reveal>
           <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
-            From first tap to end-of-day close, give your floor staff the tools
-            to sell fast, keep stock accurate, and treat regulars like regulars.
+            From the first bill of the morning to the cash count at closing —
+            one screen for sales, stock, khata, and everything the tax people
+            ask for.
           </Reveal>
         </div>
 

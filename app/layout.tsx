@@ -20,15 +20,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   // Pages set a bare title; the template appends the brand.
   title: {
-    default: "Flo — Point of sale built for the rush",
+    default: "Flo — POS software for Pakistani shops and restaurants",
     template: "%s — Flo",
   },
   description:
-    "Flo is a complete point of sale for payments, inventory, and staff. Ring up orders in seconds, keep stock honest, and see every location in one place.",
+    "Flo is a complete point of sale for Pakistani retail and hospitality — FBR digital invoicing, udhaar khata, cash, card, Raast and wallet payments, and billing that keeps working when the power goes.",
   openGraph: {
-    title: "Flo — Point of sale built for the rush",
+    title: "Flo — POS software for Pakistani shops and restaurants",
     description:
-      "Ring up orders in seconds, keep stock honest, and see every location in one place.",
+      "FBR-ready invoicing, udhaar khata, and billing that keeps working through load-shedding. Built for counters in Karachi, Lahore, and everywhere between.",
     type: "website",
   },
 };

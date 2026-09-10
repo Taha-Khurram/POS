@@ -7,72 +7,72 @@ import { PageHeader } from "@/components/site/page-header";
 export const metadata: Metadata = {
   title: "Careers",
   description:
-    "Open roles at Flo — engineering, design, support, and sales for a team building point of sale software that has to work at peak.",
+    "Open roles at Flo — engineering, design, support, and sales in Lahore, Karachi, and Islamabad, building POS software for Pakistani shops and restaurants.",
 };
 
 const VALUES = [
   {
     title: "Ship where it is used",
-    copy: "Every new hire spends a shift behind a real counter in their first month. You cannot design a register from a desk.",
+    copy: "Every new joiner spends a shift behind a real counter in their first month — a kiryana store in Anarkali, or a karahi place after 9pm. You cannot design a register from a desk in Gulberg.",
   },
   {
     title: "Peak is the spec",
-    copy: "Anything that only works on a quiet Tuesday does not work. We test against the Friday night, not the demo.",
+    copy: "Anything that only works on a quiet Tuesday does not work. We test against iftar hour, Eid week, and a 3G connection that keeps dropping.",
   },
   {
     title: "Small teams, whole problems",
-    copy: "Two or three people own a surface end to end — research, build, release, and the support tickets that follow.",
+    copy: "Two or three people own a surface end to end — research, build, release, and the support messages that follow on WhatsApp.",
   },
   {
     title: "Write it down",
-    copy: "We are spread across five time zones. A clear document beats a meeting that half the team sleeps through.",
+    copy: "We are spread across three cities and work with shopkeepers who cannot take a call mid-rush. A clear note beats a meeting nobody can attend.",
   },
 ];
 
 const PERKS = [
-  "Remote-first across UTC-8 to UTC+3",
-  "Four-day weeks in July and August",
+  "Offices in Lahore and Karachi, remote across Pakistan",
+  "Health cover for you, your spouse, and your parents",
   "Equity in every offer",
-  "Home setup budget, renewed every three years",
-  "Health cover for you and your dependants",
-  "Two weeks a year for a project of your choosing",
+  "EOBI and provident fund handled properly",
+  "Laptop and home internet paid for",
+  "Fourteen days off, plus every notified public holiday",
 ];
 
 const ROLES = [
   {
-    title: "Senior Product Engineer, Register",
+    title: "Senior Product Engineer, Billing",
     team: "Engineering",
-    location: "Remote — Europe",
+    location: "Lahore or remote — Pakistan",
     type: "Full-time",
   },
   {
-    title: "Payments Engineer",
+    title: "Payments & Integrations Engineer",
     team: "Engineering",
-    location: "Remote — Europe / East US",
+    location: "Karachi or Lahore",
     type: "Full-time",
   },
   {
     title: "Product Designer, Back Office",
     team: "Design",
-    location: "Remote — anywhere in range",
+    location: "Remote — Pakistan",
     type: "Full-time",
   },
   {
-    title: "Support Lead, Hospitality",
+    title: "Support Lead, Restaurants",
     team: "Support",
-    location: "Lisbon or remote",
+    location: "Lahore",
     type: "Full-time",
   },
   {
-    title: "Account Executive, Multi-site",
+    title: "Field Sales Executive",
     team: "Sales",
-    location: "London",
+    location: "Karachi · Lahore · Faisalabad",
     type: "Full-time",
   },
   {
-    title: "Onboarding Specialist",
+    title: "Onboarding Specialist (Urdu & English)",
     team: "Success",
-    location: "Remote — East US",
+    location: "Islamabad or remote",
     type: "Contract to hire",
   },
 ];
@@ -88,7 +88,7 @@ export default function CareersPage() {
             <span className="text-gradient">the rush runs on</span>
           </>
         }
-        lede="Flo is thirty-eight people building one product for the busiest ninety minutes of somebody else's day. If that sounds like a good constraint, we are hiring."
+        lede="Flo is twenty-six people in Lahore, Karachi, and Islamabad building one product for the busiest two hours of somebody else's day. If that sounds like a good constraint, we are hiring."
       >
         <Link href="#open-roles" className="btn btn-primary">
           See open roles
@@ -136,8 +136,8 @@ export default function CareersPage() {
               <div>
                 <h2 className="heading">How we work</h2>
                 <p className="lede mt-4 max-w-sm">
-                  Remote by default, deliberate about the few weeks a year we
-                  spend in the same room.
+                  Two offices, remote when it suits you, and deliberate about
+                  the weeks we spend in the same room.
                 </p>
               </div>
 
@@ -172,8 +172,8 @@ export default function CareersPage() {
               Open roles
             </Reveal>
             <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
-              Nothing here that fits? Write to us anyway — tell us which part of
-              the counter you would fix first.
+              Nothing here that fits? Write to us anyway — tell us which part
+              of the counter you would fix first.
             </Reveal>
           </div>
 
@@ -187,7 +187,7 @@ export default function CareersPage() {
                 className="panel card-lift group rounded-2xl"
               >
                 <a
-                  href={`mailto:careers@flopos.example?subject=${encodeURIComponent(
+                  href={`mailto:careers@flo.pk?subject=${encodeURIComponent(
                     role.title,
                   )}`}
                   className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
@@ -225,10 +225,10 @@ export default function CareersPage() {
 
           <Reveal className="mt-10 text-center" delay={120}>
             <a
-              href="mailto:careers@flopos.example"
+              href="mailto:careers@flo.pk"
               className="btn btn-ghost"
             >
-              careers@flopos.example
+              careers@flo.pk
             </a>
           </Reveal>
         </div>

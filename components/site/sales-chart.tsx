@@ -27,7 +27,7 @@ const RANGES: Range[] = [
     primary: [180, 240, 210, 300, 275, 350, 320, 410, 380, 300, 340, 420],
     compare: [260, 215, 285, 240, 330, 290, 245, 300, 265, 355, 300, 330],
     marker: 4,
-    callout: { date: "February", value: "$286k sales" },
+    callout: { date: "February", value: "Rs 2.86M sales" },
   },
   {
     id: "30d",
@@ -36,7 +36,7 @@ const RANGES: Range[] = [
     primary: [210, 170, 260, 230, 330, 300, 395, 350, 250, 290, 240, 330],
     compare: [300, 340, 250, 290, 220, 265, 210, 245, 320, 275, 350, 290],
     marker: 3,
-    callout: { date: "5 September", value: "$3,240 sales" },
+    callout: { date: "5 September", value: "Rs 284,500 sales" },
   },
   {
     id: "1w",
@@ -45,7 +45,7 @@ const RANGES: Range[] = [
     primary: [150, 220, 195, 280, 340, 420, 380, 300, 260, 320, 355, 400],
     compare: [230, 190, 260, 215, 250, 300, 275, 340, 300, 245, 280, 320],
     marker: 8,
-    callout: { date: "Friday", value: "$1,942 sales" },
+    callout: { date: "Friday", value: "Rs 196,400 sales" },
   },
 ];
 
@@ -122,7 +122,7 @@ export function SalesChart() {
     <div ref={ref} className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="font-display text-[0.8125rem] font-semibold text-mist-200">
-          Sales volume
+          Sales (Rs 000s)
         </h4>
 
         <div

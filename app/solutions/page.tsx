@@ -9,61 +9,73 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Solutions",
   description:
-    "How Flo is set up for cafés, full-service restaurants, retail floors, and multi-location groups.",
+    "How Flo is set up for kiryana stores, restaurants and dhabas, bakeries and mithai shops, pharmacies, clothing retail, and multi-branch chains across Pakistan.",
 };
 
 const INDUSTRIES = [
   {
-    name: "Cafés & quick service",
-    lede: "Peak is ninety minutes long. Everything else is preparation.",
-    copy: "One-tap favourites, modifiers that keep the line moving, and order-ready texts that stop a crowd forming at the counter.",
-    wins: ["Sub-8-second tickets", "Prepaid regulars", "Queue-aware displays"],
+    name: "Kiryana & general store",
+    lede: "Half the shop is on udhaar and the other half is in a hurry.",
+    copy: "Barcode or name search, sale by kilo, loose and carton rates, and a khata that remembers who owes what — so the notebook can retire.",
+    wins: ["Sale by weight", "Udhaar khata", "Loose and carton rates"],
     accent: true,
   },
   {
-    name: "Restaurants & bars",
-    lede: "Tables move, tabs split, courses fire.",
-    copy: "Open tabs by seat, fire courses to the right station, and settle a split six ways without recalculating anything by hand.",
-    wins: ["Course firing", "Split by seat or item", "Tip pooling by rule"],
+    name: "Restaurants, cafés & dhabas",
+    lede: "Tables turn, orders change, the kitchen needs to hear it.",
+    copy: "Table and parcel orders on one screen, kitchen prints for the karahi and the tandoor, and split bills that add up without a calculator.",
+    wins: ["Table and parcel", "Kitchen prints", "Foodpanda orders"],
   },
   {
-    name: "Retail floors",
-    lede: "The stockroom and the till tell the same story.",
-    copy: "Variants, barcodes, and par levels stay in step, so what the shelf says and what the system says match at close.",
-    wins: ["Variant matrices", "Barcode receiving", "Stock counts on tablet"],
+    name: "Bakeries & mithai shops",
+    lede: "Eid week is a year of business in six days.",
+    copy: "Weighing-scale billing per kilo, box and tray pricing, and advance orders taken with a deposit against a phone number.",
+    wins: ["Scale billing", "Advance orders", "Gift box pricing"],
   },
   {
-    name: "Multi-location groups",
-    lede: "Five sites should not mean five spreadsheets.",
-    copy: "Push a price change everywhere at once, compare sites hour by hour, and give each manager exactly what they should see.",
-    wins: ["Central catalog", "Per-site permissions", "Group-wide reporting"],
+    name: "Pharmacies & medical stores",
+    lede: "Batch, expiry, and the right rate on every strip.",
+    copy: "Sell in strips or packs, watch expiry before the distributor does, and keep trade and retail rates straight on the same item.",
+    wins: ["Batch and expiry", "Strip-level sale", "Trade vs retail rate"],
+  },
+  {
+    name: "Clothing & fabric retail",
+    lede: "One design, nine sizes, three colours, one price change.",
+    copy: "Size and colour matrices, per-metre cutting, tailor jobs against a ticket, and season-end sale pricing pushed to every outlet at once.",
+    wins: ["Size and colour grids", "Per-metre sale", "Season sale pricing"],
+  },
+  {
+    name: "Multi-branch chains",
+    lede: "Five branches should not mean five WhatsApp groups.",
+    copy: "Change a rate once and it lands everywhere, compare Karachi against Lahore hour by hour, and let each manager see only their own branch.",
+    wins: ["Central catalog", "Per-branch roles", "Group reporting"],
   },
 ];
 
 const STEPS = [
   {
-    title: "Import your menu",
-    copy: "Send a spreadsheet or your current export. We map items, modifiers, and prices before your first shift.",
+    title: "Send your rate list",
+    copy: "A spreadsheet, an old software export, or photos of the price board. We load items, rates, and units before your first shift.",
   },
   {
-    title: "Set up the floor",
-    copy: "Registers, readers, printers, and staff PINs configured together on one call — usually under an hour.",
+    title: "Set up the counter",
+    copy: "Terminal, printer, scanner, and staff PINs configured together on one call — usually inside an hour, in Urdu if that is easier.",
   },
   {
-    title: "Run one service side by side",
-    copy: "Keep your old till on standby for a shift. Most teams never switch back to it.",
+    title: "Register with FBR",
+    copy: "We handle the POS registration and the IRIS integration, then print a test fiscal invoice with you before you go live.",
   },
   {
-    title: "Turn on the extras",
-    copy: "Loyalty, order updates, and AI reordering come online once the basics are boring.",
+    title: "Run one day side by side",
+    copy: "Keep your old register or notebook on standby for a day. Most shops never go back to it.",
   },
 ];
 
 const METRICS = [
-  { value: 42, suffix: "%", label: "Faster tickets at peak" },
+  { value: 38, suffix: "%", label: "Faster billing at peak hour" },
   { value: 3.5, decimals: 1, suffix: "h", label: "Saved on weekly stock counts" },
-  { value: 99.98, decimals: 2, suffix: "%", label: "Payment uptime, trailing year" },
-  { value: 1200, suffix: "+", label: "Counters running Flo" },
+  { value: 96, suffix: "%", label: "Udhaar recovered within 30 days" },
+  { value: 900, suffix: "+", label: "Counters running Flo in Pakistan" },
 ];
 
 export default function SolutionsPage() {
@@ -77,7 +89,7 @@ export default function SolutionsPage() {
             <span className="text-gradient">not a generic one</span>
           </>
         }
-        lede="Same platform, configured for how your room actually runs — a morning coffee rush, a Saturday dinner service, or nine stores reporting into one office."
+        lede="The same platform, set up for how your shop actually runs — a 7pm kiryana queue in Faisalabad, a Saturday dinner service in Lahore, or nine outlets reporting into one office in Karachi."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -165,11 +177,12 @@ export default function SolutionsPage() {
         <div className="shell relative">
           <div className="mx-auto max-w-2xl text-center">
             <Reveal as="h2" className="heading">
-              Switching takes a week, not a quarter
+              Live in a week, not a quarter
             </Reveal>
             <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
-              Nobody can close for a migration. Flo goes in alongside what
-              you&rsquo;re already running, one step at a time.
+              No shop can shut for a software migration. Flo goes in alongside
+              whatever you run today — register, Excel, or notebook — one step
+              at a time.
             </Reveal>
           </div>
 
@@ -228,8 +241,9 @@ export default function SolutionsPage() {
             </dl>
 
             <p className="relative mt-8 text-center text-[0.6875rem] text-mist-500">
-              Figures from Flo customers running two or more registers, measured
-              over their first six months.
+              Figures from Flo customers in Karachi, Lahore, Islamabad, and
+              Faisalabad running two or more registers, measured over their
+              first six months.
             </p>
           </Reveal>
         </div>

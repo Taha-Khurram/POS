@@ -15,13 +15,13 @@ const ROW_ONE: Pillar[] = [
   {
     glyph: "insights",
     title: "Insights",
-    copy: "Spot the patterns and speed up service.",
+    copy: "See which hours and which items pay the rent.",
     tilt: -7,
   },
   {
     glyph: "catalog",
     title: "Catalog",
-    copy: "Prices, modifiers, and variants in one place.",
+    copy: "Rates, deals, sizes, and units in one place.",
     tilt: 7,
   },
 ];
@@ -30,20 +30,20 @@ const ROW_TWO: Pillar[] = [
   {
     glyph: "integrations",
     title: "Integrations",
-    copy: "Bring the tools you already use into one place.",
+    copy: "FBR, Raast, Easypaisa, JazzCash, Foodpanda.",
     tilt: -6,
     accent: true,
   },
   {
     glyph: "workflows",
     title: "Workflows",
-    copy: "Automate discounts, refunds, and closing.",
+    copy: "Automate deals, returns, and day-end closing.",
     tilt: 0,
   },
   {
     glyph: "ai",
     title: "AI",
-    copy: "Context at the heart of every sale.",
+    copy: "Knows your season, from Ramadan to Eid.",
     tilt: 6,
   },
 ];
@@ -58,7 +58,7 @@ export function Foundation() {
 
       <div className="shell relative">
         <Reveal as="h2" className="heading text-center">
-          Built on a solid foundation
+          Built for how Pakistan sells
         </Reveal>
 
         <div className="mt-14 flex flex-col items-center lg:mt-20">

@@ -31,7 +31,7 @@ export default function LoginPage() {
               Welcome back
             </h1>
             <p className="lede mt-2 text-[0.9375rem]">
-              Sign in to the Flo back office.
+              Sign in to your Flo back office.
             </p>
           </div>
 
@@ -64,7 +64,7 @@ export default function LoginPage() {
               href="/pricing"
               className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
             >
-              start on the free plan
+              compare the two plans
             </Link>
             .
           </p>

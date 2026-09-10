@@ -3,18 +3,31 @@
 import { useState } from "react";
 
 const SIZES = [
-  "1 register",
-  "2–4 registers",
-  "5–10 registers",
-  "More than 10 registers",
+  "1 branch, 1 register",
+  "1 branch, 2–4 registers",
+  "2–5 branches",
+  "More than 5 branches",
 ];
 
 const TYPES = [
-  "Café or quick service",
-  "Restaurant or bar",
-  "Retail",
-  "Multi-location group",
+  "Kiryana or general store",
+  "Restaurant, café, or dhaba",
+  "Bakery or mithai shop",
+  "Pharmacy or medical store",
+  "Clothing or fabric retail",
+  "Multi-branch chain",
   "Something else",
+];
+
+const CITIES = [
+  "Karachi",
+  "Lahore",
+  "Islamabad / Rawalpindi",
+  "Faisalabad",
+  "Multan",
+  "Peshawar",
+  "Quetta",
+  "Somewhere else in Pakistan",
 ];
 
 /**
@@ -51,11 +64,12 @@ export function DemoForm() {
           </span>
 
           <h2 className="mt-6 font-display text-[1.5rem] font-bold">
-            Thanks — we have your details
+            Shukriya — we have your details
           </h2>
           <p className="lede mx-auto mt-3 max-w-sm">
-            Someone from the team will write within one business day to book a
-            time. We will bring your own menu to the call.
+            Someone from the team will message you on WhatsApp within one
+            working day to fix a time, and we will bring your own rate list to
+            the call.
           </p>
 
           <button
@@ -93,7 +107,7 @@ export function DemoForm() {
             name="name"
             className="field"
             autoComplete="name"
-            placeholder="Caroline Meyer"
+            placeholder="Bilal Ahmed"
             required
           />
         </div>
@@ -107,7 +121,7 @@ export function DemoForm() {
             name="business"
             className="field"
             autoComplete="organization"
-            placeholder="Bellwether Coffee"
+            placeholder="Zaiqa Sweets & Bakers"
             required
           />
         </div>
@@ -122,14 +136,14 @@ export function DemoForm() {
             type="email"
             className="field"
             autoComplete="email"
-            placeholder="you@business.com"
+            placeholder="you@shopname.pk"
             required
           />
         </div>
 
         <div>
           <label className="label" htmlFor="phone">
-            Phone <span className="font-normal text-mist-500">(optional)</span>
+            Phone / WhatsApp
           </label>
           <input
             id="phone"
@@ -137,28 +151,40 @@ export function DemoForm() {
             type="tel"
             className="field"
             autoComplete="tel"
-            placeholder="+1 555 0134"
+            placeholder="+92 300 1234567"
+            required
           />
         </div>
 
         <div>
-          <label className="label" htmlFor="type">
-            What do you run?
+          <label className="label" htmlFor="city">
+            City
           </label>
-          <select id="type" name="type" className="field" defaultValue={TYPES[0]}>
-            {TYPES.map((type) => (
-              <option key={type}>{type}</option>
+          <select id="city" name="city" className="field" defaultValue={CITIES[1]}>
+            {CITIES.map((city) => (
+              <option key={city}>{city}</option>
             ))}
           </select>
         </div>
 
         <div>
           <label className="label" htmlFor="size">
-            How many registers?
+            How many branches and registers?
           </label>
-          <select id="size" name="size" className="field" defaultValue={SIZES[1]}>
+          <select id="size" name="size" className="field" defaultValue={SIZES[0]}>
             {SIZES.map((size) => (
               <option key={size}>{size}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="type">
+            What do you run?
+          </label>
+          <select id="type" name="type" className="field" defaultValue={TYPES[0]}>
+            {TYPES.map((type) => (
+              <option key={type}>{type}</option>
             ))}
           </select>
         </div>
@@ -173,14 +199,14 @@ export function DemoForm() {
             name="notes"
             rows={4}
             className="field resize-y"
-            placeholder="What you run today, and what is not working about it."
+            placeholder="What you bill on today — register, Excel, notebook — and what is not working about it."
           />
         </div>
       </div>
 
       <div className="relative mt-7 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
         <p className="text-[0.75rem] text-mist-500">
-          No card details, no obligation. We reply within one business day.
+          No advance, no obligation. We reply within one working day.
         </p>
         <button type="submit" className="btn btn-primary w-full sm:w-auto">
           Request a demo

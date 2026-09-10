@@ -8,84 +8,100 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Flat monthly pricing per register, with card processing at a published rate. Counter, Floor, and Group plans.",
+    "Two plans, priced in rupees. Standard at Rs 5,000 per branch per month and Premium at Rs 10,000 — FBR digital invoicing included on both.",
 };
 
 const PLANS = [
   {
-    name: "Counter",
-    price: "$0",
-    cadence: "per register / month",
-    pitch: "For a single till that just needs to take money cleanly.",
-    cta: { label: "Start free", href: "/login" },
+    name: "Standard",
+    price: "Rs 5,000",
+    cadence: "per branch / month",
+    pitch: "For a single shop or restaurant that needs clean billing and honest stock.",
+    cta: { label: "Book a demo", href: "/demo" },
     features: [
-      "One register, unlimited staff PINs",
-      "Tap, chip, and wallet payments",
-      "Item catalog with modifiers",
-      "Daily sales and close-out report",
-      "Email support",
+      "Up to 2 registers, unlimited staff PINs",
+      "Cash, card, Raast, Easypaisa and JazzCash",
+      "FBR digital invoicing with QR receipts",
+      "Item catalog with rates, deals, and sizes",
+      "Udhaar khata with customer balances",
+      "Stock in and out, low-stock alerts",
+      "Daily sales and cash-count report",
+      "WhatsApp support in Urdu and English",
     ],
   },
   {
-    name: "Floor",
-    price: "$79",
-    cadence: "per register / month",
-    pitch: "For rooms where the rush is the business — tabs, stock, and staff.",
+    name: "Premium",
+    price: "Rs 10,000",
+    cadence: "per branch / month",
+    pitch: "For busy floors and multi-branch owners who want one set of numbers.",
     cta: { label: "Book a demo", href: "/demo" },
     featured: true,
     features: [
-      "Everything in Counter",
-      "Tabs, splits, and course firing",
-      "Inventory with par levels and waste",
-      "Timesheets and tip pooling",
-      "Order-status messaging",
-      "Priority support, 7 days",
-    ],
-  },
-  {
-    name: "Group",
-    price: "Let's talk",
-    cadence: "billed annually",
-    pitch: "For multi-site operators who need one catalog and one set of numbers.",
-    cta: { label: "Talk to sales", href: "/demo" },
-    features: [
-      "Everything in Floor",
-      "Central catalog across locations",
-      "Per-site roles and permissions",
-      "AI reordering and price alerts",
-      "API access and data exports",
-      "Named onboarding lead",
+      "Everything in Standard",
+      "Unlimited registers per branch",
+      "Multi-branch dashboard and central catalog",
+      "Recipe-level depletion for kitchens",
+      "Purchase orders and supplier rate history",
+      "Foodpanda and delivery reconciliation",
+      "Attendance, roster, and payroll export",
+      "PRA and SRB service-tax filing support",
+      "Loyalty plus WhatsApp and SMS campaigns",
+      "API access, data exports, priority support",
     ],
   },
 ];
 
 const ADD_ONS = [
-  { name: "Card processing", detail: "2.5% + 10¢ per tap, chip, or wallet payment. No monthly minimum." },
-  { name: "Counter hardware kit", detail: "Tablet, stand, reader, and printer, preconfigured. $499 or $22/month." },
-  { name: "Loyalty", detail: "Points, punch cards, and stored value. $19 per location / month." },
-  { name: "Extra register", detail: "Add a till mid-month and we prorate it to the day." },
+  {
+    name: "Card and wallet processing",
+    detail:
+      "1.9% per card tap or swipe through our acquiring partners. Raast and wallet QR settle at 0.9%. Cash costs nothing, and there is no monthly minimum.",
+  },
+  {
+    name: "Counter hardware bundle",
+    detail:
+      "Android billing terminal, thermal receipt printer, barcode scanner, and cash drawer — delivered configured for Rs 65,000, or Rs 3,500 per month.",
+  },
+  {
+    name: "Extra register on Standard",
+    detail:
+      "Rs 1,500 per additional register per month. Premium includes as many registers as your branch can fit.",
+  },
+  {
+    name: "FBR and provincial setup",
+    detail:
+      "POS registration, IRIS integration, and your first fiscal invoice — done with you on a call, at no charge on either plan.",
+  },
 ];
 
 const FAQS = [
   {
-    q: "Is there a contract?",
-    a: "No. Monthly plans cancel at the end of the billing period, and your data exports in full whenever you ask for it. Group plans are billed annually because the onboarding work is front-loaded, but they carry the same exit terms.",
+    q: "Is there a free plan?",
+    a: "No. Flo has two plans — Standard at Rs 5,000 per branch per month and Premium at Rs 10,000 — because a register that half works is worse than none. Every demo is free, and the first month is refundable in full if the counter does not run better.",
   },
   {
-    q: "What does card processing actually cost?",
-    a: "2.5% + 10¢ per card-present payment, settled next business day. Keyed and online payments run at 2.9% + 30¢. There is no separate gateway fee, statement fee, or PCI fee.",
+    q: "Is sales tax included in those figures?",
+    a: "Prices are quoted before tax. Federal sales tax on services is added on your invoice at the prevailing rate, and we issue a proper tax invoice with our NTN and STRN so your accountant can claim it.",
   },
   {
-    q: "Can I keep my current card processor?",
-    a: "On Group plans, yes — we integrate with most major acquirers. On Counter and Floor, payments run through Flo so that refunds, disputes, and reporting stay in one system.",
+    q: "How does the FBR integration work?",
+    a: "Your branch is registered as a POS with FBR, and every bill Flo prints carries the fiscal invoice number and verification QR code that the law requires. Invoices queue locally if IRIS is unreachable and post automatically once it responds — nothing is filed by hand.",
   },
   {
-    q: "What happens if the internet drops mid-service?",
-    a: "The register keeps taking orders and card payments offline, queues them locally, and settles the queue when the connection returns. Reporting backfills automatically.",
+    q: "What happens when the power or internet goes?",
+    a: "The register keeps billing offline on the tablet or terminal, holds card and wallet receipts in a local queue, and settles everything when the connection returns. Reports and FBR filings backfill on their own.",
   },
   {
-    q: "Do you charge for staff accounts?",
-    a: "Never. Pricing is per register, so seasonal hiring does not change your bill.",
+    q: "Which payment methods can I accept?",
+    a: "Cash, cards through any 1LINK-connected acquirer, Raast QR, Easypaisa, JazzCash, and bank transfer against an invoice. Udhaar is tracked as a balance rather than a payment, so your khata and your cash always reconcile.",
+  },
+  {
+    q: "Is there a contract, and can I add branches later?",
+    a: "Monthly billing, cancel at the end of any period, and your data exports in full whenever you ask. Branches and registers are prorated to the day, so a seasonal outlet for Ramadan or Eid costs only the weeks it runs.",
+  },
+  {
+    q: "Do you charge per staff member?",
+    a: "Never. Staff PINs are unlimited on both plans, so hiring for the wedding season or Ramadan does not change your bill.",
   },
 ];
 
@@ -96,11 +112,11 @@ export default function PricingPage() {
         eyebrow="Pricing"
         title={
           <>
-            Priced per register,{" "}
-            <span className="text-gradient">not per surprise</span>
+            Two plans, priced{" "}
+            <span className="text-gradient">in rupees</span>
           </>
         }
-        lede="One monthly figure per till, one published processing rate, and no fees invented at the end of the quarter. Add and remove registers as your season changes."
+        lede="Rs 5,000 or Rs 10,000 per branch per month. FBR invoicing, udhaar khata, and support in Urdu are in both — no free tier, and no fees invented at the end of the quarter."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -113,7 +129,7 @@ export default function PricingPage() {
       {/* ---------- Plans ---------- */}
       <section className="section pt-4">
         <div className="shell">
-          <div className="grid items-start gap-4 lg:grid-cols-3">
+          <div className="mx-auto grid max-w-4xl items-start gap-4 lg:grid-cols-2">
             {PLANS.map((plan, index) => (
               <Reveal
                 key={plan.name}
@@ -132,7 +148,7 @@ export default function PricingPage() {
                       className="absolute -right-14 -top-16 h-52 w-52 rounded-full bg-white/20 blur-3xl"
                     />
                     <span className="relative self-start rounded-full border border-white/30 bg-white/15 px-3 py-1 font-display text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white">
-                      Most chosen
+                      Most chosen in Pakistan
                     </span>
                   </>
                 ) : null}
@@ -214,6 +230,23 @@ export default function PricingPage() {
               </Reveal>
             ))}
           </div>
+
+          <Reveal
+            className="panel mx-auto mt-4 max-w-4xl rounded-2xl px-6 py-5 text-center"
+            delay={220}
+            y={20}
+          >
+            <p className="text-[0.8125rem] leading-relaxed text-mist-400">
+              Running more than ten branches, or a franchise network?{" "}
+              <Link
+                href="/demo"
+                className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
+              >
+                Talk to sales
+              </Link>{" "}
+              — we quote annually on Premium and put an onboarding lead on it.
+            </p>
+          </Reveal>
         </div>
       </section>
 
@@ -221,7 +254,7 @@ export default function PricingPage() {
       <section className="section pt-0">
         <div className="shell">
           <Reveal as="h2" className="heading text-center">
-            The rest of the bill, in plain numbers
+            The rest of the bill, in plain rupees
           </Reveal>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -253,7 +286,7 @@ export default function PricingPage() {
 
         <div className="shell relative mx-auto max-w-3xl">
           <Reveal as="h2" className="heading text-center">
-            Questions we get on the first call
+            What owners ask on the first call
           </Reveal>
 
           <div className="mt-10 grid gap-3">

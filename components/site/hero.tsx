@@ -42,16 +42,17 @@ export function Hero() {
       <div className="shell pt-36 sm:pt-40 lg:pt-44">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="display" style={entrance(80)}>
-            <span className="text-gradient">Flow fast</span> when
-            <br className="hidden sm:block" /> the rush hits
+            <span className="text-gradient">Rush hour</span> ready.
+            <br className="hidden sm:block" /> FBR ready.
           </h1>
 
           <p
             className="lede mx-auto mt-6 max-w-xl"
             style={entrance(260)}
           >
-            Complete point of sale for payments, inventory, and staff — tailored
-            for modern retail and hospitality.
+            The point of sale built for Pakistani counters — FBR digital
+            invoicing, udhaar khata, cash, card, Raast and wallet payments, all
+            in one screen your staff learns in a day.
           </p>
 
           <div

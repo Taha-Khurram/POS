@@ -38,8 +38,8 @@ export function Footer() {
               </span>
             </Link>
             <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
-              Complete point of sale for payments, inventory, and staff — built
-              to hold up when the rush hits.
+              Point of sale for Pakistani shops and restaurants — FBR-ready
+              billing, udhaar khata, and stock that adds up. Lahore and Karachi.
             </p>
           </div>
 
@@ -62,7 +62,8 @@ export function Footer() {
         </div>
 
         <p className="mt-10 border-t border-white/6 pt-6 text-center text-[0.75rem] text-mist-500">
-          © {new Date().getFullYear()} Flo. Point of sale for the rush.
+          © {new Date().getFullYear()} Flo. Point of sale for Pakistani retail
+          and hospitality.
         </p>
       </div>
     </footer>

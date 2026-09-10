@@ -7,7 +7,7 @@ export function Capabilities() {
     <section className="section pt-0">
       <div className="shell relative">
         <Reveal as="h2" className="heading mx-auto max-w-lg text-center">
-          All-in-one platform capabilities
+          Everything the owner wants to see
         </Reveal>
 
         <div className="mt-12 grid gap-4 lg:mt-16">
@@ -25,15 +25,15 @@ export function Capabilities() {
 
               <div className="relative">
                 <h3 className="font-display text-[1.4rem] font-bold leading-tight text-white sm:text-[1.6rem]">
-                  Your floor,
+                  Every branch,
                   <br />
-                  simplified in
+                  on one screen,
                   <br />
-                  one dashboard.
+                  from anywhere.
                 </h3>
                 <p className="mt-4 max-w-[16rem] text-[0.8125rem] leading-relaxed text-white/80">
-                  Full visibility across registers, stock, and staff with
-                  live numbers and effortless control.
+                  Sales, cash, stock, and udhaar across all your outlets —
+                  live on your phone, whether you are at the shop or not.
                 </p>
               </div>
 
@@ -90,13 +90,13 @@ export function Capabilities() {
               <div className="relative grid gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:items-end sm:gap-4">
                 <div className="order-2 sm:order-1">
                   <h3 className="font-display text-[1.3rem] font-bold leading-tight sm:text-[1.5rem]">
-                    Order updates
+                    Updates on WhatsApp,
                     <br />
-                    people actually read.
+                    where customers read.
                   </h3>
                   <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
-                    Every ticket sends its own status — no one has to ask
-                    where their order is.
+                    Order ready, parcel on the way, udhaar reminder — sent from
+                    the counter, in Urdu or English.
                   </p>
                 </div>
 
@@ -140,7 +140,7 @@ export function Capabilities() {
                             {message.name}
                           </span>
                           <span className="block truncate text-[0.5rem] text-mist-500">
-                            {message.email}
+                            {message.contact}
                           </span>
                         </span>
                       </div>
@@ -163,12 +163,12 @@ export function Capabilities() {
 
               <div className="relative">
                 <h3 className="font-display text-[1.3rem] font-bold leading-tight sm:text-[1.45rem]">
-                  Flo AI reorders like your best manager —{" "}
-                  <span className="text-iris-300">automatically.</span>
+                  Flo AI orders stock like your best munshi —{" "}
+                  <span className="text-iris-300">on its own.</span>
                 </h3>
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-mist-400">
-                  Spots what&rsquo;s running dry, drafts the purchase order, and
-                  flags the prices that slipped.
+                  Sees what is running out before Eid, drafts the purchase
+                  order, and flags the supplier who quietly raised his rate.
                 </p>
               </div>
 
@@ -189,7 +189,7 @@ export function Capabilities() {
                     />
                   </div>
                   <p className="mt-2 text-[0.625rem] text-mist-500">
-                    6 reorders drafted · 2 awaiting approval
+                    6 orders drafted · 2 awaiting your approval
                   </p>
                 </div>
               </div>
@@ -222,10 +222,10 @@ const MESSAGES = [
     status: "Ready",
     tint: "#4f46e5",
     ago: "2m",
-    body: "Your order is ready at the counter — thanks for waiting.",
-    name: "Nick Wilson",
-    email: "nick.wilson@mail.com",
-    initials: "NW",
+    body: "Your parcel is ready at the counter — thanks for waiting.",
+    name: "Bilal Ahmed",
+    contact: "+92 300 842 1176",
+    initials: "BA",
     avatar: "linear-gradient(135deg,#f472b6,#fbbf24)",
   },
   {
@@ -233,10 +233,10 @@ const MESSAGES = [
     status: "Preparing",
     tint: "#6366f1",
     ago: "7m",
-    body: "We’re on it. Two drinks ahead of you in the queue.",
-    name: "Amara Diaz",
-    email: "amara.diaz@mail.com",
-    initials: "AD",
+    body: "Karahi is on the fire — about ten minutes for your table.",
+    name: "Ayesha Siddiqui",
+    contact: "+92 321 455 9032",
+    initials: "AS",
     avatar: "linear-gradient(135deg,#34d399,#818cf8)",
   },
 ];
@@ -256,16 +256,16 @@ function MiniDashboard() {
           <span className="rounded-full bg-white/8 px-1.5 py-[2px] text-mist-200">
             Overview
           </span>
-          <span>Orders</span>
-          <span>Metrics</span>
-          <span>Staff</span>
+          <span>Bills</span>
+          <span>Stock</span>
+          <span>Khata</span>
         </div>
         <span className="h-3 w-3 rounded-full bg-gradient-to-br from-flare-400 to-sun-400" />
       </div>
 
       <div className="p-3">
         <p className="font-display text-[0.6875rem] font-bold text-mist-50">
-          Welcome in, <span className="text-iris-300">Caroline</span>
+          Assalam-o-alaikum, <span className="text-iris-300">Bilal</span>
         </p>
 
         <div className="mt-2 grid grid-cols-4 gap-1.5">
@@ -286,14 +286,14 @@ function MiniDashboard() {
 
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
           <div className="rounded-lg border border-white/6 bg-white/[0.02] p-2">
-            {["Paid", "Refunds", "Open"].map((row) => (
+            {["Paid", "Returns", "Udhaar"].map((row) => (
               <div
                 key={row}
                 className="mt-1 flex items-center justify-between rounded bg-ink-800/70 px-1.5 py-1 first:mt-0"
               >
                 <span className="text-[0.4375rem] text-mist-400">{row}</span>
                 <span className="text-[0.4375rem] font-semibold text-mist-100">
-                  {row === "Paid" ? "1234" : row === "Refunds" ? "0" : "24"}
+                  {row === "Paid" ? "1234" : row === "Returns" ? "3" : "24"}
                 </span>
               </div>
             ))}
