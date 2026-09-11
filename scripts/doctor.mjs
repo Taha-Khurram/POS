@@ -36,6 +36,17 @@ const TABLES = [
   "invites",
   "leads",
   "audit_log",
+  "tenant_notes",
+  "tenant_health",
+  "request_rate_limits",
+  "renewal_reminders",
+  "items",
+  "register_devices",
+  "shifts",
+  "sales",
+  "sale_lines",
+  "sale_tenders",
+  "sync_outbox",
 ];
 
 const CLAIMS = ["tenant_id", "tenant_role", "branch_id", "platform_role"];
