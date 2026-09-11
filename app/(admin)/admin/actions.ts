@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { recordAudit } from "@/lib/audit";
-import { requirePlatformAdmin } from "@/lib/auth";
+import { canTakePayments, requirePlatformAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 const DAY_MS = 86_400_000;
@@ -202,6 +202,9 @@ export async function activateClient(formData: FormData) {
 
 export async function recordPayment(formData: FormData) {
   const session = await requirePlatformAdmin();
+  if (!canTakePayments(session)) {
+    redirect("/admin/payments?error=Only+the+super+admin+can+record+payments.");
+  }
   const supabase = createAdminClient();
 
   const tenantId = toText(formData.get("tenant_id"));
@@ -269,4 +272,101 @@ export async function recordPayment(formData: FormData) {
   });
 
   redirect("/admin/payments?success=Payment+recorded+successfully.");
+}
+
+export async function updateClientLifecycle(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  if (!canTakePayments(session)) {
+    redirect("/admin/clients?error=Only+the+super+admin+can+change+subscription+status.");
+  }
+
+  const supabase = createAdminClient();
+  const tenantId = toText(formData.get("tenant_id"));
+  const status = toText(formData.get("status"));
+
+  if (!tenantId || !["trialing", "active", "past_due", "suspended", "cancelled"].includes(status)) {
+    redirect(`/admin/clients/${tenantId}?error=Choose+a+valid+subscription+status.`);
+  }
+
+  const { data: subscription, error: subscriptionError } = await supabase
+    .from("subscriptions")
+    .select("id, status, suspended_at, cancelled_at")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (subscriptionError || !subscription) {
+    redirect(`/admin/clients/${tenantId}?error=That+client+has+no+subscription.`);
+  }
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("subscriptions")
+    .update({
+      status,
+      suspended_at: status === "suspended" ? now : null,
+      cancelled_at: status === "cancelled" ? now : null,
+    })
+    .eq("id", subscription.id);
+
+  if (updateError) {
+    redirect(`/admin/clients/${tenantId}?error=The+subscription+status+could+not+be+updated.`);
+  }
+
+  await recordAudit(session, {
+    action: "subscription.status_changed",
+    tenantId,
+    subjectType: "subscription",
+    subjectId: subscription.id,
+    before: { status: subscription.status },
+    after: { status },
+  });
+
+  redirect(`/admin/clients/${tenantId}?success=Subscription+status+updated.`);
+}
+
+export async function extendSubscription(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  if (!canTakePayments(session)) {
+    redirect("/admin/clients?error=Only+the+super+admin+can+extend+subscriptions.");
+  }
+
+  const supabase = createAdminClient();
+  const tenantId = toText(formData.get("tenant_id"));
+  const days = Number(toText(formData.get("days"), "0"));
+
+  if (!tenantId || !Number.isInteger(days) || days < 1 || days > 365) {
+    redirect(`/admin/clients/${tenantId}?error=Enter+an+extension+between+1+and+365+days.`);
+  }
+
+  const { data: subscription, error: subscriptionError } = await supabase
+    .from("subscriptions")
+    .select("id, current_period_end")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (subscriptionError || !subscription) {
+    redirect(`/admin/clients/${tenantId}?error=That+client+has+no+subscription.`);
+  }
+
+  const beforeEnd = subscription.current_period_end;
+  const afterEnd = addDays(new Date(beforeEnd), days).toISOString();
+  const { error: updateError } = await supabase
+    .from("subscriptions")
+    .update({ current_period_end: afterEnd })
+    .eq("id", subscription.id);
+
+  if (updateError) {
+    redirect(`/admin/clients/${tenantId}?error=The+subscription+period+could+not+be+extended.`);
+  }
+
+  await recordAudit(session, {
+    action: "subscription.period_extended",
+    tenantId,
+    subjectType: "subscription",
+    subjectId: subscription.id,
+    before: { current_period_end: beforeEnd },
+    after: { current_period_end: afterEnd, days },
+  });
+
+  redirect(`/admin/clients/${tenantId}?success=Subscription+period+extended.`);
 }
