@@ -25,6 +25,8 @@ const SECTIONS = [
   { label: "Payments", href: "/admin/payments" },
   { label: "Plans", href: "/admin/plans" },
   { label: "Orders", href: "/admin/orders" },
+  { label: "Leads", href: "/admin/leads" },
+  { label: "Audit", href: "/admin/audit" },
 ];
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {

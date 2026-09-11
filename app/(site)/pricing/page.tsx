@@ -17,7 +17,7 @@ const PLANS = [
     price: "Rs 5,000",
     cadence: "per branch / month",
     pitch: "For a single shop or restaurant that needs clean billing and honest stock.",
-    cta: { label: "Book a demo", href: "/demo" },
+    cta: { label: "Get started", href: "/checkout" },
     features: [
       "Up to 2 registers, unlimited staff PINs",
       "Cash, card, Raast, Easypaisa and JazzCash",
@@ -34,7 +34,7 @@ const PLANS = [
     price: "Rs 10,000",
     cadence: "per branch / month",
     pitch: "For busy floors and multi-branch owners who want one set of numbers.",
-    cta: { label: "Book a demo", href: "/demo" },
+    cta: { label: "Get started", href: "/checkout" },
     featured: true,
     features: [
       "Everything in Standard",

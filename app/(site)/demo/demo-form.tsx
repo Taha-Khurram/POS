@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState } from "react";
+
+import { submitLead, type LeadState } from "./actions";
 
 const SIZES = [
   "1 branch, 1 register",
@@ -35,9 +37,12 @@ const CITIES = [
  * Action (or a route handler) once there is somewhere for the lead to land.
  */
 export function DemoForm() {
-  const [sent, setSent] = useState(false);
+  const [state, formAction, pending] = useActionState<LeadState, FormData>(submitLead, {
+    error: null,
+    sent: false,
+  });
 
-  if (sent) {
+  if (state.sent) {
     return (
       <div className="panel rim relative overflow-hidden rounded-[24px] p-8 text-center sm:p-12">
         <div aria-hidden className="stars absolute inset-0 opacity-60" />
@@ -74,8 +79,8 @@ export function DemoForm() {
 
           <button
             type="button"
-            onClick={() => setSent(false)}
             className="btn btn-ghost mt-8"
+            onClick={() => window.location.reload()}
           >
             Send another request
           </button>
@@ -86,10 +91,7 @@ export function DemoForm() {
 
   return (
     <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        setSent(true);
-      }}
+      action={formAction}
       className="panel relative overflow-hidden rounded-[24px] p-7 sm:p-10"
     >
       <div
@@ -205,11 +207,12 @@ export function DemoForm() {
       </div>
 
       <div className="relative mt-7 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+        {state.error ? <p className="text-[0.75rem] text-flare-300">{state.error}</p> : null}
         <p className="text-[0.75rem] text-mist-500">
           No advance, no obligation. We reply within one working day.
         </p>
-        <button type="submit" className="btn btn-primary w-full sm:w-auto">
-          Request a demo
+        <button type="submit" disabled={pending} className="btn btn-primary w-full sm:w-auto disabled:cursor-wait disabled:opacity-60">
+          {pending ? "Sending..." : "Request a demo"}
         </button>
       </div>
     </form>

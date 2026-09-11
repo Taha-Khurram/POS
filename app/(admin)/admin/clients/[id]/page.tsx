@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { extendSubscription, updateClientLifecycle } from "@/app/(admin)/admin/actions";
+import { extendSubscription, regenerateInvite, revokeInvite, updateClientLifecycle, updateClientSubscription } from "@/app/(admin)/admin/actions";
 import { canTakePayments, requirePlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
@@ -15,7 +15,8 @@ export const metadata: Metadata = {
 async function loadClient(id: string) {
   const supabase = createClient(await cookies());
 
-  const { data, error } = await supabase
+  const [{ data, error }, { data: plans, error: plansError }] = await Promise.all([
+    supabase
     .from("tenants")
     .select(
       `
@@ -33,6 +34,9 @@ async function loadClient(id: string) {
           status,
           billing_cycle,
           agreed_price,
+          max_branches,
+          max_registers,
+          feature_overrides,
           current_period_end,
           plan_id,
           plans ( code, name )
@@ -41,9 +45,11 @@ async function loadClient(id: string) {
       `,
     )
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle(),
+    supabase.from("plans").select("code, name").eq("is_active", true).order("sort_order", { ascending: true }),
+  ]);
 
-  if (error || !data) {
+  if (error || plansError || !data) {
     return null;
   }
 
@@ -89,17 +95,22 @@ async function loadClient(id: string) {
     branches: Array.isArray(data.branches) ? data.branches : data.branches ? [data.branches] : [],
     payments: payments ?? [],
     invites: invites ?? [],
+    plans: plans ?? [],
   };
 }
 
-export default async function ClientDetailPage({ params }: PageProps<"/admin/clients/[id]">) {
+export default async function ClientDetailPage({ params, searchParams }: PageProps<"/admin/clients/[id]">) {
   const session = await requirePlatformAdmin();
   const { id } = await params;
   const client = await loadClient(id);
+  const query = await searchParams;
 
   if (!client) {
     notFound();
   }
+
+  const message = typeof query?.error === "string" ? query.error : typeof query?.success === "string" ? query.success : null;
+  const inviteUrl = typeof query?.invite === "string" ? query.invite : null;
 
   return (
     <section className="section">
@@ -113,6 +124,8 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
             Back to clients
           </Link>
         </div>
+        {message ? <p className="mb-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[0.8125rem] text-mist-200">{message}</p> : null}
+        {inviteUrl ? <p className="mb-5 break-all rounded-2xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-[0.8125rem] text-mist-100">New invite: {inviteUrl}</p> : null}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <article className="panel rim rounded-[22px] p-6">
@@ -156,6 +169,20 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
                   <button type="submit" className="btn btn-primary btn-sm">Extend period</button>
                 </form>
               </div>
+            ) : null}
+            {session.platformRole === "super_admin" && client.subscription ? (
+              <details className="mt-6 border-t border-white/8 pt-5">
+                <summary className="cursor-pointer text-[0.8125rem] font-medium text-mist-200">Edit entitlements</summary>
+                <form action={updateClientSubscription} className="mt-5 grid gap-4 md:grid-cols-2">
+                  <input type="hidden" name="tenant_id" value={client.id} />
+                  <div><label htmlFor="plan_code" className="label">Plan</label><select id="plan_code" name="plan_code" className="field" defaultValue={client.subscription.plans?.code ?? ""}>{client.plans.map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></div>
+                  <div><label htmlFor="agreed_price" className="label">Agreed price</label><input id="agreed_price" name="agreed_price" type="number" min="0" step="0.01" className="field" defaultValue={client.subscription.agreed_price} /></div>
+                  <div><label htmlFor="max_branches" className="label">Max branches</label><input id="max_branches" name="max_branches" type="number" min="1" className="field" defaultValue={client.subscription.max_branches} /></div>
+                  <div><label htmlFor="max_registers" className="label">Max registers</label><input id="max_registers" name="max_registers" type="number" min="1" className="field" defaultValue={client.subscription.max_registers} /></div>
+                  <div className="md:col-span-2"><label htmlFor="feature_overrides" className="label">Feature overrides JSON</label><textarea id="feature_overrides" name="feature_overrides" rows={4} className="field font-mono text-[0.75rem]" defaultValue={JSON.stringify(client.subscription.feature_overrides ?? {}, null, 2)} /></div>
+                  <div><button type="submit" className="btn btn-primary btn-sm">Save entitlements</button></div>
+                </form>
+              </details>
             ) : null}
           </article>
         </div>
@@ -202,6 +229,7 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
                 ))
               )}
             </div>
+            {session.platformRole === "super_admin" ? <div className="mt-5 flex flex-wrap gap-2 border-t border-white/8 pt-5"><form action={regenerateInvite}><input type="hidden" name="tenant_id" value={client.id} /><button type="submit" className="btn btn-ghost btn-sm">Regenerate invite</button></form><form action={revokeInvite}><input type="hidden" name="tenant_id" value={client.id} /><button type="submit" className="btn btn-ghost btn-sm">Revoke pending invite</button></form></div> : null}
           </article>
 
           <article className="panel rim rounded-[22px] p-6">

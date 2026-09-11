@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { updatePlan } from "@/app/(admin)/admin/actions";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
@@ -23,9 +24,12 @@ async function loadPlans() {
   return data ?? [];
 }
 
-export default async function AdminPlansPage() {
-  await requirePlatformAdmin();
+export default async function AdminPlansPage({ searchParams }: PageProps<"/admin/plans">) {
+  const session = await requirePlatformAdmin();
   const plans = await loadPlans();
+  const params = await searchParams;
+  const error = typeof params?.error === "string" ? params.error : null;
+  const success = typeof params?.success === "string" ? params.success : null;
 
   return (
     <section className="section">
@@ -36,6 +40,8 @@ export default async function AdminPlansPage() {
           Plan definitions are editable from the console, not from a deploy. This is
           the single source of truth for what a client can and cannot do.
         </p>
+        {error ? <p className="mt-5 rounded-2xl border border-flare-400/30 bg-flare-400/10 px-4 py-3 text-[0.8125rem] text-mist-200">{error}</p> : null}
+        {success ? <p className="mt-5 rounded-2xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-[0.8125rem] text-mist-100">{success}</p> : null}
 
         <div className="mt-8 space-y-5">
           {plans.map((plan) => (
@@ -62,6 +68,22 @@ export default async function AdminPlansPage() {
                   </div>
                 ))}
               </div>
+
+              {session.platformRole === "super_admin" ? (
+                <details className="mt-6 border-t border-white/8 pt-5">
+                  <summary className="cursor-pointer text-[0.8125rem] font-medium text-mist-200">Edit plan</summary>
+                  <form action={updatePlan} className="mt-5 grid gap-4 md:grid-cols-2">
+                    <input type="hidden" name="code" value={plan.code} />
+                    <div><label htmlFor={`${plan.code}-name`} className="label">Name</label><input id={`${plan.code}-name`} name="name" className="field" defaultValue={plan.name} required /></div>
+                    <div><label htmlFor={`${plan.code}-price`} className="label">List price</label><input id={`${plan.code}-price`} name="list_price" type="number" min="0" step="0.01" className="field" defaultValue={plan.list_price} required /></div>
+                    <div className="md:col-span-2"><label htmlFor={`${plan.code}-pitch`} className="label">Pitch</label><input id={`${plan.code}-pitch`} name="pitch" className="field" defaultValue={plan.pitch ?? ""} /></div>
+                    <div className="md:col-span-2"><label htmlFor={`${plan.code}-features`} className="label">Features JSON</label><textarea id={`${plan.code}-features`} name="features" rows={6} className="field font-mono text-[0.75rem]" defaultValue={JSON.stringify(plan.features ?? {}, null, 2)} required /></div>
+                    <div><label htmlFor={`${plan.code}-sort`} className="label">Sort order</label><input id={`${plan.code}-sort`} name="sort_order" type="number" className="field" defaultValue={plan.sort_order} required /></div>
+                    <label className="flex items-center gap-3 self-end text-[0.8125rem] text-mist-300"><input type="checkbox" name="is_active" defaultChecked={plan.is_active} /> Active plan</label>
+                    <div><button type="submit" className="btn btn-primary btn-sm">Save plan</button></div>
+                  </form>
+                </details>
+              ) : null}
             </article>
           ))}
         </div>

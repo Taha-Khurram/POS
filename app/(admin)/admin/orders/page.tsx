@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { rejectOrder, verifyOrder } from "@/app/(admin)/admin/actions";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
@@ -13,7 +14,7 @@ async function loadOrders() {
   const supabase = createClient(await cookies());
   const { data, error } = await supabase
     .from("orders")
-    .select("id, reference, shop_name, owner_name, phone, city, status, quoted_price, created_at")
+    .select("id, reference, shop_name, owner_name, phone, city, status, quoted_price, proof_path, rejection_reason, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -33,6 +34,10 @@ export default async function AdminOrdersPage() {
         <p className="eyebrow">Orders</p>
         <h1 className="heading mt-3">Verification queue</h1>
 
+        <p className="mt-3 text-[0.875rem] text-mist-300">
+          Verify only after matching the transfer reference and payment proof against your statement.
+        </p>
+
         <div className="panel rim mt-8 overflow-hidden rounded-[22px]">
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[0.8125rem]">
@@ -43,12 +48,13 @@ export default async function AdminOrdersPage() {
                   <th className="px-4 py-3 font-medium">Owner</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Price</th>
+                  <th className="px-4 py-3 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-mist-400">
+                    <td colSpan={6} className="px-4 py-8 text-center text-mist-400">
                       No checkout orders in the queue.
                     </td>
                   </tr>
@@ -64,6 +70,23 @@ export default async function AdminOrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-mist-300">Rs {Number(order.quoted_price).toLocaleString("en-PK")}</td>
+                      <td className="px-4 py-3">
+                        {order.status === "proof_submitted" ? (
+                          <div className="flex flex-wrap gap-2">
+                            <form action={verifyOrder}>
+                              <input type="hidden" name="order_id" value={order.id} />
+                              <button type="submit" className="btn btn-primary btn-sm">Verify</button>
+                            </form>
+                            <form action={rejectOrder} className="flex gap-2">
+                              <input type="hidden" name="order_id" value={order.id} />
+                              <input name="reason" aria-label="Rejection reason" placeholder="Reason" className="field w-32" required />
+                              <button type="submit" className="btn btn-ghost btn-sm">Reject</button>
+                            </form>
+                          </div>
+                        ) : (
+                          <span className="text-mist-400">No action</span>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
