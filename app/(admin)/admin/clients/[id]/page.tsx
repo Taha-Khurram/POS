@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { extendSubscription, regenerateInvite, revokeInvite, updateClientLifecycle, updateClientSubscription } from "@/app/(admin)/admin/actions";
+import { addClientNote, extendSubscription, regenerateInvite, revokeInvite, updateClientLifecycle, updateClientSubscription } from "@/app/(admin)/admin/actions";
 import { canTakePayments, requirePlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/utils/supabase/server";
 
@@ -64,7 +64,7 @@ async function loadClient(id: string) {
       }
     : null;
 
-  const [{ data: payments, error: paymentsError }, { data: invites, error: invitesError }] = await Promise.all([
+  const [{ data: payments, error: paymentsError }, { data: invites, error: invitesError }, { data: notes, error: notesError }, { data: health, error: healthError }] = await Promise.all([
     supabase
       .from("payments")
       .select("id, amount, method, reference, paid_at, notes")
@@ -75,9 +75,19 @@ async function loadClient(id: string) {
       .select("id, email, phone, tenant_role, expires_at, used_at, revoked_at, created_at")
       .eq("tenant_id", id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("tenant_notes")
+      .select("id, body, created_at, author_id")
+      .eq("tenant_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("tenant_health")
+      .select("last_sale_at, last_sync_at, pending_outbox_count, registered_devices_count, staff_count, item_count, updated_at")
+      .eq("tenant_id", id)
+      .maybeSingle(),
   ]);
 
-  if (paymentsError || invitesError) {
+  if (paymentsError || invitesError || notesError || healthError) {
     return null;
   }
 
@@ -89,13 +99,15 @@ async function loadClient(id: string) {
     email: data.email,
     city: data.city,
     shopType: data.shop_type,
-    notes: data.notes,
+    profileNote: data.notes,
     createdAt: data.created_at,
     subscription: normalizedSubscription,
     branches: Array.isArray(data.branches) ? data.branches : data.branches ? [data.branches] : [],
     payments: payments ?? [],
     invites: invites ?? [],
     plans: plans ?? [],
+    notes: notes ?? [],
+    health,
   };
 }
 
@@ -206,9 +218,18 @@ export default async function ClientDetailPage({ params, searchParams }: PagePro
 
         <article className="panel rim mt-5 rounded-[22px] p-6">
           <h2 className="text-xl font-bold text-mist-50">Notes</h2>
-          <p className="mt-4 text-[0.875rem] leading-relaxed text-mist-300">
-            {client.notes || "No notes recorded yet."}
-          </p>
+          <form action={addClientNote} className="mt-4 flex gap-3">
+            <input type="hidden" name="tenant_id" value={client.id} />
+            <textarea name="body" rows={2} className="field min-h-20 flex-1" placeholder="Add an internal support note" required />
+            <button type="submit" className="btn btn-primary self-end btn-sm">Add note</button>
+          </form>
+          {client.profileNote ? <p className="mt-4 rounded-xl border border-white/8 bg-white/2 p-3 text-[0.8125rem] text-mist-400">Activation note: {client.profileNote}</p> : null}
+          {client.notes.length > 0 ? <div className="mt-5 space-y-3">{client.notes.map((note) => <div key={note.id} className="border-t border-white/8 pt-3"><p className="text-[0.875rem] leading-relaxed text-mist-300">{note.body}</p><p className="mt-1 text-[0.6875rem] text-mist-500">{new Date(note.created_at).toLocaleString("en-PK")}</p></div>)}</div> : <p className="mt-4 text-[0.875rem] text-mist-400">No timestamped notes yet.</p>}
+        </article>
+
+        <article className="panel rim mt-5 rounded-[22px] p-6">
+          <h2 className="text-xl font-bold text-mist-50">Health</h2>
+          {client.health ? <dl className="mt-5 grid gap-4 text-[0.875rem] sm:grid-cols-2 lg:grid-cols-3"><div><dt className="text-mist-400">Last sale</dt><dd className="mt-1 text-mist-50">{client.health.last_sale_at ? new Date(client.health.last_sale_at).toLocaleString("en-PK") : "No sale yet"}</dd></div><div><dt className="text-mist-400">Last sync</dt><dd className="mt-1 text-mist-50">{client.health.last_sync_at ? new Date(client.health.last_sync_at).toLocaleString("en-PK") : "Not synced"}</dd></div><div><dt className="text-mist-400">Pending outbox</dt><dd className="mt-1 text-mist-50">{client.health.pending_outbox_count}</dd></div><div><dt className="text-mist-400">Devices</dt><dd className="mt-1 text-mist-50">{client.health.registered_devices_count}</dd></div><div><dt className="text-mist-400">Staff</dt><dd className="mt-1 text-mist-50">{client.health.staff_count}</dd></div><div><dt className="text-mist-400">Items</dt><dd className="mt-1 text-mist-50">{client.health.item_count}</dd></div></dl> : <p className="mt-4 text-[0.875rem] text-mist-400">No register health snapshot has been reported yet.</p>}
         </article>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">

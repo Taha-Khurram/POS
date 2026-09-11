@@ -2,12 +2,17 @@
 
 import { redirect } from "next/navigation";
 
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
 const MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "application/pdf"];
 
 export async function uploadPaymentProof(formData: FormData) {
+  if (!(await consumeRateLimit("payment-proof", 10, 3600))) {
+    redirect(`/order/${encodeURIComponent(String(formData.get("reference") ?? ""))}?error=Too+many+upload+attempts.+Please+try+again+later.`);
+  }
+
   const reference = String(formData.get("reference") ?? "").trim();
   const file = formData.get("proof");
 

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { rejectOrder, verifyOrder } from "@/app/(admin)/admin/actions";
 import { requirePlatformAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
 export const metadata: Metadata = {
@@ -21,7 +22,12 @@ async function loadOrders() {
     throw new Error(error.message);
   }
 
-  return data ?? [];
+  const admin = createAdminClient();
+  return Promise.all((data ?? []).map(async (order) => {
+    if (!order.proof_path) return { ...order, proofUrl: null };
+    const { data: signed } = await admin.storage.from("payment-proofs").createSignedUrl(order.proof_path, 300);
+    return { ...order, proofUrl: signed?.signedUrl ?? null };
+  }));
 }
 
 export default async function AdminOrdersPage() {
@@ -71,6 +77,7 @@ export default async function AdminOrdersPage() {
                       </td>
                       <td className="px-4 py-3 text-mist-300">Rs {Number(order.quoted_price).toLocaleString("en-PK")}</td>
                       <td className="px-4 py-3">
+                        {order.proofUrl ? <a href={order.proofUrl} target="_blank" rel="noreferrer" className="mb-2 block text-[0.75rem] text-iris-200 underline">View proof</a> : null}
                         {order.status === "proof_submitted" ? (
                           <div className="flex flex-wrap gap-2">
                             <form action={verifyOrder}>

@@ -220,9 +220,11 @@ export async function verifyOrder(formData: FormData) {
   const orderId = toText(formData.get("order_id"));
   if (!orderId) redirect("/admin/orders?error=The+order+could+not+be+identified.");
 
+  const claimStartedAt = new Date().toISOString();
+  const claimExpiry = new Date(Date.now() - 10 * 60_000).toISOString();
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, status, shop_name, owner_name, phone, email, city, shop_type, plan_id, billing_cycle, branches, registers, quoted_price")
+    .select("id, status, shop_name, owner_name, phone, email, city, shop_type, plan_id, billing_cycle, branches, registers, quoted_price, verification_started_at")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -230,10 +232,23 @@ export async function verifyOrder(formData: FormData) {
     redirect("/admin/orders?error=Only+orders+with+submitted+proof+can+be+verified.");
   }
 
+  const { data: claimedOrder, error: claimError } = await supabase
+    .from("orders")
+    .update({ verification_started_at: claimStartedAt })
+    .eq("id", order.id)
+    .eq("status", "proof_submitted")
+    .or(`verification_started_at.is.null,verification_started_at.lt.${claimExpiry}`)
+    .select("id, shop_name, owner_name, phone, email, city, shop_type, plan_id, billing_cycle, branches, registers, quoted_price")
+    .maybeSingle();
+
+  if (claimError || !claimedOrder) {
+    redirect("/admin/orders?error=That+order+is+already+being+verified.+Try+again+in+a+few+minutes.");
+  }
+
   const { data: plan, error: planError } = await supabase
     .from("plans")
     .select("code")
-    .eq("id", order.plan_id)
+    .eq("id", claimedOrder.plan_id)
     .maybeSingle();
 
   if (planError || !plan) {
@@ -241,17 +256,17 @@ export async function verifyOrder(formData: FormData) {
   }
 
   const activationData = new FormData();
-  activationData.set("shop_name", order.shop_name);
-  activationData.set("owner_name", order.owner_name);
-  activationData.set("phone", order.phone);
-  activationData.set("email", order.email ?? "");
-  activationData.set("city", order.city);
-  activationData.set("shop_type", order.shop_type);
+  activationData.set("shop_name", claimedOrder.shop_name);
+  activationData.set("owner_name", claimedOrder.owner_name);
+  activationData.set("phone", claimedOrder.phone);
+  activationData.set("email", claimedOrder.email ?? "");
+  activationData.set("city", claimedOrder.city);
+  activationData.set("shop_type", claimedOrder.shop_type);
   activationData.set("plan_code", plan.code);
-  activationData.set("billing_cycle", order.billing_cycle);
-  activationData.set("branches", String(order.branches));
-  activationData.set("registers", String(order.registers));
-  activationData.set("agreed_price", String(order.quoted_price));
+  activationData.set("billing_cycle", claimedOrder.billing_cycle);
+  activationData.set("branches", String(claimedOrder.branches));
+  activationData.set("registers", String(claimedOrder.registers));
+  activationData.set("agreed_price", String(claimedOrder.quoted_price));
   activationData.set("trial_days", "0");
   activationData.set("notes", `Verified self-serve order ${order.id}`);
 
@@ -263,6 +278,7 @@ export async function verifyOrder(formData: FormData) {
       tenant_id: tenantId,
       verified_by: session.userId,
       verified_at: new Date().toISOString(),
+      verification_started_at: null,
     })
     .eq("id", order.id);
 
@@ -666,4 +682,31 @@ export async function revokeInvite(formData: FormData) {
   if (error) redirect(`/admin/clients/${tenantId}?error=The+invite+could+not+be+revoked.`);
   await recordAudit(session, { action: "invite.revoked", tenantId, subjectType: "tenant", subjectId: tenantId });
   redirect(`/admin/clients/${tenantId}?success=Invite+revoked.`);
+}
+
+export async function addClientNote(formData: FormData) {
+  const session = await requirePlatformAdmin();
+  const tenantId = toText(formData.get("tenant_id"));
+  const body = toText(formData.get("body"));
+
+  if (!tenantId || !body) redirect(`/admin/clients/${tenantId}?error=Write+a+note+before+saving.`);
+
+  const supabase = createAdminClient();
+  const { data: note, error } = await supabase
+    .from("tenant_notes")
+    .insert({ tenant_id: tenantId, author_id: session.userId, body })
+    .select("id")
+    .single();
+
+  if (error || !note) redirect(`/admin/clients/${tenantId}?error=The+note+could+not+be+saved.`);
+
+  await recordAudit(session, {
+    action: "tenant.note_added",
+    tenantId,
+    subjectType: "tenant_note",
+    subjectId: note.id,
+    after: { body },
+  });
+
+  redirect(`/admin/clients/${tenantId}?success=Note+added.`);
 }

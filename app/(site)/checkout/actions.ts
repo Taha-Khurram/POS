@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 const SHOP_TYPES = ["kiryana", "restaurant", "bakery", "pharmacy", "clothing", "retail", "other"];
@@ -12,6 +13,10 @@ function text(value: FormDataEntryValue | null) {
 }
 
 export async function createCheckoutOrder(formData: FormData) {
+  if (!(await consumeRateLimit("checkout", 5, 3600))) {
+    redirect("/checkout?error=Too+many+attempts.+Please+try+again+later.");
+  }
+
   const shopName = text(formData.get("shop_name"));
   const ownerName = text(formData.get("owner_name"));
   const phone = text(formData.get("phone"));

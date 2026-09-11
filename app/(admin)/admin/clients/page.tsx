@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Client records, plan entitlements, and activation status.",
 };
 
-async function loadClients() {
+async function loadClients(filters: { search: string; status: string; city: string }) {
   const supabase = createClient(await cookies());
 
   const { data, error } = await supabase
@@ -50,12 +50,24 @@ async function loadClients() {
       periodEnd: subscription?.current_period_end ?? null,
       createdAt: row.created_at,
     };
+  }).filter((client) => {
+    const haystack = `${client.shopName} ${client.ownerName} ${client.phone}`.toLowerCase();
+    return (!filters.search || haystack.includes(filters.search.toLowerCase()))
+      && (!filters.status || client.status === filters.status)
+      && (!filters.city || client.city === filters.city);
   });
 }
 
-export default async function AdminClientsPage() {
+export default async function AdminClientsPage({ searchParams }: PageProps<"/admin/clients">) {
   await requirePlatformAdmin();
-  const clients = await loadClients();
+  const params = await searchParams;
+  const filters = {
+    search: typeof params?.search === "string" ? params.search : "",
+    status: typeof params?.status === "string" ? params.status : "",
+    city: typeof params?.city === "string" ? params.city : "",
+  };
+  const clients = await loadClients(filters);
+  const cities = [...new Set(clients.map((client) => client.city))].sort();
 
   return (
     <section className="section">
@@ -70,6 +82,13 @@ export default async function AdminClientsPage() {
             Activate client
           </Link>
         </div>
+
+        <form method="get" className="panel mt-6 grid gap-3 rounded-[18px] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+          <input name="search" className="field" placeholder="Search shop, owner, or phone" defaultValue={filters.search} />
+          <select name="status" className="field" defaultValue={filters.status}><option value="">All statuses</option><option value="trialing">Trialing</option><option value="active">Active</option><option value="past_due">Past due</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
+          <select name="city" className="field" defaultValue={filters.city}><option value="">All cities</option>{cities.map((city) => <option key={city} value={city}>{city}</option>)}</select>
+          <button type="submit" className="btn btn-ghost">Filter</button>
+        </form>
 
         <div className="panel rim mt-8 overflow-hidden rounded-[22px]">
           <div className="overflow-x-auto">

@@ -86,6 +86,18 @@ insert into public.audit_log (actor_id, actor_kind, action, tenant_id)
 values ('99999999-0000-4000-8000-000000000001', 'platform_admin',
         'tenant.activated', 'aaaaaaaa-0000-4000-8000-000000000001');
 
+insert into public.tenant_notes (tenant_id, author_id, body)
+values ('aaaaaaaa-0000-4000-8000-000000000001',
+  '99999999-0000-4000-8000-000000000001', 'Test support note');
+
+insert into public.tenant_health (tenant_id, last_sale_at, staff_count, item_count)
+values ('aaaaaaaa-0000-4000-8000-000000000001', now() - interval '1 hour', 2, 14);
+
+insert into public.renewal_reminders (tenant_id, subscription_id, reminder_date, days_until_expiry)
+select tenant_id, id, current_date, 7
+from public.subscriptions
+where tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001';
+
 -- =============================================================================
 -- Tenant A's owner
 -- =============================================================================
@@ -158,6 +170,23 @@ select is_empty(
   'tenant user cannot read the lead list'
 );
 
+select is_empty(
+  $$ select 1 from public.tenant_notes $$,
+  'tenant user cannot read internal support notes'
+);
+
+select is_empty(
+  $$ select 1 from public.tenant_health $$,
+  'tenant user cannot read platform health snapshots'
+);
+
+select throws_ok(
+  $$ insert into public.tenant_notes (tenant_id, body)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'Forged note') $$,
+  '42501', null,
+  'tenant user cannot write support notes'
+);
+
 -- No write policy exists anywhere, and the write privileges are revoked, so
 -- these fail on privilege (42501) rather than on a policy — belt and braces.
 select throws_ok(
@@ -228,6 +257,12 @@ select isnt_empty($$ select 1 from public.audit_log $$,
   'platform admin reads the audit trail');
 select isnt_empty($$ select 1 from public.leads $$,
   'platform admin reads the lead queue');
+select isnt_empty($$ select 1 from public.tenant_notes $$,
+  'platform admin reads support notes');
+select isnt_empty($$ select 1 from public.tenant_health $$,
+  'platform admin reads health snapshots');
+select isnt_empty($$ select 1 from public.renewal_reminders $$,
+  'platform admin reads renewal reminders');
 
 -- Impersonation is read-only. The console writes with the service role inside a
 -- Server Action; an admin's own JWT must never be able to touch tenant data.
@@ -262,6 +297,14 @@ select throws_ok(
   '42501', null,
   'anon cannot post to leads directly — the demo form goes through a Server Action'
 );
+select throws_ok($$ select 1 from public.tenant_notes $$, '42501', null,
+  'anon cannot read support notes');
+select throws_ok($$ select 1 from public.tenant_health $$, '42501', null,
+  'anon cannot read health snapshots');
+select throws_ok($$ select 1 from public.renewal_reminders $$, '42501', null,
+  'anon cannot read renewal reminders');
+select throws_ok($$ select 1 from public.request_rate_limits $$, '42501', null,
+  'anon cannot inspect rate limits');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it

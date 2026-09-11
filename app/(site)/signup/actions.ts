@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { recordAudit } from "@/lib/audit";
 import { sha256Hex } from "@/lib/invite-token";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 function text(value: FormDataEntryValue | null) {
@@ -11,6 +12,10 @@ function text(value: FormDataEntryValue | null) {
 }
 
 export async function redeemInvite(formData: FormData) {
+  if (!(await consumeRateLimit("signup", 5, 3600))) {
+    redirect("/signup?error=Too+many+attempts.+Please+try+again+later.");
+  }
+
   const token = text(formData.get("token"));
   const email = text(formData.get("email")).toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -63,14 +68,16 @@ export async function redeemInvite(formData: FormData) {
     redirect(`/signup?token=${encodeURIComponent(token)}&error=Your+account+could+not+be+attached+to+the+shop.`);
   }
 
-  const { error: inviteUpdateError } = await supabase
+  const { data: redeemedInvite, error: inviteUpdateError } = await supabase
     .from("invites")
     .update({ used_at: new Date().toISOString(), used_by: user.user.id })
     .eq("id", invite.id)
     .is("used_at", null)
-    .is("revoked_at", null);
+    .is("revoked_at", null)
+    .select("id")
+    .maybeSingle();
 
-  if (inviteUpdateError) {
+  if (inviteUpdateError || !redeemedInvite) {
     await supabase.from("profiles").delete().eq("id", user.user.id);
     await supabase.auth.admin.deleteUser(user.user.id);
     redirect(`/signup?token=${encodeURIComponent(token)}&error=That+invite+could+not+be+completed.`);
