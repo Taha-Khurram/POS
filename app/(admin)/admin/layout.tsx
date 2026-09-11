@@ -19,7 +19,12 @@ export const metadata: Metadata = {
  * `.field`, `.btn-primary`. It suits a dashboard opened on a laptop and costs
  * no new CSS. `/app` is the one place that gets its own visual language.
  */
-const SECTIONS = [{ label: "Overview", href: "/admin" }];
+const SECTIONS = [
+  { label: "Overview", href: "/admin" },
+  { label: "Clients", href: "/admin/clients" },
+  { label: "Plans", href: "/admin/plans" },
+  { label: "Orders", href: "/admin/orders" },
+];
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const session = await requirePlatformAdmin();
