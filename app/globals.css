@@ -947,6 +947,65 @@
     color: var(--harbour);
   }
 
+  /* Settings is the first screen here with more labels than numbers, so the
+     label gets a class rather than the same four utilities forty times. */
+  .pos-label {
+    display: block;
+    margin-bottom: 0.3125rem;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-graphite-700);
+  }
+
+  .pos-hint {
+    margin-top: 0.3125rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--color-graphite-500);
+  }
+
+  /* Section switcher. Links rather than buttons: the tab lives in the URL, so
+     the page behind it stays a server component and a half-filled settings
+     screen can be sent to whoever actually knows the NTN. */
+  .pos-tabs {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--pale-sky);
+  }
+
+  .pos-tab {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-graphite-500);
+    white-space: nowrap;
+    transition: color 0.2s var(--ease-out-soft);
+  }
+
+  .pos-tab:hover { color: var(--harbour); }
+
+  .pos-tab[aria-current="page"] { color: var(--yale-blue); }
+
+  /* The underline sits on the container's own border, not beside it. */
+  .pos-tab[aria-current="page"]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0.375rem;
+    bottom: -2px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--harbour);
+  }
+
   /* ---------------- Surfaces ---------------- */
 
   /* No ornament: four of these sit in a row and anything decorative on one is

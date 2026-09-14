@@ -1,6 +1,7 @@
 /**
- * The frame every widget on the dashboard sits in: a title, an optional line of
- * context, a slot for controls on the right, and the body.
+ * The frame every widget in the console sits in: a title, an optional line of
+ * context, a slot for controls on the right, the body, and an optional ruled
+ * footer.
  *
  * It exists so that eight widgets cannot drift into eight slightly different
  * paddings and heading sizes — the thing that makes a dashboard feel assembled
@@ -11,6 +12,7 @@ export function ChartCard({
   title,
   caption,
   actions,
+  footer,
   bleed = false,
   className = "",
   children,
@@ -18,6 +20,8 @@ export function ChartCard({
   title: string;
   caption?: string;
   actions?: React.ReactNode;
+  /** A ruled strip under the body. Settings puts its save bar here. */
+  footer?: React.ReactNode;
   /** Let the body run to the card's edge — tables want this, charts don't. */
   bleed?: boolean;
   className?: string;
@@ -39,6 +43,12 @@ export function ChartCard({
       </header>
 
       <div className={bleed ? "flex-1" : "flex-1 px-4 pb-4"}>{children}</div>
+
+      {footer ? (
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-azure-100 px-4 py-3">
+          {footer}
+        </footer>
+      ) : null}
     </section>
   );
 }

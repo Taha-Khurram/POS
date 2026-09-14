@@ -1,27 +1,124 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import { IconSettings } from "@/components/pos/icons";
-import { ModulePlaceholder } from "@/components/pos/module-placeholder";
+import { IconEmployees, IconStore } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
+import { getShopProfile } from "@/lib/pos/shop";
+import { RolesPanel } from "./roles-panel";
+import { StorePanel } from "./store-panel";
 
 export const metadata: Metadata = {
   title: "Settings",
+  description: "Shop details, tax, and who can sign in.",
 };
 
-export default async function SettingsPage() {
-  await requireSession();
+const TABS = [
+  { id: "store", label: "Store & location", icon: IconStore },
+  { id: "roles", label: "Roles & permissions", icon: IconEmployees },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const isTab = (value: unknown): value is TabId =>
+  TABS.some((tab) => tab.id === value);
+
+/**
+ * Settings.
+ *
+ * The section lives in the URL rather than in React state, for the same reason
+ * the dashboard's period does: the page stays a server component, and a half
+ * filled screen can be sent to whoever actually knows the NTN.
+ */
+export default async function SettingsPage({
+  searchParams,
+}: PageProps<"/app/settings">) {
+  const session = await requireSession();
+
+  const raw = (await searchParams).tab;
+  const tab: TabId = isTab(raw) ? raw : "store";
+
+  if (!session.tenantId) {
+    return <NotAttached />;
+  }
+
+  const [shop, entitlements] = await Promise.all([
+    getShopProfile(session.tenantId),
+    getEntitlements(session.tenantId),
+  ]);
+
+  // The claim says there is a shop but RLS returned nothing. In practice that
+  // is the access-token hook switched off in the project, which is worth
+  // saying out loud — it is silent everywhere else.
+  if (!shop) return <NotAttached unreadable />;
 
   return (
-    <ModulePlaceholder
-      title="Settings"
-      lede="Shop details, branches, receipt layout, and who can sign in."
-      icon={IconSettings}
-      arriving="Part 7 — week of 6 October"
-      bullets={[
-        "Receipt header, footer, and the 80 mm printer test page.",
-        "Branch list and which register belongs to which counter.",
-        "Your plan, your renewal date, and your invoices.",
-      ]}
-    />
+    <div className="space-y-4">
+      <header>
+        <h1 className="font-display text-[1.5rem] leading-tight font-bold">
+          Settings
+        </h1>
+        <p className="mt-1 text-[0.8125rem] text-graphite-500">
+          {shop.shopName} · {shop.city}
+        </p>
+      </header>
+
+      <nav className="pos-tabs" aria-label="Settings sections">
+        {TABS.map((item) => (
+          <Link
+            key={item.id}
+            href={`/app/settings?tab=${item.id}`}
+            className="pos-tab"
+            aria-current={item.id === tab ? "page" : undefined}
+            scroll={false}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "store" ? (
+        <StorePanel shop={shop} maxBranches={entitlements?.maxBranches ?? null} />
+      ) : (
+        <RolesPanel
+          shop={shop}
+          ownerEmail={session.email}
+          ownerRole={session.tenantRole}
+        />
+      )}
+
+      <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
+        Receipt layout, the 80 mm printer test page, and your plan and invoices
+        arrive in Part 7 — week of 6 October.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Signed in, but nothing to show. Same words as the register's gate, because
+ * it is the same problem and a shopkeeper should not have to work out that two
+ * screens are complaining about one thing.
+ */
+function NotAttached({ unreadable = false }: { unreadable?: boolean }) {
+  return (
+    <div className="pos-card mx-auto max-w-lg p-6">
+      <h1 className="font-display text-[1.375rem] font-bold">
+        Account not attached yet
+      </h1>
+      <p className="mt-3 text-[0.9375rem] leading-relaxed text-graphite-700">
+        You are signed in, but this login is not linked to a shop. Message us on
+        the same WhatsApp number you arranged Flo on and we will attach it.
+      </p>
+
+      {unreadable ? (
+        <p className="pos-hint mt-3">
+          Developer note: the session carries a tenant but the shop row came
+          back empty, which almost always means the Customize Access Token hook
+          is off. Run <code>npm run doctor</code> with your password.
+        </p>
+      ) : null}
+    </div>
   );
 }
