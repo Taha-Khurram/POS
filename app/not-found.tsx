@@ -26,7 +26,7 @@ export default function NotFound() {
       <main className="flex-1">
         <section className="relative isolate flex min-h-[calc(100vh-4rem)] items-center overflow-hidden py-28">
           <div aria-hidden className="absolute inset-0 -z-10">
-            <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_50%_0%,#12132b_0%,#08080f_50%,#04040a_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_50%_0%,#12132b_0%,#08080f_50%,#03060e_100%)]" />
             <Starfield className="absolute inset-0 h-full w-full" />
             <div className="glow left-1/2 top-[18%] h-64 w-[32rem] -translate-x-1/2 animate-breathe bg-iris-600/22" />
           </div>

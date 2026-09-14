@@ -6,28 +6,31 @@
 
 @theme {
   /* Surfaces — near-black cosmic stack */
-  --color-ink-950: #04040a;
-  --color-ink-900: #07070e;
-  --color-ink-850: #0a0b14;
-  --color-ink-800: #0e0f1b;
-  --color-ink-750: #131426;
-  --color-ink-700: #1a1c33;
-  --color-ink-600: #262a48;
+  --color-ink-950: #03060e;
+  --color-ink-900: #050a14;
+  --color-ink-850: #070d1a;
+  --color-ink-800: #0a1122;
+  --color-ink-750: #0e182e;
+  --color-ink-700: #14203c;
+  --color-ink-600: #1f2f52;
 
-  /* Brand — iris */
-  --color-iris-200: #c7d2fe;
-  --color-iris-300: #a5b4fc;
-  --color-iris-400: #818cf8;
-  --color-iris-500: #6366f1;
-  --color-iris-600: #4f46e5;
-  --color-iris-700: #4338ca;
+  /* Brand — iris. The scale is named for the old indigo; the values are the
+     blue ramp (icy blue → baby blue ice → blue energy → electric sapphire →
+     ultrasonic blue), light at 200 and deep at 700. Keep that order: gradients
+     and shadows across the site assume 500→600 darkens. */
+  --color-iris-200: #add7f6;
+  --color-iris-300: #87bfff;
+  --color-iris-400: #3f8efc;
+  --color-iris-500: #2667ff;
+  --color-iris-600: #3b28cc;
+  --color-iris-700: #3020a4;
 
   /* Text */
-  --color-mist-50: #f7f7fb;
-  --color-mist-200: #dcdce8;
-  --color-mist-300: #b6b6cc;
-  --color-mist-400: #8f8fa8;
-  --color-mist-500: #6d6d85;
+  --color-mist-50: #f5f8fc;
+  --color-mist-200: #d7dfec;
+  --color-mist-300: #aebbd0;
+  --color-mist-400: #8695ae;
+  --color-mist-500: #66758f;
 
   /* Signals */
   --color-flare-400: #f472b6;
@@ -44,6 +47,33 @@
   --color-graphite-500: #64708a;
   --color-graphite-700: #3b4557;
   --color-graphite-900: #171b26;
+
+  /* Console blue — /app's interactive ramp. The register needed a brand colour
+     that still reads on a cheap tablet under a tube light, so the console runs
+     this scale instead of iris-*: same family, far more contrast at the deep
+     end. Light at 50, deep at 900; the aliases below are the palette's own
+     names, kept so design and code argue about the same words. */
+  --color-azure-50: #e3f2fd;
+  --color-azure-100: #bbdefb;
+  --color-azure-200: #90caf9;
+  --color-azure-300: #64b5f6;
+  --color-azure-400: #42a5f5;
+  --color-azure-500: #2196f3;
+  --color-azure-600: #1e88e5;
+  --color-azure-700: #1976d2;
+  --color-azure-800: #1565c0;
+  --color-azure-900: #0d47a1;
+
+  /* Status — the one thing a blue-only palette cannot express. Every badge
+     built on these also carries a word, so state is never colour alone. */
+  --color-signal-good: #0f7b55;
+  --color-signal-warn: #b45309;
+  --color-signal-bad: #be123c;
+
+  /* Console chrome metrics */
+  --pos-header: 60px;
+  --pos-rail: 244px;
+  --pos-rail-tight: 68px;
 
   /* Type */
   --font-display: var(--font-jakarta), "Segoe UI", system-ui, sans-serif;
@@ -240,8 +270,11 @@
 
   .pos-card {
     background-color: var(--color-paper-50);
-    border: 1px solid var(--color-paper-200);
+    border: 1px solid var(--icy-blue);
     border-radius: 16px;
+    box-shadow:
+      0 1px 2px rgb(13 71 161 / 0.05),
+      0 12px 28px -22px rgb(13 71 161 / 0.45);
   }
 
   /* ---------------- Type ---------------- */
@@ -269,7 +302,7 @@
       100deg,
       var(--color-iris-400) 0%,
       var(--color-iris-300) 40%,
-      #e6e9ff 100%
+      #eef7fd 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
@@ -319,7 +352,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgb(165 180 252 / 0.55),
+      rgb(135 191 255 / 0.55),
       transparent
     );
     pointer-events: none;
@@ -360,18 +393,18 @@
       var(--color-iris-500) 0%,
       var(--color-iris-600) 100%
     );
-    border: 1px solid rgb(199 210 254 / 0.35);
+    border: 1px solid rgb(173 215 246 / 0.35);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.22),
-      0 10px 30px -10px rgb(79 70 229 / 0.75);
+      0 10px 30px -10px rgb(59 40 204 / 0.75);
   }
 
   .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.28),
-      0 18px 44px -12px rgb(99 102 241 / 0.9),
-      0 0 0 6px rgb(99 102 241 / 0.14);
+      0 18px 44px -12px rgb(38 103 255 / 0.9),
+      0 0 0 6px rgb(38 103 255 / 0.14);
   }
 
   /* Light sweep on hover */
@@ -405,8 +438,8 @@
   .btn-ghost:hover {
     transform: translateY(-2px);
     background: rgb(255 255 255 / 0.06);
-    border-color: rgb(165 180 252 / 0.5);
-    box-shadow: 0 14px 36px -14px rgb(99 102 241 / 0.6);
+    border-color: rgb(135 191 255 / 0.5);
+    box-shadow: 0 14px 36px -14px rgb(38 103 255 / 0.6);
   }
 
   .btn-sm { padding: 0.5625rem 1.25rem; font-size: 0.875rem; }
@@ -475,9 +508,9 @@
 
   .field:focus {
     outline: none;
-    border-color: rgb(165 180 252 / 0.55);
+    border-color: rgb(135 191 255 / 0.55);
     background: rgb(255 255 255 / 0.05);
-    box-shadow: 0 0 0 4px rgb(99 102 241 / 0.14);
+    box-shadow: 0 0 0 4px rgb(38 103 255 / 0.14);
   }
 
   /* Select arrow, since `appearance: none` removes the UA one */
@@ -510,7 +543,7 @@
     background-image:
       radial-gradient(1.6px 1.6px at 12% 18%, rgb(255 255 255 / 0.55) 50%, transparent 50%),
       radial-gradient(1.2px 1.2px at 78% 12%, rgb(255 255 255 / 0.40) 50%, transparent 50%),
-      radial-gradient(1.4px 1.4px at 34% 62%, rgb(199 210 254 / 0.45) 50%, transparent 50%),
+      radial-gradient(1.4px 1.4px at 34% 62%, rgb(173 215 246 / 0.45) 50%, transparent 50%),
       radial-gradient(1px 1px at 62% 78%, rgb(255 255 255 / 0.35) 50%, transparent 50%),
       radial-gradient(1.8px 1.8px at 90% 54%, rgb(255 255 255 / 0.30) 50%, transparent 50%),
       radial-gradient(1.1px 1.1px at 6% 82%, rgb(255 255 255 / 0.30) 50%, transparent 50%),
@@ -543,8 +576,8 @@
 
   .card-lift:hover {
     transform: translateY(-6px);
-    border-color: rgb(165 180 252 / 0.3);
-    box-shadow: 0 28px 60px -30px rgb(79 70 229 / 0.65);
+    border-color: rgb(135 191 255 / 0.3);
+    box-shadow: 0 28px 60px -30px rgb(59 40 204 / 0.65);
   }
 
   /* Fanned deck of cards — each rests at --tilt and straightens on hover */
@@ -579,7 +612,7 @@
     opacity: 0;
     background: radial-gradient(
       380px circle at var(--mx, 50%) var(--my, 50%),
-      rgb(129 140 248 / 0.16),
+      rgb(63 142 252 / 0.16),
       transparent 65%
     );
     transition: opacity 0.5s var(--ease-out-soft);
@@ -592,6 +625,533 @@
 /* ==========================================================================
    Utilities
    ========================================================================== */
+
+/* ==========================================================================
+   Console (/app) — the blue system
+   ========================================================================== */
+
+/* The palette under its own names. Utilities come off the --color-azure-*
+   scale; these aliases exist so hand-written CSS, this file, and a design file
+   can all say "ocean deep" and mean one hex. The chart series are named here
+   too — see the note above .pos-legend for why they are not 500 and 700. */
+:root {
+  --alice-blue: var(--color-azure-50);
+  --icy-blue: var(--color-azure-100);
+  --sky-blue: var(--color-azure-200);
+  --cool-sky: var(--color-azure-300);
+  --cool-sky-2: var(--color-azure-400);
+  --dodger-blue: var(--color-azure-500);
+  --brilliant-azure: var(--color-azure-600);
+  --twitter-blue: var(--color-azure-700);
+  --ocean-deep: var(--color-azure-800);
+  --cobalt-blue: var(--color-azure-900);
+
+  --chart-sales: var(--cool-sky);
+  --chart-profit: var(--ocean-deep);
+  --chart-bar: var(--twitter-blue);
+  --chart-grid: color-mix(in oklab, var(--cobalt-blue) 11%, transparent);
+}
+
+@layer components {
+  /* ---------------- Shell ----------------
+     One grid: rail, then work surface. The rail width is a custom property so
+     collapsing it is a single inline style on the shell rather than a class
+     swap on every child. */
+
+  .pos-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100dvh;
+  }
+
+  @media (width >= 64rem) {
+    .pos-shell {
+      grid-template-columns: var(--rail, var(--pos-rail)) minmax(0, 1fr);
+      transition: grid-template-columns 0.38s var(--ease-out-soft);
+    }
+  }
+
+  /* The work surface. A hair of blue behind the cards, so white reads as
+     raised rather than as more background. */
+  .pos-canvas {
+    min-width: 0;
+    background:
+      radial-gradient(
+        56rem 28rem at 88% -12%,
+        color-mix(in oklab, var(--icy-blue) 60%, transparent),
+        transparent 70%
+      ),
+      var(--alice-blue);
+  }
+
+  /* ---------------- Rail ---------------- */
+
+  .pos-rail {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 50;
+    display: flex;
+    width: var(--pos-rail);
+    flex-direction: column;
+    background: linear-gradient(190deg, var(--cobalt-blue) 0%, #082f66 100%);
+    color: color-mix(in oklab, #fff 78%, var(--sky-blue));
+    transform: translate3d(-100%, 0, 0);
+    transition: transform 0.38s var(--ease-out-soft);
+  }
+
+  .pos-rail[data-open="true"] { transform: none; }
+
+  @media (width >= 64rem) {
+    .pos-rail {
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+      width: auto;
+      transform: none;
+    }
+  }
+
+  .pos-rail-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 12px;
+    padding: 0.5625rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: color-mix(in oklab, #fff 70%, var(--cool-sky));
+    transition:
+      background-color 0.25s var(--ease-out-soft),
+      color 0.25s var(--ease-out-soft);
+  }
+
+  .pos-rail-link:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #fff;
+  }
+
+  .pos-rail-link[aria-current="page"] {
+    background: var(--brilliant-azure);
+    color: #fff;
+    box-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.85);
+  }
+
+  /* Lit edge, so the active module still reads when the rail is icons-only */
+  .pos-rail-link[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: -0.625rem;
+    top: 50%;
+    height: 18px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--sky-blue);
+    transform: translateY(-50%);
+  }
+
+  /* Collapsed: icons only, but the label stays in the DOM for screen readers
+     and for the hover tooltip. */
+  .pos-rail[data-tight="true"] .pos-rail-link {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .pos-rail[data-tight="true"] .pos-rail-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .pos-rail-section {
+    padding: 0 0.75rem 0.4rem;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: color-mix(in oklab, #fff 42%, var(--cool-sky));
+  }
+
+  .pos-rail[data-tight="true"] .pos-rail-section { visibility: hidden; }
+
+  .pos-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgb(6 28 62 / 0.5);
+    animation: float-in 0.25s var(--ease-out-soft) both;
+  }
+
+  /* ---------------- Topbar ---------------- */
+
+  .pos-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: var(--pos-header);
+    padding-inline: clamp(0.625rem, 2vw, 1.25rem);
+    border-bottom: 1px solid var(--icy-blue);
+    background: color-mix(in oklab, var(--color-paper-50) 88%, transparent);
+    backdrop-filter: blur(12px) saturate(150%);
+  }
+
+  /* ---------------- Controls ---------------- */
+
+  .pos-field {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--icy-blue);
+    background: var(--color-paper-50);
+    padding: 0.5rem 0.75rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    color: var(--color-graphite-900);
+    transition:
+      border-color 0.25s var(--ease-out-soft),
+      box-shadow 0.25s var(--ease-out-soft);
+  }
+
+  .pos-field::placeholder { color: var(--color-graphite-500); }
+
+  .pos-field:focus {
+    outline: none;
+    border-color: var(--dodger-blue);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--dodger-blue) 22%, transparent);
+  }
+
+  select.pos-field {
+    appearance: none;
+    padding-right: 2rem;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--twitter-blue) 50%),
+      linear-gradient(135deg, var(--twitter-blue) 50%, transparent 50%);
+    background-position: right 1rem center, right 0.75rem center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  .pos-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 10px;
+    padding: 0.5rem 0.875rem;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition:
+      background-color 0.25s var(--ease-out-soft),
+      border-color 0.25s var(--ease-out-soft),
+      color 0.25s var(--ease-out-soft),
+      box-shadow 0.3s var(--ease-out-soft),
+      transform 0.3s var(--ease-out-back);
+  }
+
+  .pos-btn:active { transform: scale(0.97); }
+
+  .pos-btn-primary {
+    color: #fff;
+    background: var(--twitter-blue);
+    border-color: var(--ocean-deep);
+    box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--cobalt-blue) 92%, transparent);
+  }
+
+  .pos-btn-primary:hover {
+    background: var(--brilliant-azure);
+    box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--cobalt-blue) 92%, transparent);
+  }
+
+  .pos-btn-soft {
+    color: var(--ocean-deep);
+    background: var(--alice-blue);
+    border-color: var(--icy-blue);
+  }
+
+  .pos-btn-soft:hover { background: var(--icy-blue); }
+
+  .pos-btn-quiet {
+    color: var(--color-graphite-700);
+    background: transparent;
+  }
+
+  .pos-btn-quiet:hover {
+    background: var(--alice-blue);
+    color: var(--ocean-deep);
+  }
+
+  .pos-btn-sm {
+    padding: 0.3125rem 0.625rem;
+    font-size: 0.8125rem;
+  }
+
+  /* Square control for the icon-only affordances in the topbar */
+  .pos-icon-btn {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 10px;
+    color: var(--color-graphite-700);
+    cursor: pointer;
+    transition:
+      background-color 0.25s var(--ease-out-soft),
+      color 0.25s var(--ease-out-soft);
+  }
+
+  .pos-icon-btn:hover {
+    background: var(--alice-blue);
+    color: var(--twitter-blue);
+  }
+
+  /* ---------------- Surfaces ---------------- */
+
+  .pos-kpi {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Corner light — the only ornament on a KPI, and it sits under the text */
+  .pos-kpi::after {
+    content: "";
+    position: absolute;
+    top: -46px;
+    right: -34px;
+    width: 132px;
+    height: 132px;
+    border-radius: 999px;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--sky-blue) 50%, transparent),
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+
+  .pos-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    min-width: 230px;
+    padding: 0.375rem;
+    border-radius: 14px;
+    border: 1px solid var(--icy-blue);
+    background: var(--color-paper-50);
+    box-shadow: 0 26px 52px -26px rgb(13 71 161 / 0.5);
+    animation: float-in 0.22s var(--ease-out-soft) both;
+  }
+
+  .pos-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9px;
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+    font-size: 0.8125rem;
+    color: var(--color-graphite-700);
+    cursor: pointer;
+    transition:
+      background-color 0.2s var(--ease-out-soft),
+      color 0.2s var(--ease-out-soft);
+  }
+
+  .pos-menu-item:hover {
+    background: var(--alice-blue);
+    color: var(--ocean-deep);
+  }
+
+  /* ---------------- Badges ----------------
+     Every badge carries a word as well as a colour, so nobody has to guess at
+     "returned" versus "paid" from hue alone. */
+
+  .pos-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.1875rem 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pos-badge-info {
+    color: var(--ocean-deep);
+    background: var(--alice-blue);
+    border-color: var(--icy-blue);
+  }
+
+  .pos-badge-good {
+    color: var(--color-signal-good);
+    background: color-mix(in oklab, var(--color-signal-good) 9%, #fff);
+    border-color: color-mix(in oklab, var(--color-signal-good) 26%, #fff);
+  }
+
+  .pos-badge-warn {
+    color: var(--color-signal-warn);
+    background: color-mix(in oklab, var(--color-signal-warn) 9%, #fff);
+    border-color: color-mix(in oklab, var(--color-signal-warn) 26%, #fff);
+  }
+
+  .pos-badge-bad {
+    color: var(--color-signal-bad);
+    background: color-mix(in oklab, var(--color-signal-bad) 8%, #fff);
+    border-color: color-mix(in oklab, var(--color-signal-bad) 24%, #fff);
+  }
+
+  /* ---------------- Table ---------------- */
+
+  .pos-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .pos-table th {
+    padding: 0.5625rem 0.75rem;
+    text-align: left;
+    white-space: nowrap;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ocean-deep);
+    background: var(--alice-blue);
+    border-bottom: 1px solid var(--icy-blue);
+  }
+
+  .pos-table td {
+    padding: 0.6875rem 0.75rem;
+    white-space: nowrap;
+    color: var(--color-graphite-700);
+    border-bottom: 1px solid var(--color-paper-200);
+  }
+
+  .pos-table tbody tr {
+    transition: background-color 0.2s var(--ease-out-soft);
+  }
+
+  .pos-table tbody tr:hover {
+    background: color-mix(in oklab, var(--alice-blue) 65%, #fff);
+  }
+
+  .pos-table tbody tr:last-child td { border-bottom: 0; }
+
+  /* Money and counts line up or they cannot be scanned down a column */
+  .pos-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------- Ranking list ---------------- */
+
+  .pos-rank {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    border-radius: 8px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ocean-deep);
+    background: var(--alice-blue);
+  }
+
+  .pos-rank[data-lead="true"] {
+    color: #fff;
+    background: var(--twitter-blue);
+  }
+
+  .pos-meter {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--alice-blue);
+    overflow: hidden;
+  }
+
+  .pos-meter > span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--chart-bar);
+    transform-origin: left;
+    animation: bar-grow 0.85s var(--ease-out-soft) both;
+  }
+
+  /* ---------------- Chart chrome ----------------
+     The series pair is cool-sky / ocean-deep rather than dodger / twitter as
+     the palette roles would suggest: those two sit ΔE 9.5 apart in OKLab,
+     under the 15 floor for telling two lines apart at a glance. Same ten
+     colours, two steps further out, ΔE 23.9. Legend and end-labels carry the
+     identity as well, since cool-sky alone is only 2.16:1 against white. */
+
+  .pos-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.875rem;
+    font-size: 0.75rem;
+    color: var(--color-graphite-700);
+  }
+
+  .pos-legend-key {
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border-radius: 3px;
+  }
+
+  .pos-tip {
+    position: absolute;
+    z-index: 20;
+    min-width: 122px;
+    padding: 0.5rem 0.625rem;
+    border-radius: 10px;
+    border: 1px solid var(--icy-blue);
+    background: var(--color-paper-50);
+    box-shadow: 0 18px 36px -20px rgb(13 71 161 / 0.55);
+    pointer-events: none;
+  }
+
+  /* ---------------- Console overrides of the dark base ---------------- */
+
+  .pos-root :focus-visible { outline-color: var(--brilliant-azure); }
+
+  .pos-root ::selection {
+    background: color-mix(in oklab, var(--dodger-blue) 28%, transparent);
+    color: var(--cobalt-blue);
+  }
+
+  .pos-root ::-webkit-scrollbar-track { background: var(--alice-blue); }
+
+  .pos-root ::-webkit-scrollbar-thumb {
+    background: var(--sky-blue);
+    border-color: var(--alice-blue);
+  }
+
+  .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--cool-sky); }
+}
 
 @utility hide-scrollbar {
   scrollbar-width: none;

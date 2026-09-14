@@ -83,8 +83,8 @@ export function UnifiedPlatform() {
             >
               <defs>
                 <linearGradient id="trace-base" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#4338ca" stopOpacity="0.15" />
-                  <stop offset="100%" stopColor="#818cf8" stopOpacity="0.55" />
+                  <stop offset="0%" stopColor="#3020a4" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="#3f8efc" stopOpacity="0.55" />
                 </linearGradient>
               </defs>
 
@@ -102,7 +102,7 @@ export function UnifiedPlatform() {
                   <path
                     d={d}
                     fill="none"
-                    stroke="#c7d2fe"
+                    stroke="#add7f6"
                     strokeWidth="1.75"
                     strokeLinecap="round"
                     strokeDasharray="16 300"
@@ -116,7 +116,7 @@ export function UnifiedPlatform() {
 
               {/* Solder pads at the line ends */}
               {[96, 152, 252, 308].map((y) => (
-                <circle key={y} cx="2" cy={y} r="2.5" fill="#818cf8" opacity="0.7" />
+                <circle key={y} cx="2" cy={y} r="2.5" fill="#3f8efc" opacity="0.7" />
               ))}
             </svg>
 

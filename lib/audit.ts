@@ -56,10 +56,14 @@ export async function recordAudit(
   }
 }
 
-const actorKind = (actor: SessionContext | null): AuditActorKind => {
-  if (!actor) return "system";
-  return actor.platformRole ? "platform_admin" : "tenant_user";
-};
+/**
+ * Every signed-in actor is a tenant user now — the platform console, and the
+ * `platform_admin` kind that went with it, are gone. The kind is kept on the
+ * row because `audit_log` is append-only: history written by the old console
+ * still carries it, and re-labelling it is not possible by design.
+ */
+const actorKind = (actor: SessionContext | null): AuditActorKind =>
+  actor ? "tenant_user" : "system";
 
 /**
  * `x-forwarded-for` is a list; the client is the first entry. Stored as `inet`,

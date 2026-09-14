@@ -6,20 +6,16 @@ import { cache } from "react";
 
 import { createClient } from "@/utils/supabase/server";
 
-export type PlatformRole = "super_admin" | "support";
 export type TenantRole = "owner" | "manager";
 
-const PLATFORM_ROLES = ["super_admin", "support"] as const;
 const TENANT_ROLES = ["owner", "manager"] as const;
 
 export type SessionContext = {
   userId: string;
   email: string | null;
-  /** Null for a signed-up-but-not-yet-activated account. It sees nothing. */
   tenantId: string | null;
   tenantRole: TenantRole | null;
   branchId: string | null;
-  platformRole: PlatformRole | null;
 };
 
 const asString = (value: unknown): string | null =>
@@ -41,7 +37,8 @@ function asMember<T extends readonly string[]>(
  * server on every render.
  *
  * Note the claim is `tenant_role`, not `role`: Supabase already uses `role` for
- * the Postgres role the request runs as.
+ * the Postgres role the request runs as. `platform_role` is still stamped by
+ * the hook but no longer read here — there is no platform console to gate.
  *
  * Wrapped in `cache()` so the app gate can call it without re-verifying the
  * token more than once per request.
@@ -60,19 +57,16 @@ export const getSessionContext = cache(
       tenantId: asString(claims.tenant_id),
       tenantRole: asMember(claims.tenant_role, TENANT_ROLES),
       branchId: asString(claims.branch_id),
-      platformRole: asMember(claims.platform_role, PLATFORM_ROLES),
     };
   },
 );
 
 /**
- * Gate for `/app`. Signed out goes to the login page with a return path; a
- * session with no tenant is allowed through so the layout can explain itself
- * rather than bouncing the owner in a loop.
+ * Gate for `/app`. Signed out goes back to the login page, which has one
+ * destination of its own — so there is no return path to carry.
  */
-export async function requireSession(returnTo: string): Promise<SessionContext> {
+export async function requireSession(): Promise<SessionContext> {
   const session = await getSessionContext();
-  if (!session) redirect(`/login?next=${encodeURIComponent(returnTo)}`);
+  if (!session) redirect("/login");
   return session;
 }
-

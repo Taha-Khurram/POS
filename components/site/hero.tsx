@@ -13,7 +13,7 @@ export function Hero() {
     <section id="top" className="relative isolate overflow-hidden">
       {/* ---------- Ambient background ---------- */}
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(120%_75%_at_50%_-10%,#12132b_0%,#08080f_45%,#04040a_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_75%_at_50%_-10%,#12132b_0%,#08080f_45%,#03060e_100%)]" />
 
         <Starfield className="absolute inset-0 h-full w-full" />
 
@@ -22,14 +22,14 @@ export function Hero() {
           className="absolute -left-[24%] top-[4%] h-[3px] w-[82%] origin-left rotate-[33deg] blur-[1px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(199 210 254 / 0.25) 14%, rgb(255 255 255 / 0.7) 48%, rgb(255 255 255 / 1) 68%, rgb(199 210 254 / 0.5) 88%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(173 215 246 / 0.25) 14%, rgb(255 255 255 / 0.7) 48%, rgb(255 255 255 / 1) 68%, rgb(173 215 246 / 0.5) 88%, transparent)",
           }}
         />
         <div
           className="absolute -left-[28%] top-[-2%] h-[260px] w-[92%] origin-left rotate-[33deg] blur-[64px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(99 102 241 / 0.30) 26%, rgb(165 180 252 / 0.50) 62%, rgb(129 140 248 / 0.18) 84%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(38 103 255 / 0.30) 26%, rgb(135 191 255 / 0.50) 62%, rgb(63 142 252 / 0.18) 84%, transparent)",
           }}
         />
         <div className="glow left-[26%] top-[30%] h-40 w-40 bg-iris-200/45 blur-[52px]" />

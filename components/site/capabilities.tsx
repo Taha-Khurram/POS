@@ -220,7 +220,7 @@ const MESSAGES = [
   {
     id: "#1042",
     status: "Ready",
-    tint: "#4f46e5",
+    tint: "#3b28cc",
     ago: "2m",
     body: "Your parcel is ready at the counter — thanks for waiting.",
     name: "Bilal Ahmed",
@@ -231,13 +231,13 @@ const MESSAGES = [
   {
     id: "#1043",
     status: "Preparing",
-    tint: "#6366f1",
+    tint: "#2667ff",
     ago: "7m",
     body: "Karahi is on the fire — about ten minutes for your table.",
     name: "Ayesha Siddiqui",
     contact: "+92 321 455 9032",
     initials: "AS",
-    avatar: "linear-gradient(135deg,#34d399,#818cf8)",
+    avatar: "linear-gradient(135deg,#34d399,#3f8efc)",
   },
 ];
 
@@ -268,9 +268,9 @@ function MiniDashboard() {
         <div className="mt-2 grid grid-cols-4 gap-1.5">
           {[
             { w: "22%", c: "#f472b6" },
-            { w: "34%", c: "#a5b4fc" },
-            { w: "46%", c: "#818cf8" },
-            { w: "18%", c: "#6d6d85" },
+            { w: "34%", c: "#87bfff" },
+            { w: "46%", c: "#3f8efc" },
+            { w: "18%", c: "#66758f" },
           ].map((bar) => (
             <div key={bar.c} className="h-2 rounded-full bg-white/6">
               <div
@@ -301,7 +301,7 @@ function MiniDashboard() {
               <path
                 d="M2 40 C 20 34, 30 16, 46 22 S 74 44, 90 30 S 118 8, 134 18 S 152 30, 158 24"
                 fill="none"
-                stroke="#818cf8"
+                stroke="#3f8efc"
                 strokeWidth="1.6"
                 strokeLinecap="round"
               />

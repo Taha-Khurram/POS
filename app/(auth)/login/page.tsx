@@ -7,74 +7,186 @@ import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
   title: "Log in",
-  description: "Sign in to your Flo back office.",
+  description: "Sign in to your Flo dashboard.",
+  // Nothing here should ever land in a search result.
+  robots: { index: false, follow: false },
 };
 
 const entrance = (delay: number) => ({
   animation: `fade-up 1s var(--ease-out-soft) ${delay}ms both`,
 });
 
-export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  // Set by the `/app` gate, so someone who was bounced here lands back where
-  // they were headed rather than on a generic dashboard.
-  const nextParam = (await searchParams).next;
-  const next = typeof nextParam === "string" ? nextParam : undefined;
+/** What the person signing in is about to walk into, in their own terms. */
+const INSIDE: { title: string; detail: string }[] = [
+  {
+    title: "Aaj ka hisaab, on one screen",
+    detail:
+      "Sales, profit, margin and basket count for today — or any window back to last month — the moment you land.",
+  },
+  {
+    title: "FBR digital invoicing, already filed",
+    detail:
+      "Every completed receipt carries its invoice number. No separate portal at the end of the month.",
+  },
+  {
+    title: "Udhaar khata that adds up",
+    detail:
+      "Who owes what, since when. The register writes it; nobody keeps a second copy in a notebook.",
+  },
+  {
+    title: "Keeps billing through load-shedding",
+    detail:
+      "The counter works offline and settles up when the light comes back. A dead UPS is not a closed shop.",
+  },
+];
 
+/** Numbers that mean something at a counter, not vanity metrics. */
+const PROOF: { figure: string; label: string }[] = [
+  { figure: "< 2s", label: "to ring up a basket" },
+  { figure: "9am–2am", label: "support on WhatsApp" },
+  { figure: "Rs 0", label: "to switch your data over" },
+];
+
+/**
+ * The sign-in screen. It lives in `(auth)`, not `(site)`, so it carries no Nav
+ * and no Footer — see the layout note.
+ *
+ * Two panels: what is behind the door on the left, the door itself on the
+ * right. Below `lg` the left panel collapses to a short strip rather than
+ * disappearing, because a shopkeeper opening this on a phone at 8am still
+ * wants to know they are in the right place before typing a password.
+ */
+export default function LoginPage() {
   return (
-    <section className="relative isolate flex min-h-[calc(100vh-4rem)] items-center overflow-hidden py-28 sm:py-32">
+    <div className="relative isolate grid min-h-dvh lg:grid-cols-[1.05fr_minmax(0,0.95fr)]">
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_50%_0%,#12132b_0%,#08080f_50%,#04040a_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_20%_0%,#12132b_0%,#08080f_52%,#03060e_100%)]" />
         <Starfield className="absolute inset-0 h-full w-full" />
-        <div className="glow left-1/2 top-[12%] h-72 w-[34rem] -translate-x-1/2 animate-breathe bg-iris-600/22" />
+        <div className="glow left-[10%] top-[8%] h-80 w-[36rem] animate-breathe bg-iris-600/20" />
+        <div className="glow right-[4%] bottom-[6%] h-72 w-[28rem] bg-iris-500/12" />
       </div>
 
-      <div className="shell">
-        <div className="mx-auto w-full max-w-[26rem]">
-          <div className="text-center" style={entrance(60)}>
-            <FloMark priority className="mx-auto h-10 w-auto" />
-            <h1 className="mt-5 font-display text-[1.75rem] font-bold">
-              Welcome back
-            </h1>
-            <p className="lede mt-2 text-[0.9375rem]">
-              Sign in to your Flo back office.
-            </p>
-          </div>
+      {/* ---------------- Left: what Flo is ---------------- */}
+      <section className="flex flex-col justify-between gap-12 px-6 py-10 sm:px-10 lg:py-14 xl:px-16">
+        <header style={entrance(40)}>
+          <Link href="/" className="inline-flex" aria-label="Flo home">
+            <FloMark priority className="h-8 w-auto" />
+          </Link>
+        </header>
 
+        <div className="max-w-xl">
+          <p className="eyebrow" style={entrance(100)}>
+            Flo back office
+          </p>
+
+          <h1
+            className="mt-4 font-display text-[clamp(2rem,4.4vw,3.1rem)] leading-[1.06] font-bold"
+            style={entrance(160)}
+          >
+            Your counter,{" "}
+            <span className="text-gradient">already counted</span>.
+          </h1>
+
+          <p className="lede mt-4" style={entrance(220)}>
+            Sign in to the dashboard your shop has been filling all day — from
+            Karachi to Sialkot, on the same tablet you bill on.
+          </p>
+
+          <ul className="mt-9 grid gap-5 sm:grid-cols-2">
+            {INSIDE.map((item, index) => (
+              <li key={item.title} style={entrance(300 + index * 70)}>
+                <p className="flex items-center gap-2 font-display text-[0.9375rem] font-semibold">
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 flex-none rounded-full bg-iris-400"
+                  />
+                  {item.title}
+                </p>
+                <p className="mt-1.5 pl-3.5 text-[0.8125rem] leading-relaxed text-mist-400">
+                  {item.detail}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <dl
+          className="flex flex-wrap gap-x-10 gap-y-5 border-t border-white/10 pt-7"
+          style={entrance(620)}
+        >
+          {PROOF.map((item) => (
+            <div key={item.label}>
+              <dt className="font-display text-[1.375rem] font-bold tabular-nums">
+                {item.figure}
+              </dt>
+              <dd className="mt-0.5 text-[0.75rem] text-mist-400">{item.label}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      {/* ---------------- Right: the form ---------------- */}
+      <section className="flex items-center justify-center px-6 pb-14 sm:px-10 lg:py-14">
+        <div className="w-full max-w-[26rem]">
           <div
-            className="panel rim relative mt-8 overflow-hidden rounded-[24px] p-7 sm:p-8"
-            style={entrance(200)}
+            className="panel rim relative overflow-hidden rounded-[24px] p-7 sm:p-8"
+            style={entrance(240)}
           >
             <div
               aria-hidden
               className="glow -right-14 -top-20 h-52 w-52 bg-iris-600/18"
             />
+
             <div className="relative">
-              <LoginForm next={next} />
+              <h2 className="font-display text-[1.5rem] leading-tight font-bold">
+                Welcome back
+              </h2>
+              <p className="mt-1.5 text-[0.875rem] text-mist-400">
+                Sign in and we will take you straight to the dashboard.
+              </p>
+
+              <div className="mt-7">
+                <LoginForm />
+              </div>
             </div>
           </div>
 
           <p
-            className="mt-6 text-center text-[0.8125rem] text-mist-400"
-            style={entrance(320)}
+            className="mt-6 text-center text-[0.8125rem] leading-relaxed text-mist-400"
+            style={entrance(360)}
           >
-            No account yet?{" "}
+            Locked out, or not set up yet?{" "}
             <Link
               href="/demo"
               className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
             >
-              Book a demo
+              Message us
             </Link>{" "}
-            or{" "}
+            and we will sort it on the same WhatsApp number you arranged Flo on.
+          </p>
+
+          <p
+            className="mt-8 text-center text-[0.75rem] text-mist-500"
+            style={entrance(420)}
+          >
             <Link
-              href="/pricing"
-              className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
+              href="/"
+              className="transition-colors duration-300 hover:text-mist-200"
             >
-              compare the two plans
+              Back to flo.pk
             </Link>
-            .
+            <span aria-hidden className="px-2 text-mist-600">
+              ·
+            </span>
+            <Link
+              href="/privacy"
+              className="transition-colors duration-300 hover:text-mist-200"
+            >
+              Privacy
+            </Link>
           </p>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

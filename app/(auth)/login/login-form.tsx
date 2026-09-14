@@ -12,14 +12,15 @@ const INITIAL: LoginState = { error: null };
  * session cookies persist either way, so it decided nothing — and a control
  * that looks like a security choice but is wired to nothing is worse than no
  * control at all.
+ *
+ * There is no `next` field any more either: sign-in has exactly one
+ * destination now, so there is nothing for the form to carry.
  */
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm() {
   const [state, formAction, pending] = useActionState(signIn, INITIAL);
 
   return (
     <form action={formAction} className="grid gap-5">
-      {next ? <input type="hidden" name="next" value={next} /> : null}
-
       {state.error ? (
         <p
           role="alert"

@@ -22,7 +22,7 @@ export function PageHeader({ eyebrow, title, lede, children }: PageHeaderProps) 
   return (
     <section className="relative isolate overflow-hidden">
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_-25%,#12132b_0%,#08080f_50%,#04040a_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_-25%,#12132b_0%,#08080f_50%,#03060e_100%)]" />
         <div className="stars absolute inset-0 opacity-70" />
         <div className="glow left-1/2 top-[-5rem] h-72 w-[42rem] -translate-x-1/2 animate-breathe bg-iris-600/22" />
         <div className="glow left-[18%] top-[38%] h-32 w-32 bg-iris-300/25 blur-[54px]" />

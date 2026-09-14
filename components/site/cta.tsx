@@ -16,7 +16,7 @@ export function Cta() {
           className="absolute bottom-[30%] left-1/2 h-[3px] w-[46rem] max-w-[92vw] -translate-x-1/2 blur-[2px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(199 210 254 / 0.65) 45%, rgb(255 255 255 / 0.85) 50%, rgb(199 210 254 / 0.65) 55%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(173 215 246 / 0.65) 45%, rgb(255 255 255 / 0.85) 50%, rgb(173 215 246 / 0.65) 55%, transparent)",
           }}
         />
 

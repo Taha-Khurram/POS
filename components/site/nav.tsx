@@ -65,8 +65,8 @@ export function Nav() {
           // since a 50% radius on a tall box renders as an ellipse.
           borderRadius: menuOpen ? "1.75rem" : "999px",
           boxShadow: condensed
-            ? "0 18px 50px -24px rgb(4 4 10 / 0.9), inset 0 1px 0 0 rgb(255 255 255 / 0.06)"
-            : "0 10px 34px -26px rgb(4 4 10 / 0.7)",
+            ? "0 18px 50px -24px rgb(3 6 14 / 0.9), inset 0 1px 0 0 rgb(255 255 255 / 0.06)"
+            : "0 10px 34px -26px rgb(3 6 14 / 0.7)",
         }}
       >
         <div className="flex items-center justify-between gap-3">

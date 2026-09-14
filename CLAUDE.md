@@ -39,13 +39,15 @@ in filename order.
 
 ## Layout
 
-Two route groups under a single root layout. `app/layout.tsx` is html, body
+Three route groups under a single root layout. `app/layout.tsx` is html, body
 and fonts only — chrome belongs to the group.
 
 - `app/(site)/` — the public marketing routes. `(site)/layout.tsx` adds `Nav`
   and `Footer`. One folder per route, each a server component exporting
   `metadata`; route-local client components live beside their page
   (`app/(site)/demo/demo-form.tsx`).
+- `app/(auth)/login/` — sign-in, in its own group precisely so it gets neither
+  `Nav` nor `Footer`. `(auth)/layout.tsx` is a bare full-height wrapper.
 - `app/(app)/app/` — the client's product: register and back office.
   `layout.tsx` is the auth gate and the light `.pos-root` shell.
 - `app/not-found.tsx` sits above the groups, so it carries `Nav`/`Footer`
@@ -55,9 +57,11 @@ and fonts only — chrome belongs to the group.
 - `components/motion/` — the animation primitives: `Reveal`, `CountUp`, `Tilt`,
   and the `useInView` / `usePrefersReducedMotion` hooks.
 - `lib/` — server-only domain logic, each module opening with `import
-  "server-only"`: `auth.ts` (session claims and the two route gates),
+  "server-only"`: `auth.ts` (session claims and the `/app` gate),
   `entitlements.ts` (the single authority on what a plan allows), `audit.ts`,
-  `format.ts`.
+  `format.ts`, `pos/` (the dashboard's window and data contract). The one
+  exception is `lib/pos/timeframe-options.ts` — the period list is shared with
+  the client filter, so it carries no `server-only` and no imports.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -163,8 +167,18 @@ request verify the token once.
 
 ## Not built yet
 
-`app/(site)/login/login-form.tsx` fakes a pending state and
 `app/(site)/demo/demo-form.tsx` swaps to a thank-you panel locally — nothing is
-sent anywhere. Wire them to `supabase.auth.signInWithPassword` and a Server
-Action writing to `leads` respectively. `/app` is a gated shell with no modules
-behind it yet; `Plan.md` has the order they arrive in.
+sent anywhere. Wire it to a Server Action writing to `leads`.
+
+Sign-in is real, but deliberately narrow while the product is in private
+preview: `app/(auth)/login/actions.ts` holds an `ALLOWED_EMAILS` list of one
+address, checked *before* Supabase verifies the password, and every successful
+sign-in lands on `/app` — there is no `next` return path and no role-based
+fork. Delete the constant and its check to open it up.
+
+There is no platform console and no shop lookup. `/app` reads no `tenants` or
+`branches` row: the layout dresses the console from constants and the dashboard
+seeds its sample figures off the signed-in account, so an account with a null
+`tenant_id` still reaches the dashboard. `lib/pos/dashboard.ts` documents the
+queries that replace the sample data, and `Plan.md` has the order the modules
+arrive in.
