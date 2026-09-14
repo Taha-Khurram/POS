@@ -1,0 +1,986 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { BarcodeScanner } from "@/components/pos/barcode-scanner";
+import {
+  IconAlert,
+  IconBarcode,
+  IconCamera,
+  IconCheck,
+  IconClose,
+  IconPlus,
+  IconSearch,
+  IconTag,
+  IconTrash,
+} from "@/components/pos/icons";
+import {
+  categoriesIn,
+  DEPARTMENTS,
+  GLOBAL_SAMPLE,
+  internalBarcode,
+  looksScanned,
+  marginOf,
+  SAMPLE_ITEMS,
+  suggestSku,
+  TRACKING,
+  UNITS,
+  type TrackingMode,
+  type UnitId,
+} from "@/lib/pos/catalog";
+import { rupees } from "@/lib/format";
+
+/**
+ * Adding one product.
+ *
+ * The order of the sheet is the order of the hands: the barcode comes first
+ * because the item is already on the counter and the scanner is already in
+ * reach, and everything a lookup can fill is directly under it. Pricing sits
+ * above stock because a shopkeeper always knows what they paid and often has
+ * to go and count what is on the shelf.
+ *
+ * Three things here are real arithmetic rather than decoration — the margin
+ * readout, the internal EAN-13, and the variant matrix — because those are the
+ * three that are wrong on every spreadsheet this screen replaces. Saving is
+ * what is missing, and the footer says so.
+ */
+
+/** Rupee fields arrive as strings; an empty one is 0, never NaN. */
+const num = (value: string) => {
+  const parsed = Number(value.replace(/[,\s]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/** Where the digits in the barcode field came from. It changes what we say. */
+type CodeSource = "none" | "scanned" | "typed" | "internal";
+
+type LookupState = "idle" | "searching" | "hit" | "miss";
+
+const TAX_RATES = [
+  { id: "18", label: "18% — standard (FBR)" },
+  { id: "16", label: "16% — Punjab services (PRA)" },
+  { id: "0", label: "0% — exempt or zero-rated" },
+];
+
+/** Quick ways to land on a round margin instead of doing the division. */
+const MARGIN_STEPS = [15, 20, 25, 30];
+
+type Option = { id: string; name: string; values: string };
+
+const NEW_OPTIONS: Option[] = [
+  { id: "opt-1", name: "Size", values: "Small, Medium, Large" },
+  { id: "opt-2", name: "Colour", values: "" },
+];
+
+/** Every combination of every option, in the order the rows were typed. */
+function matrixOf(options: Option[]) {
+  const lists = options
+    .map((option) => ({
+      name: option.name.trim(),
+      values: option.values
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    }))
+    .filter((option) => option.name && option.values.length > 0);
+
+  if (lists.length === 0) return [];
+
+  return lists.reduce<string[][]>(
+    (rows, list) => rows.flatMap((row) => list.values.map((value) => [...row, value])),
+    [[]],
+  );
+}
+
+export function ProductSheet({ onClose }: { onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+
+  const [barcode, setBarcode] = useState("");
+  const [source, setSource] = useState<CodeSource>("none");
+  const [scanning, setScanning] = useState(false);
+  const [lookup, setLookup] = useState<LookupState>("idle");
+
+  const [name, setName] = useState("");
+  const [urdu, setUrdu] = useState("");
+  const [department, setDepartment] = useState(DEPARTMENTS[0].name);
+  const [category, setCategory] = useState(DEPARTMENTS[0].categories[0].name);
+  const [sub, setSub] = useState("");
+  const [supplier, setSupplier] = useState("");
+
+  const [cost, setCost] = useState("");
+  const [price, setPrice] = useState("");
+  const [taxRate, setTaxRate] = useState("18");
+
+  const [tracking, setTracking] = useState<TrackingMode>("unit");
+  const [unit, setUnit] = useState<UnitId>("piece");
+  const [stock, setStock] = useState("");
+  const [lowAt, setLowAt] = useState("12");
+  const [options, setOptions] = useState<Option[]>(NEW_OPTIONS);
+
+  // The serial the next in-store code and the suggested SKU are cut from. It
+  // stands in for a `nextval` on the tenant's own sequence — which is what
+  // makes the printed label unique to this shop rather than to this tab.
+  const [serial, setSerial] = useState(SAMPLE_ITEMS.length + 1);
+
+  const [skuTouched, setSkuTouched] = useState(false);
+  const [sku, setSku] = useState("");
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !scanning) onClose();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // The barcode field, not the dialog: the item is on the counter and the
+    // scanner is a keyboard. Landing anywhere else means one wasted tap on
+    // every single item, which over 400 items is the whole afternoon.
+    codeRef.current?.focus();
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previous;
+    };
+  }, [onClose, scanning]);
+
+  const categories = categoriesIn(department);
+  const subs = categories.find((item) => item.name === category)?.sub ?? [];
+
+  const suggested = suggestSku(department, name, serial);
+  const effectiveSku = skuTouched ? sku : suggested;
+
+  const money = marginOf(num(cost), num(price));
+  const losing = money !== null && money.profit < 0;
+
+  const combos = useMemo(() => matrixOf(options), [options]);
+  const fractional = UNITS.find((item) => item.id === unit)?.fractional ?? false;
+
+  /* ---------------- Barcode capture ----------------
+     A USB scanner is a keyboard that types a whole code in under a tenth of a
+     second and presses Enter. Nothing needs to be installed for that to work —
+     but knowing it *was* a scanner is worth the two refs, because a 13-digit
+     code typed by hand is where mis-keyed digits come from, and only the typed
+     one is worth checking a digit at a time. */
+  const burstStart = useRef(0);
+  const burstKeys = useRef(0);
+
+  const onCodeKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const elapsed = Date.now() - burstStart.current;
+      const value = event.currentTarget.value.trim();
+      if (!value) return;
+
+      setSource(burstKeys.current >= 6 && elapsed < 400 ? "scanned" : "typed");
+      setLookup("idle");
+      burstKeys.current = 0;
+      return;
+    }
+
+    if (burstKeys.current === 0) burstStart.current = Date.now();
+    burstKeys.current += 1;
+  };
+
+  const acceptScan = (code: string) => {
+    setBarcode(code);
+    setSource("scanned");
+    setLookup("idle");
+    setScanning(false);
+  };
+
+  const generateCode = () => {
+    setBarcode(internalBarcode(serial));
+    setSource("internal");
+    setLookup("idle");
+  };
+
+  const clearCode = () => {
+    setBarcode("");
+    setSource("none");
+    setLookup("idle");
+    codeRef.current?.focus();
+  };
+
+  const runLookup = () => {
+    setLookup("searching");
+
+    // Stands in for the round trip to a global barcode database. The delay is
+    // here so the pending state is a real state and not a flash — the call it
+    // replaces will be slower than this on shop Wi-Fi, not faster.
+    window.setTimeout(() => {
+      const hit = GLOBAL_SAMPLE[barcode.trim()];
+      if (!hit) return setLookup("miss");
+
+      setName(hit.name);
+      setDepartment(hit.department);
+      setCategory(hit.category);
+      setSub("");
+      setLookup("hit");
+    }, 420);
+  };
+
+  const applyMargin = (percent: number) => {
+    const base = num(cost);
+    if (base <= 0) return;
+    // Margin is off the selling price, so the divisor is what makes this
+    // different from simply adding a percentage to the cost.
+    setPrice(String(Math.round(base / (1 - percent / 100))));
+  };
+
+  const setOption = (id: string, patch: Partial<Option>) =>
+    setOptions((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+
+  const addOption = () =>
+    setOptions((rows) => [
+      ...rows,
+      { id: `opt-${rows.length + 1}-${Date.now()}`, name: "", values: "" },
+    ]);
+
+  return (
+    <div
+      className="pos-modal"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add a product"
+        tabIndex={-1}
+        className="pos-sheet pos-sheet-wide outline-none"
+      >
+        <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-azure-100 bg-paper-50 px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-azure-200 text-azure-800">
+            <IconBarcode className="h-[18px] w-[18px]" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[1rem] leading-tight font-bold">
+              Add a product
+            </h2>
+            <p className="mt-0.5 text-[0.75rem] text-graphite-500">
+              Scan it, price it, count it. Roughly forty seconds an item.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="pos-icon-btn"
+            aria-label="Close"
+          >
+            <IconClose />
+          </button>
+        </header>
+
+        <div className="space-y-6 px-4 py-5 sm:px-5">
+          {/* ---------------- 1 · The code ---------------- */}
+          <section>
+            <Step n={1} title="Barcode" hint="Scan it, or make one for the shop." />
+
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-[13rem] flex-1 block">
+                <span className="pos-label">Barcode — UPC or EAN</span>
+                <input
+                  ref={codeRef}
+                  className="pos-field font-mono tracking-[0.06em]"
+                  value={barcode}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Click here and scan"
+                  onKeyDown={onCodeKeyDown}
+                  onChange={(event) => {
+                    setBarcode(event.target.value);
+                    setSource(event.target.value ? "typed" : "none");
+                    setLookup("idle");
+                  }}
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setScanning(true)}
+                className="pos-btn pos-btn-soft"
+              >
+                <IconCamera className="h-4 w-4" />
+                Camera
+              </button>
+
+              <button
+                type="button"
+                onClick={runLookup}
+                disabled={!looksScanned(barcode) || lookup === "searching"}
+                className="pos-btn pos-btn-soft disabled:opacity-45"
+              >
+                <IconSearch className="h-4 w-4" />
+                {lookup === "searching" ? "Looking up…" : "Look up"}
+              </button>
+            </div>
+
+            {scanning ? (
+              <div className="mt-3">
+                <BarcodeScanner onRead={acceptScan} onClose={() => setScanning(false)} />
+              </div>
+            ) : null}
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {source === "scanned" ? (
+                <span className="pos-badge pos-badge-good">
+                  <IconCheck className="h-3 w-3" />
+                  Scanned
+                </span>
+              ) : null}
+
+              {source === "internal" ? (
+                <span className="pos-badge pos-badge-info">
+                  <IconTag className="h-3 w-3" />
+                  In-store code
+                </span>
+              ) : null}
+
+              {source === "typed" && !looksScanned(barcode) && barcode ? (
+                <span className="pos-badge pos-badge-warn">
+                  Not a full UPC or EAN
+                </span>
+              ) : null}
+
+              {barcode ? (
+                <button
+                  type="button"
+                  onClick={clearCode}
+                  className="pos-btn pos-btn-quiet pos-btn-sm"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                  Clear
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={generateCode}
+                  className="pos-btn pos-btn-quiet pos-btn-sm"
+                >
+                  <IconPlus className="h-3.5 w-3.5" />
+                  No barcode on it — make one
+                </button>
+              )}
+            </div>
+
+            {lookup === "hit" ? (
+              <p className="pos-hint flex items-start gap-1.5">
+                <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-good" />
+                Filled from the barcode database — <strong>{GLOBAL_SAMPLE[barcode.trim()]?.brand}</strong>
+                , {GLOBAL_SAMPLE[barcode.trim()]?.size}. Check the name before
+                saving; these entries are written by whoever uploaded them.
+              </p>
+            ) : null}
+
+            {lookup === "miss" ? (
+              <p className="pos-hint flex items-start gap-1.5">
+                <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
+                Nothing came back for that code. Type the name below — most
+                local brands and every bakery item are missing from the global
+                databases, which is normal, not an error.
+              </p>
+            ) : null}
+
+            {source === "internal" ? <LabelPreview
+              code={barcode}
+              name={name}
+              price={num(price)}
+              sku={effectiveSku}
+              onAnother={() => {
+                setSerial((value) => value + 1);
+                setBarcode(internalBarcode(serial + 1));
+              }}
+            /> : null}
+          </section>
+
+          {/* ---------------- 2 · What it is ---------------- */}
+          <section>
+            <Step n={2} title="The item" hint="What the cashier searches for." />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="pos-label">Name</span>
+                <input
+                  className="pos-field"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Tapal Danedar 475 g"
+                />
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Urdu name — optional</span>
+                <input
+                  className="pos-field"
+                  dir="rtl"
+                  value={urdu}
+                  onChange={(event) => setUrdu(event.target.value)}
+                  placeholder="ٹپال دانے دار"
+                />
+                <p className="pos-hint">
+                  Searchable in Urdu script and in roman — <em>chini</em> finds
+                  چینی.
+                </p>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Department</span>
+                <select
+                  className="pos-field"
+                  value={department}
+                  onChange={(event) => {
+                    setDepartment(event.target.value);
+                    setCategory(categoriesIn(event.target.value)[0]?.name ?? "");
+                    setSub("");
+                  }}
+                >
+                  {DEPARTMENTS.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Category</span>
+                <select
+                  className="pos-field"
+                  value={category}
+                  onChange={(event) => {
+                    setCategory(event.target.value);
+                    setSub("");
+                  }}
+                >
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Subcategory — optional</span>
+                <select
+                  className="pos-field"
+                  value={sub}
+                  onChange={(event) => setSub(event.target.value)}
+                  disabled={subs.length === 0}
+                >
+                  <option value="">None</option>
+                  {subs.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Supplier — optional</span>
+                <input
+                  className="pos-field"
+                  value={supplier}
+                  onChange={(event) => setSupplier(event.target.value)}
+                  placeholder="Ravi Trading — Akbari Mandi"
+                />
+              </label>
+
+              <label className="block sm:col-span-2">
+                <span className="pos-label">SKU</span>
+                <input
+                  className="pos-field font-mono"
+                  value={effectiveSku}
+                  onChange={(event) => {
+                    setSkuTouched(true);
+                    setSku(event.target.value);
+                  }}
+                />
+                <p className="pos-hint">
+                  {skuTouched ? (
+                    <>
+                      Your own code.{" "}
+                      <button
+                        type="button"
+                        className="font-semibold text-azure-700 underline underline-offset-2"
+                        onClick={() => setSkuTouched(false)}
+                      >
+                        Go back to {suggested}
+                      </button>
+                    </>
+                  ) : (
+                    "Made up from the department and the name. Edit it if your rate list already has one."
+                  )}
+                </p>
+              </label>
+            </div>
+          </section>
+
+          {/* ---------------- 3 · Money ---------------- */}
+          <section>
+            <Step
+              n={3}
+              title="Cost and price"
+              hint="What you pay, and what the customer pays."
+            />
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="block">
+                <span className="pos-label">Cost price</span>
+                <input
+                  className="pos-field"
+                  inputMode="decimal"
+                  value={cost}
+                  onChange={(event) => setCost(event.target.value)}
+                  placeholder="985"
+                />
+                <p className="pos-hint">Per unit, what the supplier charges.</p>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Retail price</span>
+                <input
+                  className="pos-field"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="1150"
+                />
+                <p className="pos-hint">Tax included — as Settings has it.</p>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Tax rate</span>
+                <select
+                  className="pos-field"
+                  value={taxRate}
+                  onChange={(event) => setTaxRate(event.target.value)}
+                >
+                  {TAX_RATES.map((rate) => (
+                    <option key={rate.id} value={rate.id}>
+                      {rate.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[0.75rem] font-semibold text-graphite-500">
+                Price it at
+              </span>
+              {MARGIN_STEPS.map((step) => (
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => applyMargin(step)}
+                  disabled={num(cost) <= 0}
+                  className="pos-btn pos-btn-soft pos-btn-sm disabled:opacity-45"
+                >
+                  {step}% margin
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 grid gap-2 rounded-xl border border-azure-100 bg-azure-50/55 p-3.5 sm:grid-cols-3">
+              <Figure
+                label="Profit per unit"
+                value={money ? rupees(money.profit) : "—"}
+                tone={losing ? "bad" : "good"}
+              />
+              <Figure
+                label="Margin"
+                value={money ? `${money.marginPct.toFixed(1)}%` : "—"}
+                note="of the selling price"
+                tone={losing ? "bad" : "plain"}
+              />
+              <Figure
+                label="Markup"
+                value={money ? `${money.markupPct.toFixed(1)}%` : "—"}
+                note="on top of the cost"
+                tone="plain"
+              />
+
+              {losing ? (
+                <p className="flex items-start gap-1.5 text-[0.75rem] leading-relaxed text-signal-bad sm:col-span-3">
+                  <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                  The retail price is under the cost. That is fine for a loss
+                  leader — the register will not stop the sale — but the
+                  dashboard will count it as a loss, because it is one.
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          {/* ---------------- 4 · Stock ---------------- */}
+          <section>
+            <Step
+              n={4}
+              title="How it is counted"
+              hint="Pieces, weight, or a grid of sizes."
+            />
+
+            <fieldset>
+              <legend className="sr-only">Stock tracking</legend>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {TRACKING.map((mode) => (
+                  <label
+                    key={mode.id}
+                    className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
+                      tracking === mode.id
+                        ? "border-azure-400 bg-azure-50"
+                        : "border-azure-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="tracking"
+                      value={mode.id}
+                      checked={tracking === mode.id}
+                      onChange={() => {
+                        setTracking(mode.id);
+                        if (mode.id === "weight" && !fractional) setUnit("kg");
+                        if (mode.id !== "weight" && fractional) setUnit("piece");
+                      }}
+                      className="mt-0.5 h-4 w-4 flex-none accent-azure-700"
+                    />
+                    <span>
+                      <span className="block text-[0.875rem] font-semibold text-graphite-900">
+                        {mode.label}
+                      </span>
+                      <span className="block text-[0.75rem] leading-relaxed text-graphite-500">
+                        {mode.blurb}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {tracking === "variant" ? (
+              <VariantMatrix
+                options={options}
+                combos={combos}
+                sku={effectiveSku}
+                onChange={setOption}
+                onAdd={addOption}
+                onRemove={(id) =>
+                  setOptions((rows) => rows.filter((row) => row.id !== id))
+                }
+              />
+            ) : (
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="pos-label">Sold in</span>
+                  <select
+                    className="pos-field"
+                    value={unit}
+                    onChange={(event) => setUnit(event.target.value as UnitId)}
+                  >
+                    {UNITS.filter((item) =>
+                      tracking === "weight" ? item.fractional : true,
+                    ).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Stock on hand now</span>
+                  <input
+                    className="pos-field"
+                    inputMode="decimal"
+                    value={stock}
+                    onChange={(event) => setStock(event.target.value)}
+                    placeholder={fractional ? "84.5" : "24"}
+                  />
+                  <p className="pos-hint">
+                    {fractional
+                      ? "Decimals allowed — 84.5 kg is a legitimate count."
+                      : "Leave empty if you will count it at the stock-take."}
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Warn me below</span>
+                  <input
+                    className="pos-field"
+                    inputMode="decimal"
+                    value={lowAt}
+                    onChange={(event) => setLowAt(event.target.value)}
+                  />
+                  <p className="pos-hint">
+                    Per item, not one number for the whole shop: three bottles
+                    of shampoo is fine, three crates of Coke is not.
+                  </p>
+                </label>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-azure-100 bg-paper-50 px-4 py-3 sm:px-5">
+          <p className="mr-auto text-[0.75rem] text-graphite-500">
+            Nothing saves yet — the <code>items</code> table lands in Part 3.
+          </p>
+          <button type="button" onClick={onClose} className="pos-btn pos-btn-soft">
+            Cancel
+          </button>
+          <button type="button" className="pos-btn pos-btn-primary" disabled>
+            Save and add another
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Pieces ---------------- */
+
+function Step({ n, title, hint }: { n: number; title: string; hint: string }) {
+  return (
+    <header className="mb-3 flex items-center gap-2.5">
+      <span className="grid h-6 w-6 flex-none place-items-center rounded-lg bg-azure-800 font-display text-[0.6875rem] font-bold text-white">
+        {n}
+      </span>
+      <h3 className="font-display text-[0.9375rem] font-semibold">{title}</h3>
+      <span className="truncate text-[0.75rem] text-graphite-500">{hint}</span>
+    </header>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  tone: "good" | "bad" | "plain";
+}) {
+  const colour =
+    tone === "bad"
+      ? "text-signal-bad"
+      : tone === "good"
+        ? "text-signal-good"
+        : "text-graphite-900";
+
+  return (
+    <p>
+      <span className="block text-[0.6875rem] font-semibold tracking-wide text-graphite-500 uppercase">
+        {label}
+      </span>
+      <span className={`block font-display text-[1.125rem] font-bold tabular-nums ${colour}`}>
+        {value}
+      </span>
+      {note ? (
+        <span className="block text-[0.6875rem] text-graphite-500">{note}</span>
+      ) : null}
+    </p>
+  );
+}
+
+/**
+ * The shelf label that will come off the printer.
+ *
+ * No bars are drawn. A rectangle of plausible-looking stripes that does not
+ * decode is worse than no picture at all — someone would print a sheet of them
+ * and find out at the till. The digits are the truth; the bars are the
+ * printer's job.
+ */
+function LabelPreview({
+  code,
+  name,
+  price,
+  sku,
+  onAnother,
+}: {
+  code: string;
+  name: string;
+  price: number;
+  sku: string;
+  onAnother: () => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-azure-100 bg-azure-50/55 p-3.5">
+      <div className="w-[13.5rem] rounded-lg border border-dashed border-azure-300 bg-paper-50 px-3 py-2.5 text-center">
+        <p className="truncate text-[0.75rem] font-semibold text-graphite-900">
+          {name || "Item name"}
+        </p>
+        <p className="font-display text-[1.0625rem] font-bold text-graphite-900">
+          {price > 0 ? rupees(price) : "Rs —"}
+        </p>
+        <p className="mt-1 font-mono text-[0.6875rem] tracking-[0.18em] text-graphite-700">
+          {code}
+        </p>
+        <p className="font-mono text-[0.625rem] text-graphite-500">{sku}</p>
+      </div>
+
+      <div className="min-w-[12rem] flex-1">
+        <p className="text-[0.8125rem] leading-relaxed text-graphite-700">
+          An in-store EAN-13 in the 200 range, which GS1 keeps free for codes
+          like this — so it can never collide with a manufacturer&apos;s.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" className="pos-btn pos-btn-soft pos-btn-sm" disabled>
+            Print label
+          </button>
+          <button
+            type="button"
+            onClick={onAnother}
+            className="pos-btn pos-btn-quiet pos-btn-sm"
+          >
+            Give me a different one
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Size × colour, and whatever else the shop sells in a grid.
+ *
+ * Capped, and the cap is the point: six sizes by five colours by three fits is
+ * ninety rows to count at stock-take, and a cloth house that wants that should
+ * be asked whether it means it rather than finding out in January.
+ */
+const MATRIX_CAP = 60;
+
+function VariantMatrix({
+  options,
+  combos,
+  sku,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  options: Option[];
+  combos: string[][];
+  sku: string;
+  onChange: (id: string, patch: Partial<Option>) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  const shown = combos.slice(0, MATRIX_CAP);
+
+  return (
+    <div className="mt-4">
+      <div className="space-y-2">
+        {options.map((option, index) => (
+          <div key={option.id} className="flex flex-wrap items-end gap-2">
+            <label className="w-[9rem] flex-none">
+              <span className="pos-label">{index === 0 ? "Option" : "And"}</span>
+              <input
+                className="pos-field"
+                value={option.name}
+                onChange={(event) => onChange(option.id, { name: event.target.value })}
+                placeholder="Size"
+              />
+            </label>
+
+            <label className="min-w-[12rem] flex-1">
+              <span className="pos-label">Values, separated by commas</span>
+              <input
+                className="pos-field"
+                value={option.values}
+                onChange={(event) => onChange(option.id, { values: event.target.value })}
+                placeholder="Small, Medium, Large"
+              />
+            </label>
+
+            {options.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => onRemove(option.id)}
+                className="pos-icon-btn mb-1"
+                aria-label={`Remove ${option.name || "this option"}`}
+              >
+                <IconTrash className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={options.length >= 3}
+        className="pos-btn pos-btn-quiet pos-btn-sm mt-2 disabled:opacity-45"
+      >
+        <IconPlus className="h-3.5 w-3.5" />
+        Another option
+      </button>
+
+      {shown.length > 0 ? (
+        <div className="mt-3 overflow-x-auto rounded-xl border border-azure-100">
+          <table className="pos-table">
+            <thead>
+              <tr>
+                <th>Variant</th>
+                <th>SKU</th>
+                <th className="text-right">Opening stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((combo) => (
+                <tr key={combo.join("-")}>
+                  <td className="font-medium text-graphite-900">{combo.join(" · ")}</td>
+                  <td className="font-mono text-[0.75rem] text-graphite-500">
+                    {sku}-
+                    {combo
+                      .map((value) => value.slice(0, 2).toUpperCase())
+                      .join("")}
+                  </td>
+                  <td className="text-right">
+                    <input
+                      className="pos-field ml-auto w-24 text-right"
+                      inputMode="numeric"
+                      defaultValue="0"
+                      aria-label={`Opening stock for ${combo.join(" ")}`}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="pos-hint">
+          Name an option and give it values — the rows below build themselves.
+        </p>
+      )}
+
+      {combos.length > 0 ? (
+        <p className="pos-hint flex items-start gap-1.5">
+          {combos.length > MATRIX_CAP ? (
+            <>
+              <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
+              {combos.length} combinations — only the first {MATRIX_CAP} are
+              shown. That is a lot of rows to count at stock-take; consider
+              splitting the colours into their own items.
+            </>
+          ) : (
+            <>
+              <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-azure-600" />
+              {combos.length} {combos.length === 1 ? "row" : "rows"}, each with
+              its own stock, barcode and price override.
+            </>
+          )}
+        </p>
+      ) : null}
+    </div>
+  );
+}

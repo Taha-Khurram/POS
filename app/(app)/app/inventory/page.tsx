@@ -1,27 +1,163 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import { IconInventory } from "@/components/pos/icons";
-import { ModulePlaceholder } from "@/components/pos/module-placeholder";
+import {
+  IconAlert,
+  IconInventory,
+  IconTag,
+  IconUpload,
+} from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { rupees } from "@/lib/format";
+import { SAMPLE_ITEMS, stockState } from "@/lib/pos/catalog";
+import { CatalogPanel } from "./catalog-panel";
+import { CategoriesPanel } from "./categories-panel";
+import { ImportPanel } from "./import-panel";
 
 export const metadata: Metadata = {
   title: "Products & stock",
+  description: "Your item list, cost and retail prices, and what is running low.",
 };
 
-export default async function InventoryPage() {
+const TABS = [
+  { id: "items", label: "Items", icon: IconInventory },
+  { id: "tree", label: "Categories", icon: IconTag },
+  { id: "import", label: "Bulk import", icon: IconUpload },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const isTab = (value: unknown): value is TabId =>
+  TABS.some((tab) => tab.id === value);
+
+/**
+ * Catalog and inventory setup.
+ *
+ * The section lives in the URL, the same way Settings does: the page stays a
+ * server component, the item table is HTML on first paint, and the tab someone
+ * is looking at survives a reload on a tablet that lost the network mid-tap.
+ *
+ * The figures are sample rows out of `lib/pos/catalog.ts` until Part 3 builds
+ * `items` and `stock_levels`. The arithmetic behind them is not sample —
+ * margin, stock value at cost, and the low-stock cut are the same functions the
+ * real rows will go through.
+ */
+export default async function InventoryPage({
+  searchParams,
+}: PageProps<"/app/inventory">) {
   await requireSession();
 
+  const raw = (await searchParams).tab;
+  const tab: TabId = isTab(raw) ? raw : "items";
+
   return (
-    <ModulePlaceholder
-      title="Products & stock"
-      lede="Your item list, purchase prices, and what is running low."
-      icon={IconInventory}
-      arriving="Part 3 — week of 22 September"
-      bullets={[
-        "Bulk import from the Excel sheet you already keep.",
-        "Low-stock alerts set per item, not one number for the whole shop.",
-        "Purchase price per item — the column the profit figures on the dashboard are waiting for.",
-      ]}
-    />
+    <div className="space-y-4">
+      <header>
+        <h1 className="font-display text-[1.5rem] leading-tight font-bold">
+          Products &amp; stock
+        </h1>
+        <p className="mt-1 text-[0.8125rem] text-graphite-500">
+          Everything the register can ring up, and what it costs you.
+        </p>
+      </header>
+
+      <nav className="pos-tabs" aria-label="Catalog sections">
+        {TABS.map((item) => (
+          <Link
+            key={item.id}
+            href={`/app/inventory?tab=${item.id}`}
+            className="pos-tab"
+            aria-current={item.id === tab ? "page" : undefined}
+            scroll={false}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "items" ? (
+        <>
+          <CatalogStats />
+          <CatalogPanel items={SAMPLE_ITEMS} />
+        </>
+      ) : tab === "tree" ? (
+        <CategoriesPanel items={SAMPLE_ITEMS} />
+      ) : (
+        <ImportPanel />
+      )}
+
+      <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
+        Goods receipt, wastage, branch transfers and the stock-count session
+        arrive with the rest of Part 3 — week of 22 September.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Four figures that answer what an owner opens this screen to ask: how big is
+ * my list, how much money is sitting on the shelves, and what do I have to buy
+ * today. Stock value is at cost, not at retail — retail is what it is worth if
+ * every single unit sells, which is not a number anyone should plan against.
+ */
+function CatalogStats() {
+  const value = SAMPLE_ITEMS.reduce(
+    (total, item) => total + item.cost * item.stock,
+    0,
+  );
+  const low = SAMPLE_ITEMS.filter((item) => stockState(item) === "low").length;
+  const out = SAMPLE_ITEMS.filter((item) => stockState(item) === "out").length;
+  const uncoded = SAMPLE_ITEMS.filter((item) => !item.barcode).length;
+
+  const tiles = [
+    {
+      label: "Items in the list",
+      value: SAMPLE_ITEMS.length.toLocaleString("en-PK"),
+      note: `${uncoded} without a manufacturer barcode`,
+      alert: false,
+    },
+    {
+      label: "Stock value at cost",
+      value: rupees(value),
+      note: "What is sitting on the shelves",
+      alert: false,
+    },
+    {
+      label: "Running low",
+      value: String(low),
+      note: "Below the alert you set per item",
+      alert: low > 0,
+    },
+    {
+      label: "Out of stock",
+      value: String(out),
+      note: "The register will still list them",
+      alert: out > 0,
+    },
+  ];
+
+  return (
+    <section
+      aria-label="Catalog at a glance"
+      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+    >
+      {tiles.map((tile) => (
+        <article key={tile.label} className="pos-card p-4">
+          <h2 className="flex items-center gap-1.5 font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
+            {tile.label}
+            {tile.alert ? (
+              <IconAlert className="h-3.5 w-3.5 text-signal-warn" />
+            ) : null}
+          </h2>
+
+          <p className="mt-2.5 font-display text-[1.75rem] leading-none font-bold tracking-tight text-graphite-900 tabular-nums">
+            {tile.value}
+          </p>
+
+          <p className="mt-2.5 text-[0.75rem] text-graphite-500">{tile.note}</p>
+        </article>
+      ))}
+    </section>
   );
 }

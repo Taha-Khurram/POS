@@ -189,6 +189,49 @@ export const IconCheck = (props: IconProps) => (
   </Glyph>
 );
 
+export const IconBarcode = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3 6.5V5a2 2 0 0 1 2-2h1.5M17.5 3H19a2 2 0 0 1 2 2v1.5M21 17.5V19a2 2 0 0 1-2 2h-1.5M6.5 21H5a2 2 0 0 1-2-2v-1.5" />
+    <path d="M7 8v8M10 8v8M13.5 8v8M17 8v8" />
+  </Glyph>
+);
+
+export const IconCamera = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3 8.5A2 2 0 0 1 5 6.5h1.8l1.3-2h7.8l1.3 2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    <circle cx="12" cy="13" r="3.4" />
+  </Glyph>
+);
+
+export const IconUpload = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 15.5V19a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3.5" />
+    <path d="M12 3.5v12M7.5 8 12 3.5 16.5 8" />
+  </Glyph>
+);
+
+export const IconTag = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M11.6 3H5a2 2 0 0 0-2 2v6.6a2 2 0 0 0 .6 1.4l7.4 7.4a2 2 0 0 0 2.8 0l6.6-6.6a2 2 0 0 0 0-2.8L13 3.6a2 2 0 0 0-1.4-.6Z" />
+    <circle cx="7.9" cy="7.9" r="1.4" />
+  </Glyph>
+);
+
+export const IconTrash = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M4 6.5h16M9.5 6.5V4.8A1.3 1.3 0 0 1 10.8 3.5h2.4a1.3 1.3 0 0 1 1.3 1.3v1.7" />
+    <path d="M6.5 6.5 7.3 19a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9l.8-12.5" />
+    <path d="M10.5 10.5v6M13.5 10.5v6" />
+  </Glyph>
+);
+
+export const IconAlert = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+    <path d="M12 9v4.5M12 17.2v.1" />
+  </Glyph>
+);
+
 /**
  * The delta marker on a KPI. A triangle rather than a coloured word, because it
  * has to survive being a 10px glyph next to a number — but it never travels

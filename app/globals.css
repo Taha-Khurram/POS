@@ -1372,6 +1372,11 @@
       box-shadow: 0 40px 80px -36px rgb(13 71 161 / 0.62);
       animation: float-in 0.24s var(--ease-out-soft) both;
     }
+
+    /* The add-product form pairs its fields two and three across. At 618px
+       every pair wraps, and a form that wraps reads as one long column of
+       unrelated boxes rather than four steps. */
+    .pos-sheet-wide { width: min(100%, 780px); }
   }
 
   /* ---------------- Calendar ---------------- */
