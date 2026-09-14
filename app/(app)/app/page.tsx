@@ -54,10 +54,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[1.375rem] leading-tight font-bold">
-            Dashboard
+          <h1 className="font-display text-[1.5rem] leading-tight font-bold">
+            Good to see you
           </h1>
-          <p className="mt-0.5 text-[0.8125rem] text-graphite-500">
+          <p className="mt-1 text-[0.8125rem] text-graphite-500">
             {range.label} · {totals.transactions.toLocaleString("en-PK")} sales
             rung up
           </p>
@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
         </p>
       ) : null}
 
-      <section aria-label="Headline figures" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Headline figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Sales"
           amount={totals.sales}
@@ -121,7 +121,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
         />
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         <ChartCard
           title="Sales and profit"
           caption={`${range.label} · ${range.bucket === "hour" ? "by hour" : data.trend.length > 31 ? "by week" : "by day"}`}
@@ -139,12 +139,23 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
         </ChartCard>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-3">
+      {/* Five columns rather than three: the best sellers read first, but the
+          receipt table needs more room than a third of the row to seat six
+          columns without wrapping. */}
+      <div className="grid gap-4 xl:grid-cols-5">
+        <ChartCard
+          title="Top sellers"
+          caption={range.label}
+          className="xl:col-span-2"
+        >
+          <TopProducts products={data.topProducts} />
+        </ChartCard>
+
         <ChartCard
           title="Recent sales"
           caption="Newest first"
           bleed
-          className="xl:col-span-2"
+          className="xl:col-span-3"
           actions={
             <Link href="/app/sales" className="pos-btn pos-btn-quiet pos-btn-sm">
               See all
@@ -152,10 +163,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
           }
         >
           <RecentSalesTable sales={data.recent} />
-        </ChartCard>
-
-        <ChartCard title="Top sellers" caption={range.label}>
-          <TopProducts products={data.topProducts} />
         </ChartCard>
       </div>
     </div>

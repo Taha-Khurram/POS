@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { signOut } from "@/app/(app)/app/actions";
-import { FloMark } from "@/components/site/flo-mark";
 import {
   IconClose,
   IconCustomers,
@@ -66,6 +65,7 @@ export function ConsoleSidebar({
   open,
   tight,
   shopName,
+  email,
   onNavigate,
   onClose,
 }: {
@@ -74,10 +74,12 @@ export function ConsoleSidebar({
   /** Icons-only. Only meaningful at lg and up. */
   tight: boolean;
   shopName: string;
+  email: string | null;
   onNavigate: () => void;
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const initial = (shopName.trim()[0] ?? "F").toUpperCase();
 
   return (
     <aside
@@ -87,22 +89,20 @@ export function ConsoleSidebar({
       data-tight={tight}
       aria-label={`${shopName} navigation`}
     >
-      <div className="flex h-[var(--pos-header)] flex-none items-center justify-between gap-2 px-4">
-        {/* The wordmark is never cropped to fit the collapsed rail — it just
-            stands down, and the toggle in the topbar carries the affordance. */}
-        {tight ? null : <FloMark className="h-6 w-auto" />}
-
+      {/* Only the drawer needs a header. At lg the wordmark is in the topbar
+          and the rail can start straight in on the navigation. */}
+      <div className="flex h-[var(--pos-header)] flex-none items-center justify-end border-b border-azure-100 px-3 lg:hidden">
         <button
           type="button"
           onClick={onClose}
-          className="pos-icon-btn text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
+          className="pos-icon-btn"
           aria-label="Close navigation"
         >
           <IconClose />
         </button>
       </div>
 
-      <nav className="hide-scrollbar flex-1 overflow-y-auto px-2.5 pb-4">
+      <nav className="hide-scrollbar flex-1 overflow-y-auto px-2.5 pt-4 pb-4">
         {GROUPS.map((group) => (
           <div key={group.label} className="mb-5 last:mb-0">
             <p className="pos-rail-section">{group.label}</p>
@@ -129,7 +129,7 @@ export function ConsoleSidebar({
                       <Icon className="h-[18px] w-[18px] flex-none" />
                       <span className="pos-rail-text flex-1">{item.label}</span>
                       {item.soon && !tight ? (
-                        <span className="pos-rail-text rounded-full bg-white/12 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide text-white/70">
+                        <span className="pos-rail-text rounded-full bg-azure-50 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide text-graphite-500">
                           SOON
                         </span>
                       ) : null}
@@ -142,25 +142,54 @@ export function ConsoleSidebar({
         ))}
       </nav>
 
-      <div className="flex-none border-t border-white/10 p-2.5">
+      {/* Who is signed in, at the foot of the rail. The same identity is behind
+          the topbar avatar; down here it is readable without a click, which is
+          what a shared counter tablet actually needs. */}
+      <div className="flex-none border-t border-azure-100 p-2.5">
         {tight ? null : (
-          <div className="mb-2 rounded-xl bg-white/8 px-3 py-2.5">
-            <p className="flex items-center gap-1.5 text-[0.75rem] font-medium text-white">
-              <span className="h-1.5 w-1.5 flex-none rounded-full bg-mint-400" />
+          <div className="mb-2 flex items-center gap-1.5 rounded-xl bg-azure-50 px-3 py-2">
+            <span className="h-1.5 w-1.5 flex-none rounded-full bg-signal-good" />
+            <p className="text-[0.75rem] font-medium text-graphite-700">
               Counter online
             </p>
-            <p className="mt-0.5 text-[0.6875rem] text-white/55">
-              Everything synced
-            </p>
+            <span className="ml-auto text-[0.6875rem] text-graphite-500">
+              Synced
+            </span>
           </div>
         )}
 
-        <form action={signOut}>
-          <button type="submit" className="pos-rail-link w-full" title="Sign out">
-            <IconSignOut className="h-[18px] w-[18px] flex-none" />
-            <span className="pos-rail-text">Sign out</span>
-          </button>
-        </form>
+        <div className="flex items-center gap-2.5 px-1 py-1">
+          <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-azure-800 font-display text-[0.75rem] font-bold text-white">
+            {initial}
+          </span>
+
+          <div className="pos-rail-text min-w-0 flex-1">
+            <p className="truncate text-[0.8125rem] font-semibold text-graphite-900">
+              {shopName}
+            </p>
+            <p className="truncate text-[0.6875rem] text-graphite-500">
+              {email ?? "Signed in"}
+            </p>
+          </div>
+
+          <form action={signOut} className="pos-rail-text flex-none">
+            <button type="submit" className="pos-icon-btn" title="Sign out">
+              <IconSignOut className="h-[18px] w-[18px]" />
+              <span className="sr-only">Sign out</span>
+            </button>
+          </form>
+        </div>
+
+        {/* Collapsed, the account block is an avatar with nothing to act on, so
+            sign-out comes back as a full-width row of its own. */}
+        {tight ? (
+          <form action={signOut} className="mt-1">
+            <button type="submit" className="pos-rail-link w-full" title="Sign out">
+              <IconSignOut className="h-[18px] w-[18px] flex-none" />
+              <span className="pos-rail-text">Sign out</span>
+            </button>
+          </form>
+        ) : null}
       </div>
     </aside>
   );

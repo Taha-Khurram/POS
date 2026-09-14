@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { signOut } from "@/app/(app)/app/actions";
+import { FloMark } from "@/components/site/flo-mark";
 import {
   IconBell,
   IconChevron,
@@ -27,8 +28,9 @@ export type Notice = {
 };
 
 /**
- * The fixed top bar: find something, pick a branch, see what needs attention,
- * and start a sale.
+ * The fixed top bar: the wordmark, find something, pick a branch, see what
+ * needs attention, and start a sale. It spans the full width of the shell, so
+ * the rail hangs beneath it.
  *
  * The "New sale" button is the only primary-weight control on the whole screen.
  * That is deliberate — on a counter, the dashboard is what you look at between
@@ -74,6 +76,12 @@ export function ConsoleHeader({
 
   return (
     <header className="pos-topbar">
+      {/* The artwork is white with a transparent ground, so on a white bar it
+          sits on a plate rather than being recoloured. */}
+      <Link href="/app" className="pos-logo-plate hidden sm:grid" aria-label="Flo">
+        <FloMark className="h-4 w-auto" priority />
+      </Link>
+
       {/* Below lg the rail is a drawer, so the same corner does two jobs. */}
       <button
         type="button"
@@ -102,7 +110,7 @@ export function ConsoleHeader({
         className="relative min-w-0 flex-1 md:max-w-sm"
         onSubmit={(event) => event.preventDefault()}
       >
-        <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-azure-500" />
+        <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
         <input
           type="search"
           name="q"
@@ -128,7 +136,7 @@ export function ConsoleHeader({
           </label>
         ) : (
           <p className="hidden items-center gap-1.5 px-2 text-[0.8125rem] text-graphite-700 sm:flex">
-            <IconStore className="h-4 w-4 text-azure-500" />
+            <IconStore className="h-4 w-4 text-azure-600" />
             {branches[0]?.label ?? "Main counter"}
           </p>
         )}
@@ -168,7 +176,7 @@ export function ConsoleHeader({
                         className={`h-1.5 w-1.5 flex-none rounded-full ${
                           notice.tone === "warn"
                             ? "bg-signal-warn"
-                            : "bg-azure-500"
+                            : "bg-azure-600"
                         }`}
                       />
                       {notice.title}
@@ -190,7 +198,7 @@ export function ConsoleHeader({
             className="pos-btn pos-btn-quiet gap-2 px-1.5"
             aria-expanded={profileOpen}
           >
-            <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-azure-700 font-display text-[0.75rem] font-bold text-white">
+            <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-azure-800 font-display text-[0.75rem] font-bold text-white">
               {initial}
             </span>
             <span className="hidden max-w-32 truncate text-left text-[0.8125rem] font-medium md:block">

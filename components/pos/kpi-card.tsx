@@ -60,12 +60,12 @@ export function KpiCard({
         <h3 className="font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
           {label}
         </h3>
-        <span className="grid h-8 w-8 flex-none place-items-center rounded-xl bg-azure-50 text-azure-700">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-azure-50 text-azure-700">
           <Icon className="h-4 w-4" />
         </span>
       </header>
 
-      <p className="relative mt-2.5 font-display text-[1.75rem] leading-none font-bold tracking-tight text-azure-900 tabular-nums">
+      <p className="relative mt-2.5 font-display text-[1.75rem] leading-none font-bold tracking-tight text-graphite-900 tabular-nums">
         <CountUp
           to={amount}
           decimals={decimals}

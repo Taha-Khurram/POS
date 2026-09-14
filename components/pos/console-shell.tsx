@@ -15,6 +15,9 @@ export const RAIL_COOKIE = "flo_rail";
  * interactivity budget: the pages inside stay server components and ship no JS
  * of their own.
  *
+ * The shell is one grid: a full-width topbar, then the rail and the work
+ * surface side by side beneath it.
+ *
  * The collapse preference travels in a cookie rather than `localStorage`, and
  * the layout reads it on the server. Storage would have meant rendering an
  * expanded rail, then snapping it shut a frame after hydration — a visible
@@ -74,14 +77,30 @@ export function ConsoleShell({
         } as React.CSSProperties
       }
     >
+      {/* The bar comes first in the DOM as well as on the screen: it spans
+          both columns, so the rail begins under it and the wordmark lives in
+          the bar rather than at the top of the navigation. */}
+      <ConsoleHeader
+        shopName={shopName}
+        subtitle={subtitle}
+        email={email}
+        branches={branches}
+        notices={notices}
+        tight={tight}
+        onToggleRail={toggleRail}
+        onOpenDrawer={() => setDrawer(true)}
+      />
+
       <ConsoleSidebar
         open={drawer}
         tight={tight}
         shopName={shopName}
+        email={email}
         onNavigate={() => setDrawer(false)}
         onClose={() => setDrawer(false)}
       />
 
+      {/* Fixed, so it is out of flow and never takes a grid cell of its own. */}
       {drawer ? (
         <div
           className="pos-scrim lg:hidden"
@@ -90,20 +109,7 @@ export function ConsoleShell({
         />
       ) : null}
 
-      <div className="pos-canvas flex min-h-dvh flex-col">
-        <ConsoleHeader
-          shopName={shopName}
-          subtitle={subtitle}
-          email={email}
-          branches={branches}
-          notices={notices}
-          tight={tight}
-          onToggleRail={toggleRail}
-          onOpenDrawer={() => setDrawer(true)}
-        />
-
-        <main className="flex-1 px-3 py-4 sm:px-5 sm:py-6">{children}</main>
-      </div>
+      <main className="pos-canvas px-3 py-4 sm:px-5 sm:py-6">{children}</main>
     </div>
   );
 }

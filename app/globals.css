@@ -48,21 +48,22 @@
   --color-graphite-700: #3b4557;
   --color-graphite-900: #171b26;
 
-  /* Console blue — /app's interactive ramp. The register needed a brand colour
-     that still reads on a cheap tablet under a tube light, so the console runs
-     this scale instead of iris-*: same family, far more contrast at the deep
-     end. Light at 50, deep at 900; the aliases below are the palette's own
-     names, kept so design and code argue about the same words. */
-  --color-azure-50: #e3f2fd;
-  --color-azure-100: #bbdefb;
-  --color-azure-200: #90caf9;
-  --color-azure-300: #64b5f6;
-  --color-azure-400: #42a5f5;
-  --color-azure-500: #2196f3;
-  --color-azure-600: #1e88e5;
-  --color-azure-700: #1976d2;
-  --color-azure-800: #1565c0;
-  --color-azure-900: #0d47a1;
+  /* Console blue — /app's interactive ramp. Five colours were picked for the
+     counter (pale sky, frozen water, pacific blue, fresh sky, yale blue); the
+     five between them are interpolated so the scale steps evenly and hover
+     states have somewhere to go. Light at 50, deep at 900. The aliases further
+     down are the palette's own names, kept so design and code argue about the
+     same words. */
+  --color-azure-50: #f1f8ff;
+  --color-azure-100: #cae9ff;
+  --color-azure-200: #bee9e8;
+  --color-azure-300: #96d2e2;
+  --color-azure-400: #62b6cb;
+  --color-azure-500: #5fa8d3;
+  --color-azure-600: #3d87b5;
+  --color-azure-700: #2a6688;
+  --color-azure-800: #1b4965;
+  --color-azure-900: #12334a;
 
   /* Status — the one thing a blue-only palette cannot express. Every badge
      built on these also carries a word, so state is never colour alone. */
@@ -259,7 +260,7 @@
   .pos-root {
     color-scheme: light;
     min-height: 100%;
-    background-color: var(--color-paper-100);
+    background-color: var(--color-paper-50);
     color: var(--color-graphite-900);
   }
 
@@ -270,11 +271,9 @@
 
   .pos-card {
     background-color: var(--color-paper-50);
-    border: 1px solid var(--icy-blue);
-    border-radius: 16px;
-    box-shadow:
-      0 1px 2px rgb(13 71 161 / 0.05),
-      0 12px 28px -22px rgb(13 71 161 / 0.45);
+    border: 1px solid color-mix(in oklab, var(--pale-sky) 72%, #fff);
+    border-radius: 18px;
+    box-shadow: 0 1px 2px rgb(18 51 74 / 0.04);
   }
 
   /* ---------------- Type ---------------- */
@@ -632,36 +631,41 @@
 
 /* The palette under its own names. Utilities come off the --color-azure-*
    scale; these aliases exist so hand-written CSS, this file, and a design file
-   can all say "ocean deep" and mean one hex. The chart series are named here
-   too — see the note above .pos-legend for why they are not 500 and 700. */
+   can all say "yale blue" and mean one hex. Five of the ten were chosen by
+   hand — pale sky, frozen water, pacific blue, fresh sky, yale blue — and the
+   rest fill the gaps. The chart series are named here too; see the note above
+   .pos-legend for why they are not 500 and 700. */
 :root {
-  --alice-blue: var(--color-azure-50);
-  --icy-blue: var(--color-azure-100);
-  --sky-blue: var(--color-azure-200);
-  --cool-sky: var(--color-azure-300);
-  --cool-sky-2: var(--color-azure-400);
-  --dodger-blue: var(--color-azure-500);
-  --brilliant-azure: var(--color-azure-600);
-  --twitter-blue: var(--color-azure-700);
-  --ocean-deep: var(--color-azure-800);
-  --cobalt-blue: var(--color-azure-900);
+  --sky-wash: var(--color-azure-50);
+  --pale-sky: var(--color-azure-100);
+  --frozen-water: var(--color-azure-200);
+  --shallow: var(--color-azure-300);
+  --pacific-blue: var(--color-azure-400);
+  --fresh-sky: var(--color-azure-500);
+  --deep-sky: var(--color-azure-600);
+  --harbour: var(--color-azure-700);
+  --yale-blue: var(--color-azure-800);
+  --midnight-harbour: var(--color-azure-900);
 
-  --chart-sales: var(--cool-sky);
-  --chart-profit: var(--ocean-deep);
-  --chart-bar: var(--twitter-blue);
-  --chart-grid: color-mix(in oklab, var(--cobalt-blue) 11%, transparent);
+  --chart-sales: var(--pacific-blue);
+  --chart-profit: var(--yale-blue);
+  --chart-bar: var(--harbour);
+  --chart-grid: color-mix(in oklab, var(--midnight-harbour) 11%, transparent);
 }
 
 @layer components {
   /* ---------------- Shell ----------------
-     One grid: rail, then work surface. The rail width is a custom property so
-     collapsing it is a single inline style on the shell rather than a class
-     swap on every child. */
+     One grid, two rows: the topbar spans the full width and the rail hangs
+     below it, so the wordmark sits in the bar rather than in the navigation.
+     The rail width is a custom property, which is what lets collapsing it be a
+     single inline style on the shell instead of a class swap on every child. */
 
   .pos-shell {
     display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-columns: minmax(0, 1fr);
     min-height: 100dvh;
+    background: var(--color-paper-50);
   }
 
   @media (width >= 64rem) {
@@ -671,20 +675,29 @@
     }
   }
 
-  /* The work surface. A hair of blue behind the cards, so white reads as
-     raised rather than as more background. */
+  /* The work surface. A shade cooler than the cards, so white reads as raised
+     rather than as more background, and cut away from the rail at the corner
+     so the console reads as a panel laid on the page. */
   .pos-canvas {
     min-width: 0;
-    background:
-      radial-gradient(
-        56rem 28rem at 88% -12%,
-        color-mix(in oklab, var(--icy-blue) 60%, transparent),
-        transparent 70%
-      ),
-      var(--alice-blue);
+    background: var(--color-paper-100);
   }
 
-  /* ---------------- Rail ---------------- */
+  @media (width >= 64rem) {
+    .pos-canvas {
+      /* Pulled up a hair so the panel's own top edge lands exactly on the
+         topbar's bottom border instead of drawing a second line beside it. */
+      margin-top: -1px;
+      border-top-left-radius: 22px;
+      border-top: 1px solid var(--pale-sky);
+      border-left: 1px solid var(--pale-sky);
+    }
+  }
+
+  /* ---------------- Rail ----------------
+     Light, like the rest of the counter. A dark rail against white cards makes
+     the navigation the loudest thing on a screen whose whole job is the
+     numbers; here it recedes and the active pill is the only filled shape. */
 
   .pos-rail {
     position: fixed;
@@ -694,8 +707,8 @@
     display: flex;
     width: var(--pos-rail);
     flex-direction: column;
-    background: linear-gradient(190deg, var(--cobalt-blue) 0%, #082f66 100%);
-    color: color-mix(in oklab, #fff 78%, var(--sky-blue));
+    background: var(--color-paper-50);
+    color: var(--color-graphite-700);
     transform: translate3d(-100%, 0, 0);
     transition: transform 0.38s var(--ease-out-soft);
   }
@@ -705,8 +718,9 @@
   @media (width >= 64rem) {
     .pos-rail {
       position: sticky;
-      top: 0;
-      height: 100dvh;
+      align-self: start;
+      top: var(--pos-header);
+      height: calc(100dvh - var(--pos-header));
       width: auto;
       transform: none;
     }
@@ -722,35 +736,26 @@
     font-size: 0.875rem;
     font-weight: 500;
     white-space: nowrap;
-    color: color-mix(in oklab, #fff 70%, var(--cool-sky));
+    color: var(--color-graphite-700);
     transition:
       background-color 0.25s var(--ease-out-soft),
       color 0.25s var(--ease-out-soft);
   }
 
   .pos-rail-link:hover {
-    background: rgb(255 255 255 / 0.1);
-    color: #fff;
+    background: var(--sky-wash);
+    color: var(--yale-blue);
   }
 
+  /* The one filled shape in the rail. Yale blue on frozen water is 7.4:1, so
+     the active module is legible as text and not only as a block of colour. */
   .pos-rail-link[aria-current="page"] {
-    background: var(--brilliant-azure);
-    color: #fff;
-    box-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.85);
+    background: var(--frozen-water);
+    color: var(--yale-blue);
+    font-weight: 600;
   }
 
-  /* Lit edge, so the active module still reads when the rail is icons-only */
-  .pos-rail-link[aria-current="page"]::before {
-    content: "";
-    position: absolute;
-    left: -0.625rem;
-    top: 50%;
-    height: 18px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--sky-blue);
-    transform: translateY(-50%);
-  }
+  .pos-rail-link[aria-current="page"] :is(svg) { color: var(--harbour); }
 
   /* Collapsed: icons only, but the label stays in the DOM for screen readers
      and for the hover tooltip. */
@@ -775,7 +780,7 @@
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: color-mix(in oklab, #fff 42%, var(--cool-sky));
+    color: var(--color-graphite-500);
   }
 
   .pos-rail[data-tight="true"] .pos-rail-section { visibility: hidden; }
@@ -784,24 +789,37 @@
     position: fixed;
     inset: 0;
     z-index: 45;
-    background: rgb(6 28 62 / 0.5);
+    background: rgb(18 51 74 / 0.45);
     animation: float-in 0.25s var(--ease-out-soft) both;
   }
 
   /* ---------------- Topbar ---------------- */
 
   .pos-topbar {
+    grid-column: 1 / -1;
     position: sticky;
     top: 0;
-    z-index: 40;
+    z-index: 55;
     display: flex;
     align-items: center;
     gap: 0.625rem;
     min-height: var(--pos-header);
     padding-inline: clamp(0.625rem, 2vw, 1.25rem);
-    border-bottom: 1px solid var(--icy-blue);
-    background: color-mix(in oklab, var(--color-paper-50) 88%, transparent);
+    border-bottom: 1px solid var(--pale-sky);
+    background: color-mix(in oklab, var(--color-paper-50) 90%, transparent);
     backdrop-filter: blur(12px) saturate(150%);
+  }
+
+  /* The wordmark is white artwork, so on a white bar it needs a plate. Sized
+     to the collapsed rail, which keeps it aligned to the icons below it. */
+  .pos-logo-plate {
+    display: grid;
+    place-items: center;
+    flex: none;
+    height: 34px;
+    padding-inline: 0.625rem;
+    border-radius: 11px;
+    background: var(--yale-blue);
   }
 
   /* ---------------- Controls ---------------- */
@@ -809,7 +827,7 @@
   .pos-field {
     width: 100%;
     border-radius: 10px;
-    border: 1px solid var(--icy-blue);
+    border: 1px solid var(--pale-sky);
     background: var(--color-paper-50);
     padding: 0.5rem 0.75rem;
     font-family: var(--font-sans);
@@ -824,8 +842,8 @@
 
   .pos-field:focus {
     outline: none;
-    border-color: var(--dodger-blue);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--dodger-blue) 22%, transparent);
+    border-color: var(--deep-sky);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--fresh-sky) 28%, transparent);
   }
 
   select.pos-field {
@@ -833,8 +851,8 @@
     padding-right: 2rem;
     cursor: pointer;
     background-image:
-      linear-gradient(45deg, transparent 50%, var(--twitter-blue) 50%),
-      linear-gradient(135deg, var(--twitter-blue) 50%, transparent 50%);
+      linear-gradient(45deg, transparent 50%, var(--harbour) 50%),
+      linear-gradient(135deg, var(--harbour) 50%, transparent 50%);
     background-position: right 1rem center, right 0.75rem center;
     background-size: 5px 5px, 5px 5px;
     background-repeat: no-repeat;
@@ -865,23 +883,23 @@
 
   .pos-btn-primary {
     color: #fff;
-    background: var(--twitter-blue);
-    border-color: var(--ocean-deep);
-    box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--cobalt-blue) 92%, transparent);
+    background: var(--harbour);
+    border-color: var(--yale-blue);
+    box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--midnight-harbour) 92%, transparent);
   }
 
   .pos-btn-primary:hover {
-    background: var(--brilliant-azure);
-    box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--cobalt-blue) 92%, transparent);
+    background: var(--deep-sky);
+    box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--midnight-harbour) 92%, transparent);
   }
 
   .pos-btn-soft {
-    color: var(--ocean-deep);
-    background: var(--alice-blue);
-    border-color: var(--icy-blue);
+    color: var(--yale-blue);
+    background: var(--sky-wash);
+    border-color: var(--pale-sky);
   }
 
-  .pos-btn-soft:hover { background: var(--icy-blue); }
+  .pos-btn-soft:hover { background: var(--pale-sky); }
 
   .pos-btn-quiet {
     color: var(--color-graphite-700);
@@ -889,8 +907,8 @@
   }
 
   .pos-btn-quiet:hover {
-    background: var(--alice-blue);
-    color: var(--ocean-deep);
+    background: var(--sky-wash);
+    color: var(--yale-blue);
   }
 
   .pos-btn-sm {
@@ -914,32 +932,17 @@
   }
 
   .pos-icon-btn:hover {
-    background: var(--alice-blue);
-    color: var(--twitter-blue);
+    background: var(--sky-wash);
+    color: var(--harbour);
   }
 
   /* ---------------- Surfaces ---------------- */
 
+  /* No ornament: four of these sit in a row and anything decorative on one is
+     four times the noise. The icon plate is the only colour on the card. */
   .pos-kpi {
     position: relative;
     overflow: hidden;
-  }
-
-  /* Corner light — the only ornament on a KPI, and it sits under the text */
-  .pos-kpi::after {
-    content: "";
-    position: absolute;
-    top: -46px;
-    right: -34px;
-    width: 132px;
-    height: 132px;
-    border-radius: 999px;
-    background: radial-gradient(
-      circle,
-      color-mix(in oklab, var(--sky-blue) 50%, transparent),
-      transparent 70%
-    );
-    pointer-events: none;
   }
 
   .pos-menu {
@@ -950,7 +953,7 @@
     min-width: 230px;
     padding: 0.375rem;
     border-radius: 14px;
-    border: 1px solid var(--icy-blue);
+    border: 1px solid var(--pale-sky);
     background: var(--color-paper-50);
     box-shadow: 0 26px 52px -26px rgb(13 71 161 / 0.5);
     animation: float-in 0.22s var(--ease-out-soft) both;
@@ -973,8 +976,8 @@
   }
 
   .pos-menu-item:hover {
-    background: var(--alice-blue);
-    color: var(--ocean-deep);
+    background: var(--sky-wash);
+    color: var(--yale-blue);
   }
 
   /* ---------------- Badges ----------------
@@ -994,9 +997,9 @@
   }
 
   .pos-badge-info {
-    color: var(--ocean-deep);
-    background: var(--alice-blue);
-    border-color: var(--icy-blue);
+    color: var(--yale-blue);
+    background: var(--sky-wash);
+    border-color: var(--pale-sky);
   }
 
   .pos-badge-good {
@@ -1034,9 +1037,9 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--ocean-deep);
-    background: var(--alice-blue);
-    border-bottom: 1px solid var(--icy-blue);
+    color: var(--yale-blue);
+    background: var(--sky-wash);
+    border-bottom: 1px solid var(--pale-sky);
   }
 
   .pos-table td {
@@ -1051,7 +1054,7 @@
   }
 
   .pos-table tbody tr:hover {
-    background: color-mix(in oklab, var(--alice-blue) 65%, #fff);
+    background: color-mix(in oklab, var(--sky-wash) 65%, #fff);
   }
 
   .pos-table tbody tr:last-child td { border-bottom: 0; }
@@ -1074,37 +1077,70 @@
     font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: var(--ocean-deep);
-    background: var(--alice-blue);
+    color: var(--yale-blue);
+    background: var(--sky-wash);
   }
 
   .pos-rank[data-lead="true"] {
     color: #fff;
-    background: var(--twitter-blue);
+    background: var(--harbour);
   }
 
   .pos-meter {
-    height: 6px;
+    height: 14px;
     border-radius: 999px;
-    background: var(--alice-blue);
     overflow: hidden;
+    background: repeating-linear-gradient(
+      115deg,
+      var(--color-paper-50) 0 4px,
+      var(--sky-wash) 4px 9px
+    );
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pale-sky) 70%, #fff);
   }
 
   .pos-meter > span {
     display: block;
     height: 100%;
+    min-width: 14px;
     border-radius: 999px;
     background: var(--chart-bar);
     transform-origin: left;
     animation: bar-grow 0.85s var(--ease-out-soft) both;
   }
 
+  /* The count at the end of a bar. Tinted by rank, and always carrying the
+     number, so the tint is never the only thing distinguishing two rows. */
+  .pos-pill {
+    display: inline-grid;
+    place-items: center;
+    min-width: 30px;
+    flex: none;
+    border-radius: 999px;
+    padding: 0.125rem 0.4375rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background: var(--harbour);
+  }
+
+  .pos-pill[data-rank="0"] { background: var(--yale-blue); }
+  .pos-pill[data-rank="1"] { background: var(--harbour); }
+  .pos-pill[data-rank="2"] { background: var(--deep-sky); }
+
+  .pos-pill[data-rank="3"],
+  .pos-pill[data-rank="4"] {
+    color: var(--yale-blue);
+    background: var(--frozen-water);
+  }
+
   /* ---------------- Chart chrome ----------------
-     The series pair is cool-sky / ocean-deep rather than dodger / twitter as
-     the palette roles would suggest: those two sit ΔE 9.5 apart in OKLab,
-     under the 15 floor for telling two lines apart at a glance. Same ten
-     colours, two steps further out, ΔE 23.9. Legend and end-labels carry the
-     identity as well, since cool-sky alone is only 2.16:1 against white. */
+     The series pair is pacific-blue / yale-blue rather than fresh-sky /
+     harbour as the palette roles would suggest: those two are adjacent steps
+     of one ramp and sit under the ΔE 15 floor for telling two lines apart at
+     a glance. Four steps out they are unmistakable. The legend carries the
+     identity as well, since pacific-blue alone is only 2.3:1 against white. */
 
   .pos-legend {
     display: flex;
@@ -1128,7 +1164,7 @@
     min-width: 122px;
     padding: 0.5rem 0.625rem;
     border-radius: 10px;
-    border: 1px solid var(--icy-blue);
+    border: 1px solid var(--pale-sky);
     background: var(--color-paper-50);
     box-shadow: 0 18px 36px -20px rgb(13 71 161 / 0.55);
     pointer-events: none;
@@ -1136,21 +1172,21 @@
 
   /* ---------------- Console overrides of the dark base ---------------- */
 
-  .pos-root :focus-visible { outline-color: var(--brilliant-azure); }
+  .pos-root :focus-visible { outline-color: var(--deep-sky); }
 
   .pos-root ::selection {
-    background: color-mix(in oklab, var(--dodger-blue) 28%, transparent);
-    color: var(--cobalt-blue);
+    background: color-mix(in oklab, var(--fresh-sky) 28%, transparent);
+    color: var(--midnight-harbour);
   }
 
-  .pos-root ::-webkit-scrollbar-track { background: var(--alice-blue); }
+  .pos-root ::-webkit-scrollbar-track { background: var(--sky-wash); }
 
   .pos-root ::-webkit-scrollbar-thumb {
-    background: var(--sky-blue);
-    border-color: var(--alice-blue);
+    background: var(--frozen-water);
+    border-color: var(--sky-wash);
   }
 
-  .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--cool-sky); }
+  .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--shallow); }
 }
 
 @utility hide-scrollbar {

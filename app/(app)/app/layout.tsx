@@ -6,7 +6,7 @@ import type { Branch, Notice } from "@/components/pos/console-header";
 import { requireSession } from "@/lib/auth";
 
 export const viewport: Viewport = {
-  themeColor: "#0d47a1",
+  themeColor: "#1b4965",
   colorScheme: "light",
 };
 
