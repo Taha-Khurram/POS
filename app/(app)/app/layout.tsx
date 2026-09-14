@@ -1,13 +1,21 @@
 import type { Viewport } from "next";
 import { cookies } from "next/headers";
 
-import { ConsoleShell, RAIL_COOKIE } from "@/components/pos/console-shell";
 import type { Branch, Notice } from "@/components/pos/console-header";
+import {
+  RAIL_COOKIE,
+  THEME_COOKIE,
+  type ConsoleTheme,
+} from "@/components/pos/console-prefs";
+import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
 
 export const viewport: Viewport = {
   themeColor: "#1b4965",
-  colorScheme: "light",
+  // Both, because the counter can be switched to the dark palette per device.
+  // The element-level `color-scheme` on `.pos-root` is what actually decides;
+  // this only stops the UA assuming one and painting form controls to match.
+  colorScheme: "light dark",
 };
 
 /**
@@ -33,9 +41,14 @@ const BRANCHES: Branch[] = [{ id: "main", label: "Main counter" }];
 export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   const session = await requireSession();
 
-  // The rail's collapse preference, read before the first byte so the shell
-  // renders at the right width instead of snapping shut after hydration.
-  const initialTight = (await cookies()).get(RAIL_COOKIE)?.value === "1";
+  // Both display preferences, read before the first byte so the shell renders
+  // at the right width and in the right palette instead of correcting itself a
+  // frame after hydration. Light is the default and the fallback: a counter
+  // nobody has set a preference on is a light counter.
+  const jar = await cookies();
+  const initialTight = jar.get(RAIL_COOKIE)?.value === "1";
+  const theme: ConsoleTheme =
+    jar.get(THEME_COOKIE)?.value === "dark" ? "dark" : "light";
 
   // Standing in for the alerts the modules will raise once they exist: low
   // stock from `items`, udhaar past its terms from the khata, renewal dates
@@ -58,7 +71,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   ];
 
   return (
-    <div className="pos-root">
+    <div className="pos-root" data-theme={theme}>
       <ConsoleShell
         shopName={SHOP_NAME}
         subtitle="Flo dashboard"
@@ -66,6 +79,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
         branches={BRANCHES}
         notices={notices}
         initialTight={initialTight}
+        theme={theme}
       >
         {children}
       </ConsoleShell>

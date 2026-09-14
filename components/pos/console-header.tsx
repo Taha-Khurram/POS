@@ -15,6 +15,8 @@ import {
   IconStore,
   IconUser,
 } from "./icons";
+import type { ConsoleTheme } from "./console-prefs";
+import { ThemeToggle } from "./theme-toggle";
 import { useDismiss } from "./use-dismiss";
 
 export type Branch = { id: string; label: string };
@@ -44,6 +46,7 @@ export function ConsoleHeader({
   branches,
   notices,
   tight,
+  theme,
   onToggleRail,
   onOpenDrawer,
 }: {
@@ -53,6 +56,7 @@ export function ConsoleHeader({
   branches: Branch[];
   notices: Notice[];
   tight: boolean;
+  theme: ConsoleTheme;
   onToggleRail: () => void;
   onOpenDrawer: () => void;
 }) {
@@ -141,6 +145,8 @@ export function ConsoleHeader({
           </p>
         )}
 
+        <ThemeToggle initial={theme} />
+
         <div className="relative" ref={bellRef}>
           <button
             type="button"
@@ -153,7 +159,7 @@ export function ConsoleHeader({
           >
             <IconBell />
             {unread > 0 ? (
-              <span className="absolute top-1.5 right-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-signal-bad px-1 text-[0.5625rem] font-bold text-white">
+              <span className="pos-count absolute top-1.5 right-1.5 h-4 min-w-4 rounded-full px-1">
                 {unread}
               </span>
             ) : null}
@@ -198,7 +204,7 @@ export function ConsoleHeader({
             className="pos-btn pos-btn-quiet gap-2 px-1.5"
             aria-expanded={profileOpen}
           >
-            <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-azure-800 font-display text-[0.75rem] font-bold text-white">
+            <span className="pos-stamp h-7 w-7 rounded-full text-[0.75rem]">
               {initial}
             </span>
             <span className="hidden max-w-32 truncate text-left text-[0.8125rem] font-medium md:block">

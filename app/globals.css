@@ -282,7 +282,7 @@
 
   .pos-card {
     background-color: var(--color-paper-50);
-    border: 1px solid color-mix(in oklab, var(--pale-sky) 72%, #fff);
+    border: 1px solid color-mix(in oklab, var(--pale-sky) 72%, var(--tint-base));
     border-radius: 18px;
     box-shadow: 0 1px 2px rgb(18 51 74 / 0.04);
   }
@@ -647,6 +647,11 @@
    rest fill the gaps. The chart series are named here too; see the note above
    .pos-legend for why they are not 500 and 700. */
 :root {
+  /* What a tint is mixed into. White on the counter, ink in the dark console —
+     a badge that mixes 9% of its signal colour into #fff is a white badge the
+     moment the surface under it stops being white. */
+  --tint-base: #fff;
+
   --sky-wash: var(--color-azure-50);
   --pale-sky: var(--color-azure-100);
   --frozen-water: var(--color-azure-200);
@@ -1074,20 +1079,20 @@
 
   .pos-badge-good {
     color: var(--color-signal-good);
-    background: color-mix(in oklab, var(--color-signal-good) 9%, #fff);
-    border-color: color-mix(in oklab, var(--color-signal-good) 26%, #fff);
+    background: color-mix(in oklab, var(--color-signal-good) 9%, var(--tint-base));
+    border-color: color-mix(in oklab, var(--color-signal-good) 26%, var(--tint-base));
   }
 
   .pos-badge-warn {
     color: var(--color-signal-warn);
-    background: color-mix(in oklab, var(--color-signal-warn) 9%, #fff);
-    border-color: color-mix(in oklab, var(--color-signal-warn) 26%, #fff);
+    background: color-mix(in oklab, var(--color-signal-warn) 9%, var(--tint-base));
+    border-color: color-mix(in oklab, var(--color-signal-warn) 26%, var(--tint-base));
   }
 
   .pos-badge-bad {
     color: var(--color-signal-bad);
-    background: color-mix(in oklab, var(--color-signal-bad) 8%, #fff);
-    border-color: color-mix(in oklab, var(--color-signal-bad) 24%, #fff);
+    background: color-mix(in oklab, var(--color-signal-bad) 8%, var(--tint-base));
+    border-color: color-mix(in oklab, var(--color-signal-bad) 24%, var(--tint-base));
   }
 
   /* ---------------- Table ---------------- */
@@ -1124,7 +1129,7 @@
   }
 
   .pos-table tbody tr:hover {
-    background: color-mix(in oklab, var(--sky-wash) 65%, #fff);
+    background: color-mix(in oklab, var(--sky-wash) 65%, var(--tint-base));
   }
 
   .pos-table tbody tr:last-child td { border-bottom: 0; }
@@ -1165,7 +1170,7 @@
       var(--color-paper-50) 0 4px,
       var(--sky-wash) 4px 9px
     );
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pale-sky) 70%, #fff);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pale-sky) 70%, var(--tint-base));
   }
 
   .pos-meter > span {
@@ -1488,6 +1493,178 @@
   }
 
   .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--shallow); }
+
+  /* ---------------- Solid plates ----------------
+     A filled square or circle carrying an initial, a step number or a count.
+     These are classes rather than two utilities apiece because the pairing has
+     to survive the theme flip: the fill and the glyph on top of it must move
+     together, and `bg-azure-800 text-white` only moves one of them. */
+
+  .pos-stamp {
+    display: grid;
+    place-items: center;
+    flex: none;
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: #fff;
+    background: var(--yale-blue);
+  }
+
+  .pos-count {
+    display: grid;
+    place-items: center;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--color-signal-bad);
+  }
+}
+
+/* ==========================================================================
+   Console — after dark
+   ==========================================================================
+
+   The counter is light by default and stays that way: dark glass is unreadable
+   under a tube light at 2 pm, which is the whole reason /app breaks from the
+   marketing site's palette in the first place. But the shop at 11 pm is a
+   different room, and the owner closing the till and going through the day's
+   figures is not standing under that tube light.
+
+   So this is a per-device preference, opted into, never a `prefers-color-scheme`
+   switch — a cashier who never asked for it must never arrive at a dark till.
+
+   It is done entirely by re-pointing the console's own tokens at the marketing
+   site's ink/iris/mist stack. Nothing below re-styles a component that could be
+   re-coloured instead, which is why 40-odd files of `border-azure-100` and
+   `text-graphite-500` need no edit at all and cannot drift out of step.
+
+   Two things the scale cannot carry on its own, and they are the only reason
+   any rules follow the variables:
+
+   - azure-800 is a text colour in six places and a filled avatar in five. On
+     dark those want opposite ends of the ramp, so the avatars became
+     `.pos-stamp` above and the token is now free to be pure bright accent.
+   - The interactive ramp inverts direction. On the counter, higher means
+     deeper; here higher means brighter, because the surface it sits on flipped.
+     Only the low end (50–200, surfaces and borders) and the high end (400–800,
+     accents) are ever used, so the two halves never meet in the middle. */
+
+.pos-root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --tint-base: var(--color-ink-800);
+
+  /* Surfaces. The canvas is the site's own body colour, so the console reads
+     as the same product rather than a light screen someone dimmed. */
+  --color-paper-50: var(--color-ink-800);
+  --color-paper-100: var(--color-ink-950);
+  --color-paper-200: var(--color-ink-700);
+  --color-paper-300: var(--color-ink-600);
+
+  /* Text */
+  --color-graphite-900: var(--color-mist-50);
+  --color-graphite-700: var(--color-mist-200);
+  --color-graphite-500: var(--color-mist-400);
+
+  /* The blue ramp, re-pointed at iris. 50–200 are surfaces and borders lit
+     slightly *above* the card, 400–800 are accents lit well above it. */
+  --color-azure-50: var(--color-ink-750);
+  --color-azure-100: var(--color-ink-700);
+  --color-azure-200: var(--color-ink-600);
+  --color-azure-300: color-mix(in oklab, var(--color-iris-400) 40%, var(--color-ink-700));
+  --color-azure-400: var(--color-iris-300);
+  --color-azure-500: var(--color-iris-500);
+  --color-azure-600: var(--color-iris-400);
+  --color-azure-700: var(--color-iris-300);
+  --color-azure-800: var(--color-iris-200);
+  /* 900 is only ever a shadow, and a shadow on ink is black, not navy. */
+  --color-azure-900: var(--color-ink-950);
+
+  /* Signals, from the site's three. Pink for "bad" is the site's own flare,
+     and it survives here because the rule upstairs still holds: every badge
+     built on these carries a word, so nothing is colour alone. */
+  --color-signal-good: var(--color-mint-400);
+  --color-signal-warn: var(--color-sun-400);
+  --color-signal-bad: var(--color-flare-400);
+
+  /* Two series that have to stay apart on ink. Pale against saturated rather
+     than dark against light, which is the light theme's separation and does
+     not survive the flip. */
+  --chart-sales: var(--color-iris-200);
+  --chart-profit: var(--color-iris-400);
+  --chart-bar: var(--color-iris-300);
+  --chart-grid: color-mix(in oklab, var(--color-mist-400) 24%, transparent);
+}
+
+@layer components {
+  /* The site's own primary button, lifted whole — same gradient, same rim,
+     same bloom. It is the one control on the screen that should look like it
+     came off the marketing page, because it is the one people press. */
+  .pos-root[data-theme="dark"] .pos-btn-primary {
+    color: #fff;
+    background: linear-gradient(
+      180deg,
+      var(--color-iris-500) 0%,
+      var(--color-iris-600) 100%
+    );
+    border-color: rgb(173 215 246 / 0.35);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.22),
+      0 10px 30px -10px rgb(59 40 204 / 0.75);
+  }
+
+  .pos-root[data-theme="dark"] .pos-btn-primary:hover {
+    background: linear-gradient(
+      180deg,
+      var(--color-iris-400) 0%,
+      var(--color-iris-500) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.28),
+      0 14px 34px -12px rgb(38 103 255 / 0.85);
+  }
+
+  /* White glyphs on a bright fill are the one thing that cannot survive the
+     flip: the fills got lighter, so what sits on them has to get darker. */
+  .pos-root[data-theme="dark"] .pos-stamp {
+    color: var(--color-mist-50);
+    background: var(--color-iris-600);
+  }
+
+  .pos-root[data-theme="dark"] :is(
+    .pos-count,
+    .pos-rank[data-lead="true"],
+    .pos-pill:not([data-rank="3"]):not([data-rank="4"]),
+    .pos-day[data-edge="true"],
+    .pos-day[data-edge="true"]:hover:not(:disabled)
+  ) {
+    color: var(--color-ink-950);
+  }
+
+  /* The wordmark is white artwork. On the counter it needs a plate to sit on;
+     on ink it does not, so the plate steps back to a border. */
+  .pos-root[data-theme="dark"] .pos-logo-plate {
+    background: var(--color-ink-700);
+  }
+
+  /* On the counter an input is white on a white card and the border carries
+     it. On ink there is no lighter left to go, so the field goes the other
+     way and reads as a well cut into the card. */
+  .pos-root[data-theme="dark"] :is(.pos-field, .pos-picker) {
+    background-color: var(--color-ink-900);
+  }
+
+  .pos-root[data-theme="dark"] .pos-scrim { background: rgb(3 6 14 / 0.66); }
+
+  .pos-root[data-theme="dark"] .pos-card {
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  }
+
+  /* The lifted surfaces drop navy glows and take black ones — a blue shadow
+     on a blue-black ground is a halo, not a shadow. */
+  .pos-root[data-theme="dark"] :is(.pos-menu, .pos-tip, .pos-sheet) {
+    box-shadow: 0 30px 60px -28px rgb(0 0 0 / 0.85);
+  }
 }
 
 @utility hide-scrollbar {

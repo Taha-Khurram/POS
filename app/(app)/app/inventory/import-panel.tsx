@@ -518,9 +518,7 @@ function Steps({ current }: { current: number }) {
           <li key={label} className="flex items-center gap-2">
             <span
               className={`grid h-6 w-6 flex-none place-items-center rounded-lg font-display text-[0.6875rem] font-bold ${
-                done || live
-                  ? "bg-azure-800 text-white"
-                  : "bg-azure-50 text-graphite-500"
+                done || live ? "pos-stamp" : "bg-azure-50 text-graphite-500"
               }`}
             >
               {done ? <IconCheck className="h-3.5 w-3.5" /> : at}

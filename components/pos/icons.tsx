@@ -189,6 +189,19 @@ export const IconCheck = (props: IconProps) => (
   </Glyph>
 );
 
+export const IconSun = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="4.2" />
+    <path d="M12 2.6v2.2M12 19.2v2.2M4.1 4.1l1.6 1.6M18.3 18.3l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.1 19.9l1.6-1.6M18.3 5.7l1.6-1.6" />
+  </Glyph>
+);
+
+export const IconMoon = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.7 8.7 0 1 0 10.7 10.7Z" />
+  </Glyph>
+);
+
 export const IconBarcode = (props: IconProps) => (
   <Glyph {...props}>
     <path d="M3 6.5V5a2 2 0 0 1 2-2h1.5M17.5 3H19a2 2 0 0 1 2 2v1.5M21 17.5V19a2 2 0 0 1-2 2h-1.5M6.5 21H5a2 2 0 0 1-2-2v-1.5" />

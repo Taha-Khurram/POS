@@ -289,7 +289,7 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
             cy={chart.y(hovered.sales)}
             r="5"
             fill="var(--chart-sales)"
-            stroke="#fff"
+            stroke="var(--color-paper-50)"
             strokeWidth="2.5"
           />
         ) : null}

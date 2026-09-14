@@ -749,7 +749,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
 function Step({ n, title, hint }: { n: number; title: string; hint: string }) {
   return (
     <header className="mb-3 flex items-center gap-2.5">
-      <span className="grid h-6 w-6 flex-none place-items-center rounded-lg bg-azure-800 font-display text-[0.6875rem] font-bold text-white">
+      <span className="pos-stamp h-6 w-6 rounded-lg text-[0.6875rem]">
         {n}
       </span>
       <h3 className="font-display text-[0.9375rem] font-semibold">{title}</h3>

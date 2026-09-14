@@ -272,7 +272,7 @@ export function RolesPanel({
               <tr>
                 <td>
                   <span className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-azure-800 font-display text-[0.75rem] font-bold text-white">
+                    <span className="pos-stamp h-8 w-8 rounded-full text-[0.75rem]">
                       {(shop.ownerName.trim()[0] ?? "F").toUpperCase()}
                     </span>
                     <span>

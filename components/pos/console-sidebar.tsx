@@ -159,7 +159,7 @@ export function ConsoleSidebar({
         )}
 
         <div className="flex items-center gap-2.5 px-1 py-1">
-          <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-azure-800 font-display text-[0.75rem] font-bold text-white">
+          <span className="pos-stamp h-8 w-8 rounded-full text-[0.75rem]">
             {initial}
           </span>
 

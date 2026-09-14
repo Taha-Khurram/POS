@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { ConsoleHeader, type Branch, type Notice } from "./console-header";
+import { RAIL_COOKIE, rememberPref, type ConsoleTheme } from "./console-prefs";
 import { ConsoleSidebar } from "./console-sidebar";
-
-export const RAIL_COOKIE = "flo_rail";
 
 /**
  * The console's chrome, and the only client component in the layout.
@@ -36,6 +35,7 @@ export function ConsoleShell({
   branches,
   notices,
   initialTight,
+  theme,
   children,
 }: {
   shopName: string;
@@ -44,6 +44,8 @@ export function ConsoleShell({
   branches: Branch[];
   notices: Notice[];
   initialTight: boolean;
+  /** Read from the cookie by the layout, so the first paint is already right. */
+  theme: ConsoleTheme;
   children: React.ReactNode;
 }) {
   const [tight, setTight] = useState(initialTight);
@@ -64,8 +66,7 @@ export function ConsoleShell({
   const toggleRail = () => {
     const next = !tight;
     setTight(next);
-    // A year, path-wide, lax: it is a layout preference, not a session.
-    document.cookie = `${RAIL_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+    rememberPref(RAIL_COOKIE, next ? "1" : "0");
   };
 
   return (
@@ -87,6 +88,7 @@ export function ConsoleShell({
         branches={branches}
         notices={notices}
         tight={tight}
+        theme={theme}
         onToggleRail={toggleRail}
         onOpenDrawer={() => setDrawer(true)}
       />
