@@ -36,7 +36,7 @@
 
   /* Register surfaces — the counter is lit, not dark. Dark glass does not
      belong under a tube light at 2 pm, so /app runs its own light scale while
-     the marketing site and /admin keep the ink-* stack. */
+    the marketing site keeps the ink-* stack. */
   --color-paper-50: #ffffff;
   --color-paper-100: #f4f5f8;
   --color-paper-200: #e6e8ee;

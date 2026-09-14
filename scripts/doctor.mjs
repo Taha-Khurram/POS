@@ -6,7 +6,7 @@
  *
  * Written because the failure that costs the most time is silent: if the custom
  * access token hook is not enabled, sign-in succeeds, every RLS policy sees a
- * null tenant_id, and `/admin` returns the same 404 as a typo. Nothing in the
+ * null tenant_id, and the signed-in app reads nothing. Nothing in the
  * app can tell you that — this can.
  */
 import { createClient } from "@supabase/supabase-js";
@@ -107,7 +107,7 @@ const { data: admins, error: adminError } = await admin
   .from("platform_admins")
   .select("user_id, platform_role, full_name");
 if (adminError) fail("platform_admins", adminError.message);
-else if (!admins.length) fail("platform_admins", "empty — run npm run create-admin");
+else if (!admins.length) fail("platform_admins", "empty");
 else
   for (const row of admins) {
     pass(row.platform_role, row.full_name ?? row.user_id);

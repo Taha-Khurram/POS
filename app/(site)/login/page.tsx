@@ -15,8 +15,8 @@ const entrance = (delay: number) => ({
 });
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  // Set by the `/app` and `/admin` gates, so someone who was bounced here lands
-  // back where they were headed rather than on a generic dashboard.
+  // Set by the `/app` gate, so someone who was bounced here lands back where
+  // they were headed rather than on a generic dashboard.
   const nextParam = (await searchParams).next;
   const next = typeof nextParam === "string" ? nextParam : undefined;
 

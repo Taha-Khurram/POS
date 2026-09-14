@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { createClient } from "@/utils/supabase/server";
@@ -43,9 +43,8 @@ function asMember<T extends readonly string[]>(
  * Note the claim is `tenant_role`, not `role`: Supabase already uses `role` for
  * the Postgres role the request runs as.
  *
- * Wrapped in `cache()` so the gates below can be called from a layout, a page,
- * and a `generateMetadata()` in the same request without re-verifying the token
- * three times.
+ * Wrapped in `cache()` so the app gate can call it without re-verifying the
+ * token more than once per request.
  */
 export const getSessionContext = cache(
   async (): Promise<SessionContext | null> => {
@@ -77,25 +76,3 @@ export async function requireSession(returnTo: string): Promise<SessionContext> 
   return session;
 }
 
-/**
- * Gate for `/admin`. `notFound()` rather than a 403 — the console should not be
- * discoverable by a tenant who guesses the URL (§3.7).
- *
- * Call this in the layout AND in every page and `generateMetadata()` beneath
- * it. A layout gate alone is not enough: Next renders the page concurrently
- * with the layout, so a page that does not gate itself still serialises its
- * markup and its title into the 404 response — which tells the prober exactly
- * what they were looking for. Layouts also do not re-render on client
- * navigation, so they cannot be the only check.
- */
-export async function requirePlatformAdmin(): Promise<
-  SessionContext & { platformRole: PlatformRole }
-> {
-  const session = await getSessionContext();
-  if (!session?.platformRole) notFound();
-  return session as SessionContext & { platformRole: PlatformRole };
-}
-
-/** Billing rights are the super_admin's; support staff read and answer calls. */
-export const canTakePayments = (session: SessionContext) =>
-  session.platformRole === "super_admin";

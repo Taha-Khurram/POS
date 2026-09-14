@@ -17,7 +17,6 @@ npm run lint    # eslint (flat config, next core-web-vitals + typescript)
 
 ```bash
 npm run doctor        # Supabase preflight: env, schema, bucket, JWT claims
-npm run create-admin  # grant yourself /admin access
 ```
 
 There are no tests and no CI. `npm run lint` and `npm run build` are the only
@@ -40,7 +39,7 @@ in filename order.
 
 ## Layout
 
-Three route groups under a single root layout. `app/layout.tsx` is html, body
+Two route groups under a single root layout. `app/layout.tsx` is html, body
 and fonts only — chrome belongs to the group.
 
 - `app/(site)/` — the public marketing routes. `(site)/layout.tsx` adds `Nav`
@@ -49,11 +48,8 @@ and fonts only — chrome belongs to the group.
   (`app/(site)/demo/demo-form.tsx`).
 - `app/(app)/app/` — the client's product: register and back office.
   `layout.tsx` is the auth gate and the light `.pos-root` shell.
-- `app/(admin)/admin/` — the owner console. `layout.tsx` gates on the
-  `platform_role` claim and calls `notFound()` for everyone else, so `/admin`
-  answers 404 rather than 403 and is not discoverable.
 - `app/not-found.tsx` sits above the groups, so it carries `Nav`/`Footer`
-  itself. It is also what a non-admin sees at any `/admin` URL.
+  itself.
 - `components/site/` — page sections and site chrome (`nav`, `footer`, `hero`,
   `page-header`, `cta`, …). Composed by pages; not generic UI primitives.
 - `components/motion/` — the animation primitives: `Reveal`, `CountUp`, `Tilt`,
@@ -93,9 +89,8 @@ Color scales: `ink-*` (near-black surfaces), `iris-*` (brand), `mist-*` (text),
 and the default sans (Inter). Easings are tokens — `var(--ease-out-soft)`,
 `--ease-out-back`, `--ease-in-out-soft`.
 
-**Two visual languages.** The marketing site and `/admin` are dark and share
-everything above — the console reuses `.panel`, `.rim`, `.field`, `.btn-primary`
-and adds no CSS of its own. `/app` is the exception: the counter is light and
+**Two visual languages.** The marketing site is dark. `/app` is the exception:
+the counter is light and
 high-contrast, because dark glass is unreadable under a tube light at 2 pm. It
 gets `.pos-root` (which also sets `color-scheme: light`), `.pos-card`, and the
 `paper-*` / `graphite-*` scales. Don't reach for Tailwind's built-in `slate-*`
@@ -163,18 +158,13 @@ to stay green.
 
 ## Gating a route
 
-Call the gate in the layout **and** in every page and `generateMetadata()`
-beneath it. A layout gate alone is not enough for two reasons: Next renders the
-page concurrently with the layout, so an ungated page serialises its markup and
-its `<title>` into the 404 body that `notFound()` produces — which tells whoever
-probed `/admin` exactly what they found; and layouts do not re-render on client
-navigation, so they cannot be the only check. `getSessionContext()` is wrapped
-in React `cache()`, so gating three times in one request verifies the token once.
+`getSessionContext()` is wrapped in React `cache()`, so repeated gates in one
+request verify the token once.
 
 ## Not built yet
 
 `app/(site)/login/login-form.tsx` fakes a pending state and
 `app/(site)/demo/demo-form.tsx` swaps to a thank-you panel locally — nothing is
 sent anywhere. Wire them to `supabase.auth.signInWithPassword` and a Server
-Action writing to `leads` respectively. `/app` and `/admin` are gated shells
-with no modules behind them yet; `Plan.md` has the order they arrive in.
+Action writing to `leads` respectively. `/app` is a gated shell with no modules
+behind it yet; `Plan.md` has the order they arrive in.

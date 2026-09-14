@@ -17,8 +17,7 @@ const entrance = (delay: number) => ({
 
 /**
  * The global 404. It sits above the route groups, so it carries the site chrome
- * itself — and it is also what `notFound()` renders for a non-admin who probes
- * an `/admin` URL, which is exactly the response we want there.
+ * itself for routes that do not exist.
  */
 export default function NotFound() {
   return (

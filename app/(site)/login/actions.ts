@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { destination, safeNext } from "@/lib/redirects";
+import { safeNext } from "@/lib/redirects";
 import { createClient } from "@/utils/supabase/server";
 
 export type LoginState = { error: string | null };
@@ -38,15 +38,5 @@ export async function signIn(
     return { error: "That email and password do not match an account." };
   }
 
-  // Where they land depends on who they are, and that is a claim on the token
-  // we were just issued — so read it from that token rather than the cookie
-  // jar, which the browser has not been handed yet.
-  const { data: verified } = await supabase.auth.getClaims(
-    data.session.access_token,
-  );
-  const isPlatformAdmin =
-    typeof verified?.claims?.platform_role === "string" &&
-    verified.claims.platform_role.length > 0;
-
-  redirect(destination(next, isPlatformAdmin));
+  redirect(next ?? "/app");
 }

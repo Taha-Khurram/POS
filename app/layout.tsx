@@ -38,8 +38,8 @@ export const viewport: Viewport = {
 
 /**
  * The only root layout: html, body, fonts. Chrome belongs to the route groups —
- * `(site)` adds Nav and Footer, `(app)` swaps to the light register shell, and
- * `(admin)` renders the console. Keeping one root layout means one font load and
+ * `(site)` adds Nav and Footer and `(app)` swaps to the light register shell.
+ * Keeping one root layout means one font load and
  * no full page reload when moving between groups.
  */
 export default function RootLayout({ children }: LayoutProps<"/">) {
