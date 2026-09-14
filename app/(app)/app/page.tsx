@@ -63,20 +63,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
           </p>
         </div>
 
-        <TimeframeFilter value={range.id} custom={range.custom} />
+        <TimeframeFilter
+          value={range.id}
+          label={range.label}
+          custom={range.custom}
+        />
       </header>
-
-      {/* The sample-data banner is not decoration. Every figure on this screen
-          is plausible and none of it is real, and a dashboard that does not say
-          so is how a shopkeeper ends up ordering stock against invented
-          numbers. It disappears when `isSample` does. */}
-      {data.isSample ? (
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-sun-400/40 bg-sun-400/10 px-3.5 py-2.5 text-[0.8125rem] text-graphite-700">
-          <span className="font-semibold text-graphite-900">Sample figures.</span>
-          The register is not writing sales yet, so this screen is showing a
-          worked example of what your counter will look like.
-        </p>
-      ) : null}
 
       <section aria-label="Headline figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard

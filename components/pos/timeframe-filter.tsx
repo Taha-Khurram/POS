@@ -7,117 +7,163 @@ import {
   TIMEFRAME_OPTIONS,
   type TimeframeId,
 } from "@/lib/pos/timeframe-options";
+import { DateRangeModal } from "./date-range-modal";
+import { IconCalendar, IconCheck, IconChevron } from "./icons";
+import { useDismiss } from "./use-dismiss";
 
 /**
  * The dashboard's global time filter.
  *
- * It is a real `<form method="get">` pointed at `/app`, so on a tablet that has
- * not finished hydrating — or has JavaScript disabled, or lost the bundle to a
- * dead connection halfway through — changing the range still works as a plain
- * browser navigation. Once hydrated, the same submit is intercepted and pushed
- * through the router instead, which keeps the rail and the scroll position.
- *
  * Every widget on the page reads the resolved window from `searchParams`, so
  * there is no "apply to all" wiring to get wrong: one navigation re-renders the
- * whole dashboard from one range.
+ * whole dashboard from one range, and the resulting URL can be sent to an
+ * accountant.
+ *
+ * It is a listbox rather than a `<select>` because the last row is not a
+ * period — it opens a calendar — and because a native dropdown cannot carry the
+ * dates a custom range resolved to. The `<noscript>` twin below is the same
+ * control as a plain GET form: on a tablet that has not finished hydrating, or
+ * lost the bundle to a dead connection, changing the period is still a browser
+ * navigation.
  */
 export function TimeframeFilter({
   value,
+  label,
   custom,
 }: {
   value: TimeframeId;
+  /** The resolved window's own words — "Last 7 days", or "1 – 15 Sept". */
+  label: string;
   custom?: { from: string; to: string };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const [range, setRange] = useState<TimeframeId>(value);
-  const [from, setFrom] = useState(custom?.from ?? "");
-  const [to, setTo] = useState(custom?.to ?? "");
+  const {
+    ref: menuRef,
+    open,
+    setOpen,
+  } = useDismiss<HTMLDivElement>();
 
-  const go = (next: TimeframeId, nextFrom = from, nextTo = to) => {
-    const params = new URLSearchParams({ range: next });
+  const [picking, setPicking] = useState(false);
 
-    if (next === "custom") {
-      params.set("from", nextFrom);
-      params.set("to", nextTo);
-    }
-
+  const go = (params: URLSearchParams) => {
+    setOpen(false);
     startTransition(() => router.push(`/app?${params}`, { scroll: false }));
   };
 
-  return (
-    <form
-      method="get"
-      action="/app"
-      className="flex flex-wrap items-center gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        go(range);
-      }}
-      data-pending={pending}
-    >
-      <label className="relative">
-        <span className="sr-only">Period</span>
-        <select
-          name="range"
-          value={range}
-          className="pos-field w-auto font-medium"
-          onChange={(event) => {
-            const next = event.target.value as TimeframeId;
-            setRange(next);
-            // A custom range is not a period until both ends are filled in, so
-            // it waits for Apply. Everything else navigates on the spot.
-            if (next !== "custom") go(next);
-          }}
-        >
-          {TIMEFRAME_OPTIONS.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+  const choose = (next: TimeframeId) => {
+    // A custom range is not a period until both ends exist, so it opens the
+    // calendar instead of navigating. Everything else goes on the spot.
+    if (next === "custom") {
+      setOpen(false);
+      setPicking(true);
+      return;
+    }
 
-      {range === "custom" ? (
-        <>
-          <input
-            type="date"
-            name="from"
-            value={from}
-            max={to || undefined}
-            onChange={(event) => setFrom(event.target.value)}
-            className="pos-field w-auto"
-            aria-label="From date"
-            required
+    go(new URLSearchParams({ range: next }));
+  };
+
+  return (
+    <div className="relative ml-auto flex justify-end" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="pos-picker js-only"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={label}
+      >
+        <IconCalendar className="h-4 w-4 flex-none text-azure-600" />
+        <span className="flex-1 truncate text-left">{label}</span>
+
+        {/* The spinner takes the caret's place rather than standing beside it,
+            so the control is exactly as wide while it is thinking. */}
+        {pending ? (
+          <span
+            className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2 border-azure-200 border-t-azure-700"
+            aria-hidden
           />
-          <span className="text-[0.8125rem] text-graphite-500">to</span>
-          <input
-            type="date"
-            name="to"
-            value={to}
-            min={from || undefined}
-            onChange={(event) => setTo(event.target.value)}
-            className="pos-field w-auto"
-            aria-label="To date"
-            required
-          />
-          <button type="submit" className="pos-btn pos-btn-soft">
-            Apply
-          </button>
-        </>
+        ) : (
+          <IconChevron className="pos-picker-caret h-3.5 w-3.5" />
+        )}
+
+        <span aria-live="polite" className="sr-only">
+          {pending ? "Updating the dashboard" : ""}
+        </span>
+      </button>
+
+      {open ? (
+        <div className="pos-menu pos-picker-menu" role="menu">
+          {TIMEFRAME_OPTIONS.map((option) => {
+            const selected = option.id === value;
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => choose(option.id)}
+                className="pos-option"
+              >
+                <span className="flex-1">
+                  {option.id === "custom" ? "Pick your own dates…" : option.label}
+
+                  {/* A selected custom range says what it resolved to; the
+                      trigger above it is showing the same dates, but the list
+                      is where you go to change them. */}
+                  {option.id === "custom" && selected && custom ? (
+                    <span className="mt-0.5 block text-[0.75rem] font-normal text-graphite-500">
+                      {custom.from.replace("T", " ")} → {custom.to.replace("T", " ")}
+                    </span>
+                  ) : null}
+                </span>
+
+                {selected ? (
+                  <IconCheck className="h-4 w-4 flex-none text-azure-700" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
       ) : null}
 
-      {/* Reserved space rather than a spinner that shifts the row when it
-          appears — the whole point of this control is that it sits still. */}
-      <span
-        aria-live="polite"
-        className={`text-[0.75rem] text-azure-700 transition-opacity duration-200 ${
-          pending ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        Updating…
-      </span>
-    </form>
+      {picking ? (
+        <DateRangeModal
+          initial={custom}
+          onClose={() => setPicking(false)}
+          onApply={(from, to) => {
+            setPicking(false);
+            go(new URLSearchParams({ range: "custom", from, to }));
+          }}
+        />
+      ) : null}
+
+      <noscript>
+        {/* Same trick as the reveal fallback in `app/layout.tsx`: a style tag
+            that only exists when scripting is off, standing the plain form up
+            in place of the control that cannot work without JavaScript. */}
+        <style>{`.js-only{display:none}`}</style>
+
+        <form method="get" action="/app" className="flex items-center gap-2">
+          <label>
+            <span className="sr-only">Period</span>
+            <select name="range" defaultValue={value} className="pos-field w-auto">
+              {TIMEFRAME_OPTIONS.filter((option) => option.id !== "custom").map(
+                (option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <button type="submit" className="pos-btn pos-btn-soft">
+            Show
+          </button>
+        </form>
+      </noscript>
+    </div>
   );
 }

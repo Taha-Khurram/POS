@@ -20,7 +20,9 @@ import type { Timeframe } from "./timeframes";
  *    Until that migration lands, the three cost-side KPIs are sample figures.
  * 2. **`getDashboardData` returns sample data.** It is deterministic — seeded
  *    off the tenant and the window — so it does not flicker between renders and
- *    reads like a real shop. `isSample` is true, and the UI says so out loud.
+ *    reads like a real shop. `isSample` is true; the dashboard no longer
+ *    surfaces that flag, so nothing on screen distinguishes these figures
+ *    from a real shop's.
  *    Nothing here reaches Supabase; see the note at the bottom of this file for
  *    the queries that replace it.
  */

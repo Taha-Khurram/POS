@@ -169,6 +169,26 @@ export const IconUser = (props: IconProps) => (
   </Glyph>
 );
 
+export const IconCalendar = (props: IconProps) => (
+  <Glyph {...props}>
+    <rect x="3" y="5" width="18" height="16" rx="2.5" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Glyph>
+);
+
+export const IconClock = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 1.8" />
+  </Glyph>
+);
+
+export const IconCheck = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="m5 12.5 4.5 4.5L19 7" />
+  </Glyph>
+);
+
 /**
  * The delta marker on a KPI. A triangle rather than a coloured word, because it
  * has to survive being a 10px glyph next to a number — but it never travels
