@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 
+import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
 import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
-import { perCycle, rupees } from "@/lib/format";
-import { getEntitlements } from "@/lib/entitlements";
 import { SAMPLE_ITEMS } from "@/lib/pos/catalog";
-import { getCounter, getShopProfile, getShopSettings } from "@/lib/pos/shop";
+import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
+import { CounterPicker } from "./counter-picker";
 import { Till } from "./till";
 
 export const metadata: Metadata = {
@@ -17,33 +18,58 @@ export const metadata: Metadata = {
 /**
  * The counter.
  *
- * A server component that reads the three rows the till needs — the counter
- * switch, the shop that prints at the top of the receipt, and the currency and
- * clock the receipt is written in — and hands them to one client component.
- * Nothing about the bill is worked out here; the arithmetic is in
- * `lib/pos/counter.ts` so that it holds on a tablet with no signal.
+ * A server component that reads what the till needs — the shop's open counters,
+ * the shop that prints at the top of the receipt, and the currency and clock
+ * the receipt is written in — and hands one counter's worth to a client
+ * component. Nothing about the bill is worked out here; the arithmetic is in
+ * `lib/pos/counter.ts` so that it holds on a tablet with a bad connection.
+ *
+ * Which counter is a per-device cookie, not a per-user setting: the till by the
+ * door is the till by the door whoever is standing at it. It is re-checked
+ * against the shop's own open counters on every load, so a counter that was
+ * shut overnight sends the tablet back to the picker rather than to a register
+ * whose every sale would be refused.
  *
  * The item list is still `SAMPLE_ITEMS`, the same rows Products & stock shows,
  * so the register and the catalog cannot disagree about what is on the shelf.
  * When `items` has real rows this becomes a query and nothing else moves.
  */
-export default async function RegisterPage() {
+export default async function RegisterPage({
+  searchParams,
+}: PageProps<"/app/register">) {
   const session = await requireSession();
 
   if (!session.tenantId) return <NotAttached />;
 
-  const [counter, shop, settings] = await Promise.all([
-    getCounter(session.tenantId),
+  const [counters, shop, settings, jar] = await Promise.all([
+    listCounters(session.tenantId),
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
+    cookies(),
   ]);
 
-  // No shop row, or the counter is switched off in Settings. Either way there
-  // is nothing to bill against — a receipt with no shop name at the top is not
-  // a receipt, and a counter nobody opened was not meant to sell.
-  if (!shop || !counter.isActive) {
-    return <CounterShut hasShop={Boolean(shop)} tenantId={session.tenantId} />;
+  // No shop row means the claim says there is one and RLS returned nothing —
+  // in practice the access-token hook switched off. A receipt with no shop name
+  // at the top is not a receipt either way.
+  if (!shop) return <CounterShut hasShop={false} />;
+
+  const open = counters.filter((counter) => counter.isActive);
+  if (open.length === 0) return <CounterShut hasShop counters={counters.length} />;
+
+  const remembered = jar.get(COUNTER_COOKIE)?.value ?? null;
+  const chosen = open.find((counter) => counter.id === remembered) ?? null;
+
+  // `?pick=1` is the cashier asking to switch. Without it, one open counter
+  // needs no question — a single-till shop should never see this screen.
+  const switching = (await searchParams).pick === "1";
+
+  if (switching || !chosen) {
+    if (switching || open.length > 1) {
+      return <CounterPicker counters={open} current={chosen?.id ?? null} />;
+    }
   }
+
+  const counter = chosen ?? open[0];
 
   return (
     <div className="space-y-4">
@@ -57,13 +83,22 @@ export default async function RegisterPage() {
           </p>
         </div>
 
-        <Link
-          href="/app/settings?tab=counter"
-          className="pos-btn pos-btn-soft pos-btn-sm"
-        >
-          <IconSettings className="h-4 w-4" />
-          Counter settings
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {open.length > 1 ? (
+            <Link href="/app/register?pick=1" className="pos-btn pos-btn-soft pos-btn-sm">
+              <IconRegister className="h-4 w-4" />
+              Switch counter
+            </Link>
+          ) : null}
+
+          <Link
+            href={`/app/settings?tab=counter&counter=${counter.id}`}
+            className="pos-btn pos-btn-quiet pos-btn-sm"
+          >
+            <IconSettings className="h-4 w-4" />
+            Counter settings
+          </Link>
+        </div>
       </header>
 
       <Till
@@ -77,21 +112,21 @@ export default async function RegisterPage() {
 }
 
 /**
- * Signed in, attached to a shop, and the counter is shut.
+ * Attached to a shop, and no counter is open.
  *
  * It names the switch and links straight to it rather than saying the register
  * is unavailable — the owner is one tap from the thing that fixes this, and
  * "contact support" for a checkbox is how a Saturday gets wasted.
  */
-async function CounterShut({
+function CounterShut({
   hasShop,
-  tenantId,
+  counters = 0,
 }: {
   hasShop: boolean;
-  tenantId: string;
+  /** How many exist but are shut, so the copy can tell "none yet" from
+   *  "you have two and both are off". */
+  counters?: number;
 }) {
-  const entitlements = hasShop ? await getEntitlements(tenantId) : null;
-
   return (
     <div className="mx-auto max-w-lg">
       <div className="pos-card p-6">
@@ -100,57 +135,40 @@ async function CounterShut({
         </span>
 
         <h1 className="mt-4 font-display text-[1.375rem] font-bold">
-          The counter is shut
+          {hasShop && counters > 0
+            ? "Every counter is shut"
+            : hasShop
+              ? "No counter yet"
+              : "We cannot read your shop"}
         </h1>
 
         <p className="mt-2.5 text-[0.9375rem] leading-relaxed text-graphite-700">
-          {hasShop ? (
-            <>
-              Shukriya — your account is live. Open the counter in Settings and
-              this screen becomes the till: scan or search an item, it goes on
-              the bill, and the total prints on an 80 mm roll.
-            </>
-          ) : (
+          {!hasShop ? (
             <>
               This login is attached to a shop we cannot read. Run{" "}
               <code>npm run doctor</code> — it is almost always the Customize
               Access Token hook switched off in the Supabase project.
             </>
+          ) : counters > 0 ? (
+            <>
+              You have {counters} {counters === 1 ? "counter" : "counters"}, and
+              none of them is open. Open one in Settings and this screen becomes
+              the till.
+            </>
+          ) : (
+            <>
+              Shukriya — your account is live. Add a counter in Settings and
+              this screen becomes the till: scan or search an item, it goes on
+              the bill, and the total prints on an 80 mm roll.
+            </>
           )}
         </p>
 
         {hasShop ? (
-          <Link
-            href="/app/settings?tab=counter"
-            className="pos-btn pos-btn-primary mt-5"
-          >
+          <Link href="/app/settings?tab=counter" className="pos-btn pos-btn-primary mt-5">
             <IconSettings className="h-4 w-4" />
-            Open the counter
+            {counters > 0 ? "Open a counter" : "Add a counter"}
           </Link>
-        ) : null}
-
-        {entitlements ? (
-          <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-orchid-100 pt-5 text-[0.875rem]">
-            <dt className="text-graphite-500">Plan</dt>
-            <dd className="text-right font-medium">{entitlements.planName}</dd>
-
-            <dt className="text-graphite-500">You pay</dt>
-            <dd className="text-right font-medium">
-              {rupees(entitlements.agreedPrice)} /{" "}
-              {perCycle(entitlements.billingCycle)}
-            </dd>
-
-            <dt className="text-graphite-500">Registers</dt>
-            <dd className="text-right font-medium">{entitlements.maxRegisters}</dd>
-
-            <dt className="text-graphite-500">Branches</dt>
-            <dd className="text-right font-medium">{entitlements.maxBranches}</dd>
-
-            <dt className="text-graphite-500">Renews in</dt>
-            <dd className="text-right font-medium">
-              {entitlements.daysUntilExpiry} days
-            </dd>
-          </dl>
         ) : null}
       </div>
     </div>

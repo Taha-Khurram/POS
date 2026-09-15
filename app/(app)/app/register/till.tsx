@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BarcodeScanner } from "@/components/pos/barcode-scanner";
 import {
+  IconAlert,
   IconBarcode,
   IconCamera,
   IconCart,
@@ -17,13 +18,14 @@ import {
 } from "@/components/pos/icons";
 import {
   billOf,
-  claimSerial,
   lineTotal,
   moneyFormatter,
   parseQuantity,
-  receiptNumber,
+  newSaleId,
+  provisionalReceiptNumber,
+  round3,
   type CartLine,
-  type CounterSettings,
+  type Counter,
   type TenderId,
 } from "@/lib/pos/counter";
 import {
@@ -34,6 +36,7 @@ import {
 } from "@/lib/pos/catalog";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
+import { recordSale } from "./actions";
 import { PaymentSheet } from "./payment-sheet";
 import { Receipt, type Sale } from "./receipt";
 
@@ -52,9 +55,12 @@ import { Receipt, type Sale } from "./receipt";
  * item on the bill. Focus is therefore returned to that box after every action,
  * because a scanner firing into a closed dialog is a scan that vanished.
  *
- * What is not here yet: the sale is not written to `sales`. That needs a branch
- * row, real `items`, and the offline outbox, and a half-written sale is worse
- * than an honest one — so the counter bills and prints, and Part 4 records.
+ * The sale is recorded before it prints, through `recordSale`, which re-prices
+ * every line from the catalog server-side — so the browser decides what and how
+ * many, and never what it costs. The receipt number comes back from that write
+ * rather than being invented here: it is the counter's own series, claimed in
+ * the same transaction that inserts the sale, which is the only way two tablets
+ * on one counter cannot print the same number.
  */
 export function Till({
   items,
@@ -63,7 +69,7 @@ export function Till({
   settings,
 }: {
   items: Product[];
-  counter: CounterSettings;
+  counter: Counter;
   shop: ShopProfile;
   settings: ShopSettings;
 }) {
@@ -234,15 +240,49 @@ export function Till({
 
   /* ---------------- Settling ---------------- */
 
-  const tendered = (tender: TenderId, given: number | null, change: number) => {
+  // The sale's id, minted on the tablet the moment the payment sheet opens. It
+  // is what makes a retry a replay rather than a second bill: `record_sale`
+  // hands back the receipt the first attempt issued instead of claiming
+  // another number. Re-minted for every new bill, never reused.
+  const saleId = useRef<string>("");
+
+  const tendered = async (
+    tender: TenderId,
+    given: number | null,
+    change: number,
+    force: boolean,
+  ): Promise<string | null> => {
+    const frozen = lines.map((line) => ({ ...line }));
+
+    // Printing an unrecorded sale is the escape hatch, taken only after the
+    // write has already failed — so it never asks the server a second time.
+    const result = force
+      ? null
+      : await recordSale({
+          saleId: saleId.current,
+          counterId: counter.id,
+          tender,
+          lines: frozen.map((line) => ({ id: line.id, quantity: line.quantity })),
+        }).catch(() => ({
+          ok: false as const,
+          error:
+            "We could not reach Flo to record this sale. Check the connection and try again.",
+        }));
+
+    if (result && !result.ok) return result.error;
+
     const at = new Date();
 
     setSale({
-      receiptNo: receiptNumber(counter.receiptPrefix, at, claimSerial(counter.receiptPrefix, at)),
+      // The counter's own number when the sale was recorded; an unmistakable
+      // stand-in when it was not, so a bill that is missing from the takings
+      // can never be confused for one that is in them.
+      receiptNo: result?.ok ? result.receiptNo : provisionalReceiptNumber(at),
+      recorded: Boolean(result?.ok),
       at,
-      // A copy, frozen here. The cart is emptied on the next line, and a
-      // receipt that re-read it would print the next customer's shopping.
-      lines: lines.map((line) => ({ ...line })),
+      // Frozen above. The cart is emptied on the next line, and a receipt that
+      // re-read it would print the next customer's shopping.
+      lines: frozen,
       bill,
       tender,
       tendered: given,
@@ -251,6 +291,9 @@ export function Till({
 
     setLines([]);
     setPaying(false);
+    saleId.current = "";
+
+    return null;
   };
 
   const newSale = () => {
@@ -518,7 +561,10 @@ export function Till({
 
             <button
               type="button"
-              onClick={() => setPaying(true)}
+              onClick={() => {
+                saleId.current = newSaleId();
+                setPaying(true);
+              }}
               disabled={lines.length === 0}
               className="pos-btn pos-btn-primary mt-3.5 w-full py-2.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -533,7 +579,13 @@ export function Till({
           bill={bill}
           counter={counter}
           settings={settings}
-          onClose={() => setPaying(false)}
+          onClose={() => {
+            setPaying(false);
+            // A bill that was never tendered keeps no id. Reusing it on the
+            // next customer would make `record_sale` replay this one and hand
+            // back a receipt for shopping nobody bought.
+            saleId.current = "";
+          }}
           onTender={tendered}
         />
       ) : null}
@@ -607,13 +659,23 @@ function SaleDone({
         className="pos-sheet outline-none"
       >
         <header className="print-hide flex items-center gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
-          <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-signal-good/15 text-signal-good">
-            <IconCheck className="h-[18px] w-[18px]" />
+          <span
+            className={`grid h-9 w-9 flex-none place-items-center rounded-xl ${
+              sale.recorded
+                ? "bg-signal-good/15 text-signal-good"
+                : "bg-signal-warn/15 text-signal-warn"
+            }`}
+          >
+            {sale.recorded ? (
+              <IconCheck className="h-[18px] w-[18px]" />
+            ) : (
+              <IconAlert className="h-[18px] w-[18px]" />
+            )}
           </span>
 
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-[1rem] leading-tight font-bold">
-              Sale done
+              {sale.recorded ? "Sale done" : "Printed, not recorded"}
             </h2>
             <p className="mt-0.5 font-mono text-[0.75rem] text-graphite-500">
               {sale.receiptNo}
@@ -726,7 +788,3 @@ function Figure({
     </div>
   );
 }
-
-/** Three decimals, matching `sale_lines.quantity numeric(12, 3)` — and enough
- *  that adding 0.25 four times comes to exactly 1. */
-const round3 = (value: number) => Math.round(value * 1000) / 1000;

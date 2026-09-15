@@ -20,6 +20,19 @@ export const RAIL_COOKIE = "flo_rail";
 
 export const THEME_COOKIE = "flo_theme";
 
+/**
+ * Which counter this tablet bills from.
+ *
+ * A device preference and not a user one, which is why it is here beside the
+ * rail and the theme rather than on `profiles`: the till by the door is the
+ * till by the door whoever is standing at it, and a manager who signs in to
+ * cover a break must not drag counter 1's receipt series onto counter 2.
+ *
+ * Read by the register on the server, so it has to be a cookie — the same
+ * reason the theme is one.
+ */
+export const COUNTER_COOKIE = "flo_counter";
+
 export type ConsoleTheme = "light" | "dark";
 
 /** A year, path-wide, lax: these are display preferences, not sessions. */

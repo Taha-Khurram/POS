@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { IconCard, IconCash, IconClose } from "@/components/pos/icons";
+import { IconAlert, IconCard, IconCash, IconClose } from "@/components/pos/icons";
 import {
   changeDue,
   moneyFormatter,
@@ -10,7 +10,7 @@ import {
   quickTenders,
   tendersOn,
   type Bill,
-  type CounterSettings,
+  type Counter,
   type TenderId,
 } from "@/lib/pos/counter";
 import type { ShopSettings } from "@/lib/pos/settings-options";
@@ -29,6 +29,13 @@ import type { ShopSettings } from "@/lib/pos/settings-options";
  *
  * Card is a confirmation, not a transaction: the shop's machine is a separate
  * box on the counter and Flo never sees the authorisation. The button says so.
+ *
+ * Tendering is also where the sale is written down, so this is the one screen
+ * in the register that waits on the network. When that write fails the sheet
+ * stays put and says so — and then offers to print anyway, because a shop that
+ * cannot sell when the line is down is a shop that stops using Flo. What it
+ * will not do is pretend: a sale printed that way is marked on the roll and is
+ * not in the day's takings.
  */
 export function PaymentSheet({
   bill,
@@ -38,10 +45,17 @@ export function PaymentSheet({
   onTender,
 }: {
   bill: Bill;
-  counter: CounterSettings;
+  counter: Counter;
   settings: ShopSettings;
   onClose: () => void;
-  onTender: (tender: TenderId, tendered: number | null, change: number) => void;
+  /** Resolves to an error to show, or null once the sale is done with. */
+  onTender: (
+    tender: TenderId,
+    tendered: number | null,
+    change: number,
+    /** Print without recording, after the write has already failed once. */
+    force: boolean,
+  ) => Promise<string | null>;
 }) {
   const money = moneyFormatter(settings);
   const available = tendersOn(counter);
@@ -50,6 +64,8 @@ export function PaymentSheet({
   // default should be the one nobody has to think about.
   const [tender, setTender] = useState<TenderId>(available[0]?.id ?? "cash");
   const [given, setGiven] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const cashRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -86,9 +102,12 @@ export function PaymentSheet({
   const ready = !cash || (tendered !== null && !short);
   const change = cash && tendered !== null ? changeDue(tendered, bill.total) : 0;
 
-  const settle = () => {
-    if (!ready) return;
-    onTender(tender, cash ? tendered : null, cash ? change : 0);
+  const settle = async (force = false) => {
+    if (!ready || busy) return;
+
+    setBusy(true);
+    setFailure(await onTender(tender, cash ? tendered : null, cash ? change : 0, force));
+    setBusy(false);
   };
 
   return (
@@ -113,7 +132,7 @@ export function PaymentSheet({
           if (event.target instanceof HTMLButtonElement) return;
 
           event.preventDefault();
-          settle();
+          void settle();
         }}
       >
         <header className="flex items-start gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
@@ -248,20 +267,55 @@ export function PaymentSheet({
               was settled by card — press it once the machine says approved.
             </p>
           )}
+
+          {/* The write failed. Said plainly, with the one thing the cashier can
+              do about it and the cost of doing it, rather than a retry button
+              that hides what is actually wrong. */}
+          {failure ? (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-signal-bad/40 bg-signal-bad/5 p-3 text-[0.8125rem] leading-relaxed text-graphite-700"
+            >
+              <IconAlert className="mt-0.5 h-4 w-4 flex-none text-signal-bad" />
+              {failure}
+            </p>
+          ) : null}
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 px-4 py-3 sm:px-5">
-          <button type="button" onClick={onClose} className="pos-btn pos-btn-soft">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="pos-btn pos-btn-soft disabled:opacity-60"
+          >
             Back to the bill
           </button>
 
+          {/* Only after a failure, and never as a first resort — a sale printed
+              this way is not in the day's takings and the roll says so. */}
+          {failure ? (
+            <button
+              type="button"
+              onClick={() => void settle(true)}
+              disabled={busy}
+              className="pos-btn pos-btn-soft disabled:opacity-60"
+            >
+              Print without recording
+            </button>
+          ) : null}
+
           <button
             type="button"
-            onClick={settle}
-            disabled={!ready}
+            onClick={() => void settle()}
+            disabled={!ready || busy}
             className="pos-btn pos-btn-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {cash ? "Take cash" : "Card approved"} · {money(bill.total)}
+            {busy
+              ? "Recording…"
+              : failure
+                ? `Try again · ${money(bill.total)}`
+                : `${cash ? "Take cash" : "Card approved"} · ${money(bill.total)}`}
           </button>
         </footer>
       </div>

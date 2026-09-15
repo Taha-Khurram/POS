@@ -7,7 +7,7 @@ import {
   writeQuantity,
   type Bill,
   type CartLine,
-  type CounterSettings,
+  type Counter,
   type TenderId,
 } from "@/lib/pos/counter";
 import type { ShopSettings } from "@/lib/pos/settings-options";
@@ -32,6 +32,10 @@ import type { ShopProfile } from "@/lib/pos/shop";
  */
 export type Sale = {
   receiptNo: string;
+  /** False when the sale could not be written down and the cashier printed it
+   *  anyway. The roll says so, because a bill that is missing from the day's
+   *  takings must never look like one that is in them. */
+  recorded: boolean;
   at: Date;
   /** Frozen at tender. The cart is cleared the moment this exists, so a
    *  reprint shows what was sold and not what is on the screen now. */
@@ -52,7 +56,7 @@ export function Receipt({
 }: {
   sale: Sale;
   shop: ShopProfile;
-  counter: CounterSettings;
+  counter: Counter;
   settings: ShopSettings;
 }) {
   const money = moneyFormatter(settings);
@@ -86,8 +90,21 @@ export function Receipt({
 
       <Rule />
 
+      {/* An unrecorded sale is stated at the top, in the place a cashier's eye
+          already goes, rather than in small print at the bottom. The money was
+          taken; what is missing is the record of it. */}
+      {!sale.recorded ? (
+        <p className="border border-black px-1.5 py-1 text-center font-display text-[0.8125rem] font-bold uppercase">
+          Not recorded
+          <span className="mt-0.5 block text-[0.6875rem] leading-snug font-normal normal-case">
+            This bill is not in today&rsquo;s takings. Keep it and re-enter the
+            sale once Flo is back.
+          </span>
+        </p>
+      ) : null}
+
       {/* ---- Which bill ---- */}
-      <dl>
+      <dl className={sale.recorded ? undefined : "mt-2"}>
         <Row label="Bill" value={sale.receiptNo} mono />
         <Row label="Date" value={receiptStamp(sale.at, settings.timezone)} />
         <Row label="Counter" value={counter.name} />

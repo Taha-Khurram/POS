@@ -1,10 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireSession, type SessionContext } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
-import { RECEIPT_FOOTER_MAX, RECEIPT_PREFIX_RE } from "@/lib/pos/counter";
+import { getEntitlements } from "@/lib/entitlements";
+import {
+  RECEIPT_FOOTER_MAX,
+  RECEIPT_PREFIX_RE,
+  newCounterDefaults,
+} from "@/lib/pos/counter";
 import {
   ACCESS_LEVELS,
   CURRENCIES,
@@ -295,8 +301,29 @@ export async function saveRolePermissions(
 }
 
 // -----------------------------------------------------------------------------
-// The counter — the `counters` row the register opens against.
+// Counters
+//
+// A shop has as many as its plan allows, each with its own receipt series and
+// its own register. `max_registers` comes from `getEntitlements`, which is the
+// single authority on what a plan allows — the cap is not re-stated here.
 // -----------------------------------------------------------------------------
+
+/** The counter's id arrives in the form, so it is checked against the tenant's
+ *  own rows before anything is written. A crafted id must not reach `.eq()`. */
+async function ownCounter(tenantId: string, counterId: unknown) {
+  if (typeof counterId !== "string" || !counterId) return null;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("counters")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", counterId)
+    .maybeSingle();
+
+  return data?.id ?? null;
+}
+
 export async function saveCounter(
   _previous: SettingsState,
   formData: FormData,
@@ -304,6 +331,9 @@ export async function saveCounter(
   const owner = await requireOwner();
   if (!owner.ok) return fail(owner.error);
   const { session } = owner;
+
+  const counterId = await ownCounter(session.tenantId, formData.get("counter_id"));
+  if (!counterId) return fail("That counter is not one of yours. Reload and try again.");
 
   const name = text(formData.get("name"));
   if (!name) return fail("Give the counter a name — the receipt prints it.");
@@ -319,7 +349,9 @@ export async function saveCounter(
 
   const footer = text(formData.get("receipt_footer"));
   if (footer.length > RECEIPT_FOOTER_MAX) {
-    return fail(`The footer line has to fit the roll — ${RECEIPT_FOOTER_MAX} characters at most.`);
+    return fail(
+      `The footer line has to fit the roll — ${RECEIPT_FOOTER_MAX} characters at most.`,
+    );
   }
 
   const acceptsCash = checked(formData, "accepts_cash");
@@ -334,7 +366,6 @@ export async function saveCounter(
   }
 
   const after = {
-    tenant_id: session.tenantId,
     name,
     is_active: isActive,
     receipt_prefix: receiptPrefix,
@@ -351,16 +382,24 @@ export async function saveCounter(
     .select(
       "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
     )
-    .eq("tenant_id", session.tenantId)
+    .eq("id", counterId)
     .maybeSingle();
 
-  // Upsert, like the currency card: 0010 backfills nothing, so the first save
-  // is the insert and every one after it is the update.
   const { error } = await supabase
     .from("counters")
-    .upsert(after, { onConflict: "tenant_id" });
+    .update(after)
+    .eq("id", counterId)
+    .eq("tenant_id", session.tenantId);
 
-  if (error) return fail("We could not save the counter. Please try again.");
+  if (error) {
+    // The one failure worth naming: two counters cannot share a prefix, or
+    // their receipt numbers stop telling the tills apart.
+    return fail(
+      error.code === "23505"
+        ? `Another counter already uses the prefix ${receiptPrefix}. Give this one its own.`
+        : "We could not save the counter. Please try again.",
+    );
+  }
 
   await recordAudit(session, {
     // Opening and closing a counter is the entry somebody will come looking for
@@ -368,7 +407,7 @@ export async function saveCounter(
     // the switch rather than for the form.
     action: isActive ? "counter.opened" : "counter.closed",
     subjectType: "counter",
-    subjectId: session.tenantId,
+    subjectId: counterId,
     before,
     after,
   });
@@ -376,4 +415,148 @@ export async function saveCounter(
   revalidatePath("/app/settings");
   revalidatePath("/app/register");
   return done();
+}
+
+/**
+ * Add a counter, then go straight to its settings.
+ *
+ * It arrives shut, named for its position, and with a prefix cut from the same
+ * number — all three of which the owner is about to change, which is why this
+ * redirects into the editor rather than dropping a half-configured till into a
+ * list and leaving them to find it.
+ */
+export async function addCounter(): Promise<void> {
+  const owner = await requireOwner();
+  // A plain action behind a button, so there is no state to return a sentence
+  // in. The panel only draws the button when there is room; this is the check
+  // that actually holds.
+  if (!owner.ok) redirect("/app/settings?tab=counter");
+  const { session } = owner;
+
+  const supabase = createAdminClient();
+
+  const [{ data: existing }, entitlements, branchId] = await Promise.all([
+    supabase
+      .from("counters")
+      .select("sort_order")
+      .eq("tenant_id", session.tenantId)
+      .order("sort_order", { ascending: false }),
+    getEntitlements(session.tenantId),
+    primaryBranch(session.tenantId),
+  ]);
+
+  const counters = existing ?? [];
+  const allowed = entitlements?.maxRegisters ?? 1;
+
+  if (counters.length >= allowed) redirect("/app/settings?tab=counter&full=1");
+
+  const position = (counters[0]?.sort_order ?? 0) + 1;
+  const seed = newCounterDefaults(position);
+
+  const { data: created, error } = await supabase
+    .from("counters")
+    .insert({
+      tenant_id: session.tenantId,
+      name: seed.name,
+      receipt_prefix: seed.receiptPrefix,
+      is_active: seed.isActive,
+      accepts_cash: seed.acceptsCash,
+      accepts_card: seed.acceptsCard,
+      auto_print: seed.autoPrint,
+      sort_order: seed.sortOrder,
+      // Inherits the shop's branch. Nothing picks one yet — there is one per
+      // shop — but `sales.branch_id` is not-null, so a counter without one
+      // cannot record a sale.
+      branch_id: branchId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) redirect("/app/settings?tab=counter&failed=1");
+
+  await recordAudit(session, {
+    action: "counter.added",
+    subjectType: "counter",
+    subjectId: created.id,
+    after: seed,
+  });
+
+  revalidatePath("/app/settings");
+  revalidatePath("/app/register");
+  redirect(`/app/settings?tab=counter&counter=${created.id}`);
+}
+
+/**
+ * Remove a counter.
+ *
+ * Refused once it has rung up a sale. `sales.counter_id` is `on delete
+ * restrict` for exactly this reason: a day's takings that cannot say which till
+ * took the money is not a day's takings, and the fix for a counter a shop has
+ * stopped using is to shut it, not to erase where its money came from.
+ */
+export async function deleteCounter(
+  _previous: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const owner = await requireOwner();
+  if (!owner.ok) return fail(owner.error);
+  const { session } = owner;
+
+  const counterId = await ownCounter(session.tenantId, formData.get("counter_id"));
+  if (!counterId) return fail("That counter is not one of yours. Reload and try again.");
+
+  const supabase = createAdminClient();
+
+  const { count } = await supabase
+    .from("sales")
+    .select("id", { count: "exact", head: true })
+    .eq("counter_id", counterId);
+
+  if (count && count > 0) {
+    return fail(
+      `This counter has ${count} ${count === 1 ? "sale" : "sales"} against it, so it cannot be deleted — that money has to stay accounted for. Switch it off instead.`,
+    );
+  }
+
+  const { data: before } = await supabase
+    .from("counters")
+    .select("name, receipt_prefix, is_active")
+    .eq("id", counterId)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("counters")
+    .delete()
+    .eq("id", counterId)
+    .eq("tenant_id", session.tenantId);
+
+  if (error) return fail("We could not delete the counter. Please try again.");
+
+  await recordAudit(session, {
+    action: "counter.deleted",
+    subjectType: "counter",
+    subjectId: counterId,
+    before,
+  });
+
+  revalidatePath("/app/settings");
+  revalidatePath("/app/register");
+  redirect("/app/settings?tab=counter");
+}
+
+/** The shop's one branch. 0011 gives every tenant a primary one; this is the
+ *  lookup a counter created after that migration ran needs. */
+async function primaryBranch(tenantId: string): Promise<string | null> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("branches")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .order("is_primary", { ascending: false })
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+
+  return data?.id ?? null;
 }

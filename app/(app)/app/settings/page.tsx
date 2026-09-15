@@ -3,13 +3,14 @@ import Link from "next/link";
 
 import { IconEmployees, IconRegister, IconStore } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import {
-  getCounter,
   getRolePermissions,
   getShopProfile,
   getShopSettings,
+  listCounters,
 } from "@/lib/pos/shop";
-import { CounterForm } from "./counter-form";
+import { CountersPanel } from "./counters-panel";
 import { RolesPanel } from "./roles-panel";
 import { StorePanel } from "./store-panel";
 
@@ -47,18 +48,19 @@ export default async function SettingsPage({
 }: PageProps<"/app/settings">) {
   const session = await requireSession();
 
-  const raw = (await searchParams).tab;
-  const tab: TabId = isTab(raw) ? raw : "store";
+  const query = await searchParams;
+  const tab: TabId = isTab(query.tab) ? query.tab : "store";
 
   if (!session.tenantId) {
     return <NotAttached />;
   }
 
-  const [shop, settings, counter, permissions] = await Promise.all([
+  const [shop, settings, counters, permissions, entitlements] = await Promise.all([
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
-    getCounter(session.tenantId),
+    listCounters(session.tenantId),
     getRolePermissions(session.tenantId),
+    getEntitlements(session.tenantId),
   ]);
 
   // The claim says there is a shop but RLS returned nothing. In practice that
@@ -97,7 +99,17 @@ export default async function SettingsPage({
       {tab === "store" ? (
         <StorePanel shop={shop} settings={settings} readOnly={readOnly} />
       ) : tab === "counter" ? (
-        <CounterForm counter={counter} readOnly={readOnly} />
+        <CountersPanel
+          counters={counters}
+          // A counter id in the URL that is not one of this shop's simply falls
+          // back to the list, the same way an unknown tab does.
+          selected={
+            counters.find((item) => item.id === query.counter) ?? null
+          }
+          maxRegisters={entitlements?.maxRegisters ?? 1}
+          atLimit={query.full === "1"}
+          readOnly={readOnly}
+        />
       ) : (
         <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}

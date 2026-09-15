@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
-import { DEFAULT_COUNTER, type CounterSettings } from "@/lib/pos/counter";
+import type { Counter } from "@/lib/pos/counter";
 import {
   CURRENCIES,
   CURRENCY_FORMATS,
@@ -196,42 +196,55 @@ export async function getRolePermissions(
 }
 
 /**
- * The counter, as Settings writes it and the register reads it.
- *
- * A shop with no row reads the column defaults from 0010 — which have
- * `isActive: false`, so "never set up" and "switched off" arrive at the
- * register as the same thing and it only has to handle one of them.
+ * Every counter in the shop, in the order they are picked in.
  *
  * Deliberately NOT wrapped in `cache()`, like the three readers above it.
  * `cache()` is scoped to the request, and a Server Action plus the re-render
  * its `revalidatePath` triggers are one request — so a memoised read hands the
- * re-render the row as it was before the write, and Settings redraws itself
+ * re-render the rows as they were before the write, and Settings redraws itself
  * with the values the owner just changed away from. It looks like the save
- * failed until you navigate away and come back on a fresh request, which is
- * the worst possible way for a settings screen to be wrong. There is nothing
- * to dedupe here in any case: Settings reads this once, the register reads it
- * once, and those are two different requests.
+ * failed until you navigate away and come back on a fresh request, which is the
+ * worst possible way for a settings screen to be wrong.
+ *
+ * A shop with no rows gets an empty list, not an implied counter: 0011 backfills
+ * nothing, and "no counter yet" is a real state the register has to draw.
  */
-export async function getCounter(tenantId: string): Promise<CounterSettings> {
+export async function listCounters(tenantId: string): Promise<Counter[]> {
   const supabase = createClient(await cookies());
 
   const { data } = await supabase
     .from("counters")
     .select(
-      "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
+      "id, name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print, sort_order, receipt_day, receipt_serial",
     )
     .eq("tenant_id", tenantId)
-    .maybeSingle();
+    .order("sort_order")
+    .order("created_at");
 
-  if (!data) return DEFAULT_COUNTER;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    isActive: row.is_active,
+    receiptPrefix: row.receipt_prefix,
+    acceptsCash: row.accepts_cash,
+    acceptsCard: row.accepts_card,
+    receiptFooter: row.receipt_footer,
+    autoPrint: row.auto_print,
+    sortOrder: row.sort_order,
+    // Only meaningful on the day it was issued. A yesterday's number shown
+    // against today reads as "this counter has already sold something".
+    lastReceiptNo:
+      row.receipt_day && row.receipt_serial > 0
+        ? `${row.receipt_prefix}-${row.receipt_day.slice(2).replace(/-/g, "")}-${String(row.receipt_serial).padStart(4, "0")}`
+        : null,
+  }));
+}
 
-  return {
-    name: data.name,
-    isActive: data.is_active,
-    receiptPrefix: data.receipt_prefix,
-    acceptsCash: data.accepts_cash,
-    acceptsCard: data.accepts_card,
-    receiptFooter: data.receipt_footer,
-    autoPrint: data.auto_print,
-  };
+/** One counter, by id, scoped to the shop that asked. */
+export async function getCounter(
+  tenantId: string,
+  counterId: string,
+): Promise<Counter | null> {
+  const counters = await listCounters(tenantId);
+  return counters.find((counter) => counter.id === counterId) ?? null;
 }

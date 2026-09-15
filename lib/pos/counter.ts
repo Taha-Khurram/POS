@@ -1,23 +1,25 @@
 /**
- * The counter: what Settings stores about it, and the arithmetic the register
- * does on top of it.
+ * Counters: what Settings stores about each one, and the arithmetic the
+ * register does on top of them.
  *
  * No `server-only` and no server imports, the same exception `catalog.ts` and
  * `timeframe-options.ts` carry — the till is a client component and the Server
- * Action that validates its settings has to agree with it exactly. One module,
+ * Actions that validate its input have to agree with it exactly. One module,
  * read from both sides.
  *
  * Everything under "The bill" is written against the types rather than against
  * the sample catalog, so it survives the switch to real `items` rows.
  */
 
+import { unitShort, type UnitId } from "@/lib/pos/catalog";
 import {
   type Currency,
   type Option,
   type ShopSettings,
 } from "@/lib/pos/settings-options";
 
-export type CounterSettings = {
+export type Counter = {
+  id: string;
   name: string;
   /** Off until the owner says the prices are right. */
   isActive: boolean;
@@ -28,29 +30,41 @@ export type CounterSettings = {
    *  Null for the shop that prints neither. */
   receiptFooter: string | null;
   autoPrint: boolean;
-};
-
-/** What a shop with no `counters` row reads as — the column defaults in 0010. */
-export const DEFAULT_COUNTER: CounterSettings = {
-  name: "Counter 1",
-  isActive: false,
-  receiptPrefix: "INV",
-  acceptsCash: true,
-  acceptsCard: false,
-  receiptFooter: null,
-  autoPrint: true,
+  /** The order they are listed and picked in. A shop names its tills by where
+   *  they stand, not alphabetically. */
+  sortOrder: number;
+  /** The last receipt number this counter issued, for the day it issued it.
+   *  Read-only here — `public.record_sale` owns the series. */
+  lastReceiptNo: string | null;
 };
 
 /**
  * Upper-case, no spaces, eight characters at the outside — the same shape as
  * the check constraint on `counters.receipt_prefix`. It is read down a phone
  * line ("which bill? A-L-M dash…") and printed on a 32-character line, and
- * both of those are why it is not free text.
+ * both of those are why it is not free text. Unique per shop, because it is the
+ * only thing telling two counters' receipts apart.
  */
 export const RECEIPT_PREFIX_RE = /^[A-Z0-9][A-Z0-9-]{0,7}$/;
 
 /** One line of paper. A second is a second line of paper on every sale. */
 export const RECEIPT_FOOTER_MAX = 80;
+
+/**
+ * What a counter looks like the moment it is added, before the owner has
+ * touched it. Shut, because a till that opens the instant it is created is a
+ * till that can sell at prices nobody has checked.
+ */
+export const newCounterDefaults = (position: number) => ({
+  name: `Counter ${position}`,
+  receiptPrefix: position === 1 ? "INV" : `INV${position}`,
+  isActive: false,
+  acceptsCash: true,
+  acceptsCard: false,
+  receiptFooter: null,
+  autoPrint: true,
+  sortOrder: position,
+});
 
 /* ---------------- Tenders ---------------- */
 
@@ -79,7 +93,7 @@ export const isTender = (value: unknown): value is TenderId =>
   TENDERS.some((tender) => tender.id === value);
 
 /** The tenders this counter is switched on for, in the order they are offered. */
-export const tendersOn = (counter: CounterSettings) =>
+export const tendersOn = (counter: Pick<Counter, "acceptsCash" | "acceptsCard">) =>
   TENDERS.filter((tender) =>
     tender.id === "cash" ? counter.acceptsCash : counter.acceptsCard,
   );
@@ -92,8 +106,9 @@ export type CartLine = {
   id: string;
   name: string;
   urdu: string;
-  /** `unitShort()` of the catalog unit — "pc", "kg". Printed after the count. */
-  unit: string;
+  /** The catalog unit, stored as-is on `sale_lines.unit`. Shortened to "pc" or
+   *  "kg" only where it is printed. */
+  unit: UnitId;
   /** Decimal for anything sold off a scale, whole otherwise. */
   quantity: number;
   price: number;
@@ -202,64 +217,130 @@ export function moneyFormatter({ currency, currencyFormat }: ShopSettings) {
   };
 }
 
-/** A quantity as it prints beside the line: "2", "0.75 kg". */
+/** A quantity as it prints beside the line: "2 pc", "0.75 kg". */
 export const writeQuantity = (line: CartLine) =>
-  `${line.quantity.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${line.unit}`;
+  `${line.quantity.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(line.unit)}`;
 
 /* ---------------- Receipt numbers ---------------- */
 
 /**
- * `ALM-260916-0042` — prefix, the day, and the sale's place in it.
- *
- * The serial is the counter's own and resets daily, so it never grows past four
+ * `ALM-260916-0042` — the counter's prefix, the trading day, and the sale's
+ * place in it. The series resets each morning, so it never grows past four
  * digits and a cashier can say "the forty-second bill today" without
  * subtracting anything.
  *
- * It is issued in the browser rather than by the database, which is honest
- * about what this is: nothing is written to `sales` yet, so a server-issued
- * number would be a number burnt on a sale no table remembers. When the sale is
- * recorded, the same string gets claimed in the statement that inserts it.
+ * The number is issued by `public.record_sale` inside the same transaction that
+ * inserts the sale, not here. That is the only way two tablets pointed at one
+ * counter cannot print the same number, and the only way a number is never
+ * burnt on a sale that failed to save.
  */
-export const receiptNumber = (prefix: string, at: Date, serial: number) =>
-  `${prefix}-${stamp(at)}-${String(serial).padStart(4, "0")}`;
-
-/** YYMMDD off the tablet's own calendar, which is the day the cashier is in. */
-function stamp(at: Date) {
-  const yy = String(at.getFullYear()).slice(2);
-  const mm = String(at.getMonth() + 1).padStart(2, "0");
-  const dd = String(at.getDate()).padStart(2, "0");
-  return `${yy}${mm}${dd}`;
-}
-
-export const serialKey = (prefix: string, at: Date) =>
-  `flo.receipt.${prefix}.${stamp(at)}`;
+export const PROVISIONAL_PREFIX = "UNSAVED";
 
 /**
- * Where the day's serial lives until `sales` does.
+ * What prints when the sale could not be recorded — a dead connection, most
+ * likely, which on a Pakistani counter is a Tuesday.
  *
- * Per counter and per day, so tomorrow starts at 1. Storage that is unavailable
- * — a private window, blocked site data — falls back to 1 rather than refusing
- * to sell: a duplicate receipt number is a bad afternoon, and a register that
- * will not ring up is a shut shop.
+ * Deliberately not a number in the counter's own series: it has to be
+ * impossible to mistake for one, because it is not in the takings and never
+ * will be until the offline outbox lands. The receipt says so out loud rather
+ * than looking like every other bill.
  */
-export function claimSerial(prefix: string, at: Date): number {
-  const key = serialKey(prefix, at);
+export const provisionalReceiptNumber = (at: Date) =>
+  `${PROVISIONAL_PREFIX}-${String(at.getHours()).padStart(2, "0")}${String(at.getMinutes()).padStart(2, "0")}${String(at.getSeconds()).padStart(2, "0")}`;
 
-  try {
-    const next = Number(window.localStorage.getItem(key) ?? 0) + 1;
-    window.localStorage.setItem(key, String(next));
-    return Number.isFinite(next) && next > 0 ? next : 1;
-  } catch {
-    return 1;
+export const isProvisional = (receiptNo: string) =>
+  receiptNo.startsWith(`${PROVISIONAL_PREFIX}-`);
+
+/**
+ * The id a sale is minted with on the tablet, before it is sent anywhere.
+ *
+ * Client-generated so that a retry after a dropped connection replays rather
+ * than records a second bill — `public.record_sale` hands back the receipt the
+ * first attempt issued when it sees an id it already has.
+ *
+ * `crypto.randomUUID` is absent on a page served over plain http, which is
+ * exactly how a shop's own Wi-Fi is usually set up, so there is a fallback.
+ * It is not cryptographic and does not need to be: this is an idempotency key
+ * checked against one shop's own sales, not a secret.
+ */
+export function newSaleId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
   }
+
+  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (char) =>
+    (
+      Number(char) ^
+      (Math.random() * 16) >> (Number(char) / 4)
+    ).toString(16),
+  );
+}
+
+/* ---------------- The trading day ---------------- */
+
+/**
+ * Which day's books a sale belongs to.
+ *
+ * Not the calendar day it happened on. `tenant_settings.day_ends_at` is where
+ * the shop cuts its books — a dhaba that shuts at 1 am wants that sale on the
+ * day it opened — so a sale before that hour counts to the day before. Stamped
+ * once by the register onto `sales.business_day`, so every report afterwards
+ * agrees without re-deriving it from a setting that can change.
+ *
+ * `YYYY-MM-DD` in the shop's own timezone, which is not the tablet's: a counter
+ * device bought in Dubai and shipped to Lahore keeps the wrong clock for
+ * months.
+ */
+export function businessDayOf(
+  at: Date,
+  timezone: string,
+  dayEndsAt: string,
+): string {
+  const local = shopParts(at, timezone);
+  const cut = Number(dayEndsAt.slice(0, 2));
+
+  // Before the cut, the shop is still trading yesterday. Built from the local
+  // Y/M/D as a UTC date purely so the -1 day rolls month and year correctly.
+  const day = Date.UTC(local.year, local.month - 1, local.day);
+  const belongs = new Date(local.hour < cut ? day - 86_400_000 : day);
+
+  return belongs.toISOString().slice(0, 10);
+}
+
+/** Today's trading day, for a report opened with no day asked for. */
+export const currentBusinessDay = (settings: ShopSettings) =>
+  businessDayOf(new Date(), settings.timezone, settings.dayEndsAt);
+
+/** `Intl` is the only thing that knows what o'clock it is in Karachi on a
+ *  server running in UTC, so the parts are read out of it rather than from
+ *  `getHours()` on a Date that has no timezone of its own. */
+function shopParts(at: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(at);
+
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    // Midnight comes back as "24" from some ICU builds.
+    hour: read("hour") % 24,
+  };
 }
 
 /* ---------------- Time on the receipt ---------------- */
 
 /**
  * The stamp printed on the roll, in the shop's timezone rather than the
- * tablet's. A counter tablet bought in Dubai and shipped to Lahore keeps the
- * wrong clock for months, and the receipt is the one place it shows.
+ * tablet's — the same reason `businessDayOf` takes one.
  */
 export const receiptStamp = (at: Date, timezone: string) =>
   new Intl.DateTimeFormat("en-PK", {
@@ -272,16 +353,29 @@ export const receiptStamp = (at: Date, timezone: string) =>
     hour12: true,
   }).format(at);
 
+/** "16 Sep 2026" — a trading day as a report writes it. */
+export const writeBusinessDay = (day: string) =>
+  new Intl.DateTimeFormat("en-PK", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${day}T00:00:00Z`));
+
 /* ---------------- Arithmetic ---------------- */
 
 /** Two decimals, matching the `numeric(12, 2)` every money column is. */
 export const round2 = (value: number) => Math.round(value * 100) / 100;
 
+/** Three, matching `sale_lines.quantity numeric(12, 3)` — and enough that
+ *  adding 0.25 four times comes to exactly 1. */
+export const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
 /**
- * A quantity off a form field. Weighed items take three decimals, matching
- * `sale_lines.quantity numeric(12, 3)`; everything else is whole units, so a
- * typed "2.5" against a bottle of Coke is refused rather than rounded into a
- * sale nobody can hand over.
+ * A quantity off a form field. Weighed items take three decimals; everything
+ * else is whole units, so a typed "2.5" against a bottle of Coke is refused
+ * rather than rounded into a sale nobody can hand over.
  */
 export function parseQuantity(value: string, fractional: boolean): number | null {
   const trimmed = value.trim().replace(/,/g, "");
@@ -291,7 +385,7 @@ export function parseQuantity(value: string, fractional: boolean): number | null
   if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 99_999) return null;
   if (!fractional && !Number.isInteger(quantity)) return null;
 
-  return fractional ? Math.round(quantity * 1000) / 1000 : quantity;
+  return fractional ? round3(quantity) : quantity;
 }
 
 /**
