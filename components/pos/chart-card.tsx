@@ -45,7 +45,7 @@ export function ChartCard({
       <div className={bleed ? "flex-1" : "flex-1 px-4 pb-4"}>{children}</div>
 
       {footer ? (
-        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-azure-100 px-4 py-3">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 px-4 py-3">
           {footer}
         </footer>
       ) : null}

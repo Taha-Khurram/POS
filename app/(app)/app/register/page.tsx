@@ -40,7 +40,7 @@ export default async function RegisterPage() {
         </p>
 
         {entitlements ? (
-          <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-azure-100 pt-5 text-[0.875rem]">
+          <dl className="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-orchid-100 pt-5 text-[0.875rem]">
             <dt className="text-graphite-500">Plan</dt>
             <dd className="text-right font-medium">{entitlements.planName}</dd>
 

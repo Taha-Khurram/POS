@@ -74,14 +74,14 @@ export function TimeframeFilter({
         aria-expanded={open}
         title={label}
       >
-        <IconCalendar className="h-4 w-4 flex-none text-azure-600" />
+        <IconCalendar className="h-4 w-4 flex-none text-orchid-600" />
         <span className="flex-1 truncate text-left">{label}</span>
 
         {/* The spinner takes the caret's place rather than standing beside it,
             so the control is exactly as wide while it is thinking. */}
         {pending ? (
           <span
-            className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2 border-azure-200 border-t-azure-700"
+            className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2 border-orchid-200 border-t-orchid-700"
             aria-hidden
           />
         ) : (
@@ -121,7 +121,7 @@ export function TimeframeFilter({
                 </span>
 
                 {selected ? (
-                  <IconCheck className="h-4 w-4 flex-none text-azure-700" />
+                  <IconCheck className="h-4 w-4 flex-none text-orchid-700" />
                 ) : null}
               </button>
             );

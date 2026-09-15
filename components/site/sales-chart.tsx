@@ -176,8 +176,8 @@ export function SalesChart() {
             >
               <defs>
                 <linearGradient id="chart-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3f8efc" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#3f8efc" stopOpacity="0" />
+                  <stop offset="0%" stopColor="#9b85ea" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#9b85ea" stopOpacity="0" />
                 </linearGradient>
               </defs>
 
@@ -216,7 +216,7 @@ export function SalesChart() {
                 ref={primaryRef}
                 d={primaryPath}
                 fill="none"
-                stroke="#3f8efc"
+                stroke="#9b85ea"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -230,13 +230,13 @@ export function SalesChart() {
                   cx={marker.x}
                   cy={marker.y}
                   r="8"
-                  fill="rgb(63 142 252 / 0.18)"
+                  fill="rgb(155 133 234 / 0.18)"
                 />
                 <circle
                   cx={marker.x}
                   cy={marker.y}
                   r="3.5"
-                  fill="#add7f6"
+                  fill="#dcd4ff"
                   stroke="#3b28cc"
                   strokeWidth="1.5"
                 />

@@ -253,8 +253,8 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
         tabIndex={-1}
         className="pos-sheet pos-sheet-wide outline-none"
       >
-        <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-azure-100 bg-paper-50 px-4 py-3.5 sm:px-5">
-          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-azure-200 text-azure-800">
+        <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-orchid-100 bg-paper-50 px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
             <IconBarcode className="h-[18px] w-[18px]" />
           </span>
 
@@ -509,7 +509,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
                       Your own code.{" "}
                       <button
                         type="button"
-                        className="font-semibold text-azure-700 underline underline-offset-2"
+                        className="font-semibold text-orchid-700 underline underline-offset-2"
                         onClick={() => setSkuTouched(false)}
                       >
                         Go back to {suggested}
@@ -589,7 +589,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
               ))}
             </div>
 
-            <div className="mt-3 grid gap-2 rounded-xl border border-azure-100 bg-azure-50/55 p-3.5 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 rounded-xl border border-orchid-100 bg-orchid-50/55 p-3.5 sm:grid-cols-3">
               <Figure
                 label="Profit per unit"
                 value={money ? rupees(money.profit) : "—"}
@@ -635,8 +635,8 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
                     key={mode.id}
                     className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
                       tracking === mode.id
-                        ? "border-azure-400 bg-azure-50"
-                        : "border-azure-100"
+                        ? "border-orchid-400 bg-orchid-50"
+                        : "border-orchid-100"
                     }`}
                   >
                     <input
@@ -649,7 +649,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
                         if (mode.id === "weight" && !fractional) setUnit("kg");
                         if (mode.id !== "weight" && fractional) setUnit("piece");
                       }}
-                      className="mt-0.5 h-4 w-4 flex-none accent-azure-700"
+                      className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
                     />
                     <span>
                       <span className="block text-[0.875rem] font-semibold text-graphite-900">
@@ -728,7 +728,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
           </section>
         </div>
 
-        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-azure-100 bg-paper-50 px-4 py-3 sm:px-5">
+        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 bg-paper-50 px-4 py-3 sm:px-5">
           <p className="mr-auto text-[0.75rem] text-graphite-500">
             Nothing saves yet — the <code>items</code> table lands in Part 3.
           </p>
@@ -813,8 +813,8 @@ function LabelPreview({
   onAnother: () => void;
 }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-azure-100 bg-azure-50/55 p-3.5">
-      <div className="w-[13.5rem] rounded-lg border border-dashed border-azure-300 bg-paper-50 px-3 py-2.5 text-center">
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-orchid-100 bg-orchid-50/55 p-3.5">
+      <div className="w-[13.5rem] rounded-lg border border-dashed border-orchid-300 bg-paper-50 px-3 py-2.5 text-center">
         <p className="truncate text-[0.75rem] font-semibold text-graphite-900">
           {name || "Item name"}
         </p>
@@ -925,7 +925,7 @@ function VariantMatrix({
       </button>
 
       {shown.length > 0 ? (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-azure-100">
+        <div className="mt-3 overflow-x-auto rounded-xl border border-orchid-100">
           <table className="pos-table">
             <thead>
               <tr>
@@ -974,7 +974,7 @@ function VariantMatrix({
             </>
           ) : (
             <>
-              <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-azure-600" />
+              <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-orchid-600" />
               {combos.length} {combos.length === 1 ? "row" : "rows"}, each with
               its own stock, barcode and price override.
             </>

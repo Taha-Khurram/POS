@@ -88,8 +88,9 @@ re-deriving them from raw utilities:**
 - Ambience — `.glow` (blurred blob), `.stars` (cheap CSS starfield), `.spotlight`
   (pointer-tracked, fed by `--mx`/`--my` from `Tilt`), `.marquee-mask`/`.marquee-track`
 
-Color scales: `ink-*` (near-black surfaces), `iris-*` (brand), `mist-*` (text),
-`flare/mint/sun-400` (signals). Fonts through `font-display` (Plus Jakarta Sans)
+Color scales: `ink-*` (violet-black surfaces), `iris-*` (brand — a violet at
+every step, not just at its deep end), `mist-*` (text), `flare/mint/sun-400`
+(signals). Fonts through `font-display` (Plus Jakarta Sans)
 and the default sans (Inter). Easings are tokens — `var(--ease-out-soft)`,
 `--ease-out-back`, `--ease-in-out-soft`.
 
@@ -97,8 +98,23 @@ and the default sans (Inter). Easings are tokens — `var(--ease-out-soft)`,
 the counter is light and
 high-contrast, because dark glass is unreadable under a tube light at 2 pm. It
 gets `.pos-root` (which also sets `color-scheme: light`), `.pos-card`, and the
-`paper-*` / `graphite-*` scales. Don't reach for Tailwind's built-in `slate-*`
-or `gray-*` there.
+`paper-*` (white surfaces) / `graphite-*` (text) / `orchid-*` (the violet
+interactive ramp, 50 → 900) scales. Don't reach for Tailwind's built-in
+`slate-*`, `gray-*`, `violet-*` or `purple-*` there.
+
+The work surface is white — `paper-100` and `paper-50` are both `#fff`, and a
+card is told from the canvas by its `pale-lilac` hairline, not by a change of
+ground. `orchid-700`/`800` are the site's `iris-600`/`700` to the hex, so the
+console's deep accents and the marketing site's brand are one purple.
+
+`/app` also has an opt-in dark theme (`.pos-root[data-theme="dark"]`, set from
+a cookie, never `prefers-color-scheme`). It works by re-pointing those same
+tokens at the site's own `ink-*`/`iris-*`/`mist-*` stack, so the night console
+and the marketing page are one palette by construction. That only holds because
+the whole brand is one violet: **colour belongs in a token, not in a
+component** — a hard-coded hex in a `.tsx` file survives the theme flip, and a
+blue one left anywhere is what made the site and the product disagree in the
+first place.
 
 ## Conventions worth matching
 

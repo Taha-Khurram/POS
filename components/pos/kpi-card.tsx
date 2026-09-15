@@ -60,7 +60,7 @@ export function KpiCard({
         <h3 className="font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
           {label}
         </h3>
-        <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-azure-50 text-azure-700">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-50 text-orchid-700">
           <Icon className="h-4 w-4" />
         </span>
       </header>

@@ -192,8 +192,8 @@ export function DateRangeModal({
         tabIndex={-1}
         className="pos-sheet outline-none"
       >
-        <header className="flex items-start gap-3 border-b border-azure-100 px-4 py-3.5 sm:px-5">
-          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-azure-200 text-azure-800">
+        <header className="flex items-start gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
             <IconCalendar className="h-[18px] w-[18px]" />
           </span>
 
@@ -316,15 +316,15 @@ export function DateRangeModal({
             screen is asked is a question about whole days; the shift question
             is the exception, so it costs one tap rather than two fields that
             are wrong most of the time. */}
-        <div className="border-t border-azure-100 px-4 py-3 sm:px-5">
+        <div className="border-t border-orchid-100 px-4 py-3 sm:px-5">
           <label className="flex cursor-pointer items-center gap-2.5 text-[0.8125rem] text-graphite-700">
             <input
               type="checkbox"
               checked={timed}
               onChange={(event) => setTimed(event.target.checked)}
-              className="h-4 w-4 flex-none accent-azure-700"
+              className="h-4 w-4 flex-none accent-orchid-700"
             />
-            <IconClock className="h-4 w-4 flex-none text-azure-600" />
+            <IconClock className="h-4 w-4 flex-none text-orchid-600" />
             Narrow it to a time of day
           </label>
 
@@ -353,7 +353,7 @@ export function DateRangeModal({
           ) : null}
         </div>
 
-        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-azure-100 px-4 py-3 sm:px-5">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 px-4 py-3 sm:px-5">
           {!timesValid ? (
             <p className="mr-auto text-[0.75rem] font-medium text-signal-bad">
               The closing time has to come after the opening one.

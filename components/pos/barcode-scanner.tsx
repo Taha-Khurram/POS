@@ -144,9 +144,9 @@ export function BarcodeScanner({
   const problem = status !== "starting" && status !== "live" ? MESSAGES[status] : null;
 
   return (
-    <div className="rounded-2xl border border-azure-100 bg-azure-50/60 p-3">
+    <div className="rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3">
       <div className="flex items-center gap-2">
-        <IconCamera className="h-4 w-4 flex-none text-azure-700" />
+        <IconCamera className="h-4 w-4 flex-none text-orchid-700" />
         <p className="flex-1 font-display text-[0.8125rem] font-semibold text-graphite-900">
           {status === "live" ? "Hold the barcode in the frame" : "Camera"}
         </p>

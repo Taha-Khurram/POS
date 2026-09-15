@@ -54,11 +54,11 @@ export function CategoriesPanel({ items }: { items: Product[] }) {
         <ul className="space-y-1.5">
           {DEPARTMENTS.map((department) => (
             <li key={department.id}>
-              <details className="group rounded-xl border border-azure-100 open:bg-azure-50/40">
+              <details className="group rounded-xl border border-orchid-100 open:bg-orchid-50/40">
                 <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-3">
                   <IconChevron className="h-4 w-4 flex-none -rotate-90 text-graphite-500 transition-transform duration-200 group-open:rotate-0" />
 
-                  <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-azure-100 text-azure-800">
+                  <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-orchid-100 text-orchid-800">
                     <IconTag className="h-4 w-4" />
                   </span>
 
@@ -77,7 +77,7 @@ export function CategoriesPanel({ items }: { items: Product[] }) {
                   </span>
                 </summary>
 
-                <ul className="space-y-1 border-t border-azure-100 px-3.5 py-3">
+                <ul className="space-y-1 border-t border-orchid-100 px-3.5 py-3">
                   {department.categories.map((category) => (
                     <li
                       key={category.id}
@@ -97,7 +97,7 @@ export function CategoriesPanel({ items }: { items: Product[] }) {
                         {category.sub.map((sub) => (
                           <span
                             key={sub}
-                            className="rounded-full bg-azure-50 px-2 py-0.5 text-[0.6875rem] font-medium text-azure-800"
+                            className="rounded-full bg-orchid-50 px-2 py-0.5 text-[0.6875rem] font-medium text-orchid-800"
                           >
                             {sub}
                           </span>
@@ -131,9 +131,9 @@ export function CategoriesPanel({ items }: { items: Product[] }) {
           {DEPARTMENTS.map((department) => (
             <div
               key={department.id}
-              className="rounded-xl border border-azure-100 bg-azure-50/60 px-3 py-4 text-center"
+              className="rounded-xl border border-orchid-100 bg-orchid-50/60 px-3 py-4 text-center"
             >
-              <span className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-paper-50 text-azure-700">
+              <span className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-paper-50 text-orchid-700">
                 <IconRegister className="h-[18px] w-[18px]" />
               </span>
               <p className="mt-2 font-display text-[0.8125rem] leading-tight font-semibold text-graphite-900">

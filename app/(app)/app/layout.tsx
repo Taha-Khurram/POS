@@ -11,7 +11,9 @@ import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
 
 export const viewport: Viewport = {
-  themeColor: "#1b4965",
+  // orchid-800. The one colour that cannot come from a token — the browser
+  // paints its own chrome with it before any stylesheet is read.
+  themeColor: "#3020a4",
   // Both, because the counter can be switched to the dark palette per device.
   // The element-level `color-scheme` on `.pos-root` is what actually decides;
   // this only stops the UA assuming one and painting form controls to match.

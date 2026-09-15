@@ -52,7 +52,7 @@ const COLUMNS: Column<Product>[] = [
     cell: (item) => (
       <span className="flex items-center gap-2.5">
         <span
-          className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-azure-50 text-azure-700"
+          className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-orchid-50 text-orchid-700"
           aria-hidden
         >
           {item.barcode ? (

@@ -5,32 +5,43 @@
    ========================================================================== */
 
 @theme {
-  /* Surfaces — near-black cosmic stack */
-  --color-ink-950: #03060e;
-  --color-ink-900: #050a14;
-  --color-ink-850: #070d1a;
-  --color-ink-800: #0a1122;
-  --color-ink-750: #0e182e;
-  --color-ink-700: #14203c;
-  --color-ink-600: #1f2f52;
+  /* Surfaces — near-black cosmic stack, violet-black rather than navy. The
+     ground has to sit under the brand without arguing with it, and the brand
+     is a purple. Same lightness at every step as the blue-black it replaces. */
+  --color-ink-950: #06040f;
+  --color-ink-900: #090615;
+  --color-ink-850: #0c081c;
+  --color-ink-800: #110c25;
+  --color-ink-750: #170f33;
+  --color-ink-700: #1f1642;
+  --color-ink-600: #2e2159;
 
-  /* Brand — iris. The scale is named for the old indigo; the values are the
-     blue ramp (icy blue → baby blue ice → blue energy → electric sapphire →
-     ultrasonic blue), light at 200 and deep at 700. Keep that order: gradients
-     and shadows across the site assume 500→600 darkens. */
-  --color-iris-200: #add7f6;
-  --color-iris-300: #87bfff;
-  --color-iris-400: #3f8efc;
-  --color-iris-500: #2667ff;
+  /* Brand — iris, and the name is finally honest: the whole ramp is the violet
+     now, not just its deep end.
+
+     600 and 700 have not moved — they were always this purple, which is why
+     the console's orchid-700/800 could be anchored to them. What changed is
+     everything above: 200–500 were blue, and since they are what a gradient
+     headline, a button's top stop and every glow are drawn from, the site read
+     blue while the product read purple. Light at 200, deep at 700; keep that
+     order, because gradients and shadows across the site assume 500→600
+     darkens. 200–400 are also exactly the three tints the dark console lifts
+     for its accents. */
+  --color-iris-200: #dcd4ff;
+  --color-iris-300: #c4b6fb;
+  --color-iris-400: #9b85ea;
+  --color-iris-500: #6f52dc;
   --color-iris-600: #3b28cc;
   --color-iris-700: #3020a4;
 
-  /* Text */
-  --color-mist-50: #f5f8fc;
-  --color-mist-200: #d7dfec;
-  --color-mist-300: #aebbd0;
-  --color-mist-400: #8695ae;
-  --color-mist-500: #66758f;
+  /* Text. Violet-cast greys, matching graphite-* on the light counter — a
+     blue-grey paragraph beside a violet button reads as two palettes that met
+     by accident. */
+  --color-mist-50: #f6f4fd;
+  --color-mist-200: #ddd6ee;
+  --color-mist-300: #b7aecb;
+  --color-mist-400: #9a8fb4;
+  --color-mist-500: #776d91;
 
   /* Signals */
   --color-flare-400: #f472b6;
@@ -41,31 +52,42 @@
      belong under a tube light at 2 pm, so /app runs its own light scale while
     the marketing site keeps the ink-* stack. */
   --color-paper-50: #ffffff;
-  --color-paper-100: #f4f5f8;
-  --color-paper-200: #e6e8ee;
-  --color-paper-300: #cfd3dd;
-  --color-graphite-500: #64708a;
-  --color-graphite-700: #3b4557;
-  --color-graphite-900: #171b26;
+  /* The work surface. White rather than the old grey wash: on the counter the
+     colour is the violet, and everything it sits on is paper. Cards are told
+     apart by a hairline, not by a change of ground. */
+  --color-paper-100: #ffffff;
+  --color-paper-200: #e9e7f0;
+  --color-paper-300: #d3cfe0;
+  /* The greys carry the same violet cast rather than the old blue one. Same
+     lightness to the eye, so nothing about contrast moves — but a blue-grey
+     paragraph beside a violet button reads as two palettes that met by
+     accident. */
+  --color-graphite-500: #706589;
+  --color-graphite-700: #443c58;
+  --color-graphite-900: #1c1726;
 
-  /* Console blue — /app's interactive ramp. Five colours were picked for the
-     counter (pale sky, frozen water, pacific blue, fresh sky, yale blue); the
-     five between them are interpolated so the scale steps evenly and hover
-     states have somewhere to go. Light at 50, deep at 900. The aliases further
-     down are the palette's own names, kept so design and code argue about the
-     same words. */
-  --color-azure-50: #f1f8ff;
-  --color-azure-100: #cae9ff;
-  --color-azure-200: #bee9e8;
-  --color-azure-300: #96d2e2;
-  --color-azure-400: #62b6cb;
-  --color-azure-500: #5fa8d3;
-  --color-azure-600: #3d87b5;
-  --color-azure-700: #2a6688;
-  --color-azure-800: #1b4965;
-  --color-azure-900: #12334a;
+  /* Console violet — /app's interactive ramp, and the only colour on an
+     otherwise white counter.
 
-  /* Status — the one thing a blue-only palette cannot express. Every badge
+     Its deep end is the marketing site's, to the hex: 700 is iris-600 and 800
+     is iris-700, so the button an owner presses on the pricing page and the
+     button they press at the till are the same purple. The eight around them
+     are interpolated, so the scale steps evenly and hover states have
+     somewhere to go. Light at 50, deep at 900; the aliases further down are
+     the palette's own names, kept so design and code argue about the same
+     words. */
+  --color-orchid-50: #f5f3ff;
+  --color-orchid-100: #e5e0fb;
+  --color-orchid-200: #d5ccf8;
+  --color-orchid-300: #b9abf2;
+  --color-orchid-400: #9b85ea;
+  --color-orchid-500: #7f63e0;
+  --color-orchid-600: #5e40d6;
+  --color-orchid-700: #3b28cc;
+  --color-orchid-800: #3020a4;
+  --color-orchid-900: #211566;
+
+  /* Status — the one thing a single-hue palette cannot express. Every badge
      built on these also carries a word, so state is never colour alone. */
   --color-signal-good: #0f7b55;
   --color-signal-warn: #b45309;
@@ -280,11 +302,14 @@
     letter-spacing: -0.02em;
   }
 
+  /* The canvas is white and so is the card, so the hairline is the only thing
+     telling them apart — it gets the full tint rather than the washed-out mix
+     that a grey work surface could afford. */
   .pos-card {
     background-color: var(--color-paper-50);
-    border: 1px solid color-mix(in oklab, var(--pale-sky) 72%, var(--tint-base));
+    border: 1px solid var(--pale-lilac);
     border-radius: 18px;
-    box-shadow: 0 1px 2px rgb(18 51 74 / 0.04);
+    box-shadow: 0 1px 2px rgb(33 21 102 / 0.05);
   }
 
   /* ---------------- Type ---------------- */
@@ -312,7 +337,7 @@
       100deg,
       var(--color-iris-400) 0%,
       var(--color-iris-300) 40%,
-      #eef7fd 100%
+      #f3efff 100%
     );
     -webkit-background-clip: text;
     background-clip: text;
@@ -362,7 +387,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgb(135 191 255 / 0.55),
+      rgb(196 182 251 / 0.55),
       transparent
     );
     pointer-events: none;
@@ -403,7 +428,7 @@
       var(--color-iris-500) 0%,
       var(--color-iris-600) 100%
     );
-    border: 1px solid rgb(173 215 246 / 0.35);
+    border: 1px solid rgb(220 212 255 / 0.35);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.22),
       0 10px 30px -10px rgb(59 40 204 / 0.75);
@@ -413,8 +438,8 @@
     transform: translateY(-2px);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.28),
-      0 18px 44px -12px rgb(38 103 255 / 0.9),
-      0 0 0 6px rgb(38 103 255 / 0.14);
+      0 18px 44px -12px rgb(111 82 220 / 0.9),
+      0 0 0 6px rgb(111 82 220 / 0.14);
   }
 
   /* Light sweep on hover */
@@ -448,8 +473,8 @@
   .btn-ghost:hover {
     transform: translateY(-2px);
     background: rgb(255 255 255 / 0.06);
-    border-color: rgb(135 191 255 / 0.5);
-    box-shadow: 0 14px 36px -14px rgb(38 103 255 / 0.6);
+    border-color: rgb(196 182 251 / 0.5);
+    box-shadow: 0 14px 36px -14px rgb(111 82 220 / 0.6);
   }
 
   .btn-sm { padding: 0.5625rem 1.25rem; font-size: 0.875rem; }
@@ -518,9 +543,9 @@
 
   .field:focus {
     outline: none;
-    border-color: rgb(135 191 255 / 0.55);
+    border-color: rgb(196 182 251 / 0.55);
     background: rgb(255 255 255 / 0.05);
-    box-shadow: 0 0 0 4px rgb(38 103 255 / 0.14);
+    box-shadow: 0 0 0 4px rgb(111 82 220 / 0.14);
   }
 
   /* Select arrow, since `appearance: none` removes the UA one */
@@ -553,7 +578,7 @@
     background-image:
       radial-gradient(1.6px 1.6px at 12% 18%, rgb(255 255 255 / 0.55) 50%, transparent 50%),
       radial-gradient(1.2px 1.2px at 78% 12%, rgb(255 255 255 / 0.40) 50%, transparent 50%),
-      radial-gradient(1.4px 1.4px at 34% 62%, rgb(173 215 246 / 0.45) 50%, transparent 50%),
+      radial-gradient(1.4px 1.4px at 34% 62%, rgb(220 212 255 / 0.45) 50%, transparent 50%),
       radial-gradient(1px 1px at 62% 78%, rgb(255 255 255 / 0.35) 50%, transparent 50%),
       radial-gradient(1.8px 1.8px at 90% 54%, rgb(255 255 255 / 0.30) 50%, transparent 50%),
       radial-gradient(1.1px 1.1px at 6% 82%, rgb(255 255 255 / 0.30) 50%, transparent 50%),
@@ -586,7 +611,7 @@
 
   .card-lift:hover {
     transform: translateY(-6px);
-    border-color: rgb(135 191 255 / 0.3);
+    border-color: rgb(196 182 251 / 0.3);
     box-shadow: 0 28px 60px -30px rgb(59 40 204 / 0.65);
   }
 
@@ -622,7 +647,7 @@
     opacity: 0;
     background: radial-gradient(
       380px circle at var(--mx, 50%) var(--my, 50%),
-      rgb(63 142 252 / 0.16),
+      rgb(155 133 234 / 0.16),
       transparent 65%
     );
     transition: opacity 0.5s var(--ease-out-soft);
@@ -637,36 +662,34 @@
    ========================================================================== */
 
 /* ==========================================================================
-   Console (/app) — the blue system
+   Console (/app) — the violet system
    ========================================================================== */
 
-/* The palette under its own names. Utilities come off the --color-azure-*
+/* The palette under its own names. Utilities come off the --color-orchid-*
    scale; these aliases exist so hand-written CSS, this file, and a design file
-   can all say "yale blue" and mean one hex. Five of the ten were chosen by
-   hand — pale sky, frozen water, pacific blue, fresh sky, yale blue — and the
-   rest fill the gaps. The chart series are named here too; see the note above
-   .pos-legend for why they are not 500 and 700. */
+   can all say "imperial" and mean one hex. The chart series are named here
+   too; see the note above .pos-legend for why they are not 500 and 700. */
 :root {
   /* What a tint is mixed into. White on the counter, ink in the dark console —
      a badge that mixes 9% of its signal colour into #fff is a white badge the
      moment the surface under it stops being white. */
   --tint-base: #fff;
 
-  --sky-wash: var(--color-azure-50);
-  --pale-sky: var(--color-azure-100);
-  --frozen-water: var(--color-azure-200);
-  --shallow: var(--color-azure-300);
-  --pacific-blue: var(--color-azure-400);
-  --fresh-sky: var(--color-azure-500);
-  --deep-sky: var(--color-azure-600);
-  --harbour: var(--color-azure-700);
-  --yale-blue: var(--color-azure-800);
-  --midnight-harbour: var(--color-azure-900);
+  --lilac-wash: var(--color-orchid-50);
+  --pale-lilac: var(--color-orchid-100);
+  --wisteria: var(--color-orchid-200);
+  --heather: var(--color-orchid-300);
+  --lavender: var(--color-orchid-400);
+  --amethyst: var(--color-orchid-500);
+  --mulberry: var(--color-orchid-600);
+  --imperial: var(--color-orchid-700);
+  --indigo-deep: var(--color-orchid-800);
+  --midnight-violet: var(--color-orchid-900);
 
-  --chart-sales: var(--yale-blue);
-  --chart-profit: var(--pacific-blue);
-  --chart-bar: var(--harbour);
-  --chart-grid: color-mix(in oklab, var(--midnight-harbour) 11%, transparent);
+  --chart-sales: var(--indigo-deep);
+  --chart-profit: var(--lavender);
+  --chart-bar: var(--imperial);
+  --chart-grid: color-mix(in oklab, var(--midnight-violet) 11%, transparent);
 }
 
 @layer components {
@@ -705,8 +728,8 @@
          topbar's bottom border instead of drawing a second line beside it. */
       margin-top: -1px;
       border-top-left-radius: 22px;
-      border-top: 1px solid var(--pale-sky);
-      border-left: 1px solid var(--pale-sky);
+      border-top: 1px solid var(--pale-lilac);
+      border-left: 1px solid var(--pale-lilac);
     }
   }
 
@@ -759,19 +782,19 @@
   }
 
   .pos-rail-link:hover {
-    background: var(--sky-wash);
-    color: var(--yale-blue);
+    background: var(--lilac-wash);
+    color: var(--indigo-deep);
   }
 
-  /* The one filled shape in the rail. Yale blue on frozen water is 7.4:1, so
+  /* The one filled shape in the rail. Indigo-deep on wisteria is 7.4:1, so
      the active module is legible as text and not only as a block of colour. */
   .pos-rail-link[aria-current="page"] {
-    background: var(--frozen-water);
-    color: var(--yale-blue);
+    background: var(--wisteria);
+    color: var(--indigo-deep);
     font-weight: 600;
   }
 
-  .pos-rail-link[aria-current="page"] :is(svg) { color: var(--harbour); }
+  .pos-rail-link[aria-current="page"] :is(svg) { color: var(--imperial); }
 
   /* Collapsed: icons only, but the label stays in the DOM for screen readers
      and for the hover tooltip. */
@@ -805,7 +828,7 @@
     position: fixed;
     inset: 0;
     z-index: 45;
-    background: rgb(18 51 74 / 0.45);
+    background: rgb(33 21 102 / 0.45);
     animation: float-in 0.25s var(--ease-out-soft) both;
   }
 
@@ -821,7 +844,7 @@
     gap: 0.625rem;
     min-height: var(--pos-header);
     padding-inline: clamp(0.625rem, 2vw, 1.25rem);
-    border-bottom: 1px solid var(--pale-sky);
+    border-bottom: 1px solid var(--pale-lilac);
     background: color-mix(in oklab, var(--color-paper-50) 90%, transparent);
     backdrop-filter: blur(12px) saturate(150%);
   }
@@ -835,7 +858,7 @@
     height: 34px;
     padding-inline: 0.625rem;
     border-radius: 11px;
-    background: var(--yale-blue);
+    background: var(--indigo-deep);
   }
 
   /* ---------------- Controls ---------------- */
@@ -843,7 +866,7 @@
   .pos-field {
     width: 100%;
     border-radius: 10px;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
     padding: 0.5rem 0.75rem;
     font-family: var(--font-sans);
@@ -858,8 +881,8 @@
 
   .pos-field:focus {
     outline: none;
-    border-color: var(--deep-sky);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--fresh-sky) 28%, transparent);
+    border-color: var(--mulberry);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--amethyst) 28%, transparent);
   }
 
   select.pos-field {
@@ -867,8 +890,8 @@
     padding-right: 2rem;
     cursor: pointer;
     background-image:
-      linear-gradient(45deg, transparent 50%, var(--harbour) 50%),
-      linear-gradient(135deg, var(--harbour) 50%, transparent 50%);
+      linear-gradient(45deg, transparent 50%, var(--imperial) 50%),
+      linear-gradient(135deg, var(--imperial) 50%, transparent 50%);
     background-position: right 1rem center, right 0.75rem center;
     background-size: 5px 5px, 5px 5px;
     background-repeat: no-repeat;
@@ -899,23 +922,23 @@
 
   .pos-btn-primary {
     color: #fff;
-    background: var(--harbour);
-    border-color: var(--yale-blue);
-    box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--midnight-harbour) 92%, transparent);
+    background: var(--imperial);
+    border-color: var(--indigo-deep);
+    box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--midnight-violet) 92%, transparent);
   }
 
   .pos-btn-primary:hover {
-    background: var(--deep-sky);
-    box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--midnight-harbour) 92%, transparent);
+    background: var(--mulberry);
+    box-shadow: 0 14px 28px -12px color-mix(in oklab, var(--midnight-violet) 92%, transparent);
   }
 
   .pos-btn-soft {
-    color: var(--yale-blue);
-    background: var(--sky-wash);
-    border-color: var(--pale-sky);
+    color: var(--indigo-deep);
+    background: var(--lilac-wash);
+    border-color: var(--pale-lilac);
   }
 
-  .pos-btn-soft:hover { background: var(--pale-sky); }
+  .pos-btn-soft:hover { background: var(--pale-lilac); }
 
   .pos-btn-quiet {
     color: var(--color-graphite-700);
@@ -923,8 +946,8 @@
   }
 
   .pos-btn-quiet:hover {
-    background: var(--sky-wash);
-    color: var(--yale-blue);
+    background: var(--lilac-wash);
+    color: var(--indigo-deep);
   }
 
   .pos-btn-sm {
@@ -948,8 +971,8 @@
   }
 
   .pos-icon-btn:hover {
-    background: var(--sky-wash);
-    color: var(--harbour);
+    background: var(--lilac-wash);
+    color: var(--imperial);
   }
 
   /* Settings is the first screen here with more labels than numbers, so the
@@ -978,7 +1001,7 @@
     gap: 0.25rem;
     overflow-x: auto;
     padding-bottom: 2px;
-    border-bottom: 1px solid var(--pale-sky);
+    border-bottom: 1px solid var(--pale-lilac);
   }
 
   .pos-tab {
@@ -996,9 +1019,9 @@
     transition: color 0.2s var(--ease-out-soft);
   }
 
-  .pos-tab:hover { color: var(--harbour); }
+  .pos-tab:hover { color: var(--imperial); }
 
-  .pos-tab[aria-current="page"] { color: var(--yale-blue); }
+  .pos-tab[aria-current="page"] { color: var(--indigo-deep); }
 
   /* The underline sits on the container's own border, not beside it. */
   .pos-tab[aria-current="page"]::after {
@@ -1008,7 +1031,7 @@
     bottom: -2px;
     height: 2px;
     border-radius: 999px;
-    background: var(--harbour);
+    background: var(--imperial);
   }
 
   /* ---------------- Surfaces ---------------- */
@@ -1028,9 +1051,9 @@
     min-width: 230px;
     padding: 0.375rem;
     border-radius: 14px;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
-    box-shadow: 0 26px 52px -26px rgb(13 71 161 / 0.5);
+    box-shadow: 0 26px 52px -26px rgb(59 40 204 / 0.5);
     animation: float-in 0.22s var(--ease-out-soft) both;
   }
 
@@ -1051,8 +1074,8 @@
   }
 
   .pos-menu-item:hover {
-    background: var(--sky-wash);
-    color: var(--yale-blue);
+    background: var(--lilac-wash);
+    color: var(--indigo-deep);
   }
 
   /* ---------------- Badges ----------------
@@ -1072,9 +1095,9 @@
   }
 
   .pos-badge-info {
-    color: var(--yale-blue);
-    background: var(--sky-wash);
-    border-color: var(--pale-sky);
+    color: var(--indigo-deep);
+    background: var(--lilac-wash);
+    border-color: var(--pale-lilac);
   }
 
   .pos-badge-good {
@@ -1112,9 +1135,9 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--yale-blue);
-    background: var(--sky-wash);
-    border-bottom: 1px solid var(--pale-sky);
+    color: var(--indigo-deep);
+    background: var(--lilac-wash);
+    border-bottom: 1px solid var(--pale-lilac);
   }
 
   .pos-table td {
@@ -1129,7 +1152,7 @@
   }
 
   .pos-table tbody tr:hover {
-    background: color-mix(in oklab, var(--sky-wash) 65%, var(--tint-base));
+    background: color-mix(in oklab, var(--lilac-wash) 65%, var(--tint-base));
   }
 
   .pos-table tbody tr:last-child td { border-bottom: 0; }
@@ -1152,13 +1175,13 @@
     font-size: 0.6875rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: var(--yale-blue);
-    background: var(--sky-wash);
+    color: var(--indigo-deep);
+    background: var(--lilac-wash);
   }
 
   .pos-rank[data-lead="true"] {
     color: #fff;
-    background: var(--harbour);
+    background: var(--imperial);
   }
 
   .pos-meter {
@@ -1168,9 +1191,9 @@
     background: repeating-linear-gradient(
       115deg,
       var(--color-paper-50) 0 4px,
-      var(--sky-wash) 4px 9px
+      var(--lilac-wash) 4px 9px
     );
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pale-sky) 70%, var(--tint-base));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pale-lilac) 70%, var(--tint-base));
   }
 
   .pos-meter > span {
@@ -1197,26 +1220,26 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: #fff;
-    background: var(--harbour);
+    background: var(--imperial);
   }
 
-  .pos-pill[data-rank="0"] { background: var(--yale-blue); }
-  .pos-pill[data-rank="1"] { background: var(--harbour); }
-  .pos-pill[data-rank="2"] { background: var(--deep-sky); }
+  .pos-pill[data-rank="0"] { background: var(--indigo-deep); }
+  .pos-pill[data-rank="1"] { background: var(--imperial); }
+  .pos-pill[data-rank="2"] { background: var(--mulberry); }
 
   .pos-pill[data-rank="3"],
   .pos-pill[data-rank="4"] {
-    color: var(--yale-blue);
-    background: var(--frozen-water);
+    color: var(--indigo-deep);
+    background: var(--wisteria);
   }
 
   /* ---------------- Chart chrome ----------------
-     The series pair is yale-blue / pacific-blue rather than harbour /
-     fresh-sky as the palette roles would suggest: those two are adjacent steps
+     The series pair is indigo-deep / lavender rather than imperial /
+     amethyst as the palette roles would suggest: those two are adjacent steps
      of one ramp and sit under the ΔE 15 floor for telling two series apart at
      a glance. Four steps out they are unmistakable. Form carries the identity
      as well as colour — sales is a line, profit is a bar — which is what lets
-     pacific-blue do the job at only 2.3:1 against white. */
+     lavender do the job at only 2.3:1 against white. */
 
   .pos-bar {
     transform-box: fill-box;
@@ -1252,9 +1275,9 @@
     min-width: 148px;
     padding: 0.5rem 0.625rem;
     border-radius: 10px;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
-    box-shadow: 0 18px 36px -20px rgb(13 71 161 / 0.55);
+    box-shadow: 0 18px 36px -20px rgb(59 40 204 / 0.55);
     pointer-events: none;
   }
 
@@ -1273,7 +1296,7 @@
     min-width: 172px;
     max-width: 280px;
     border-radius: 12px;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
     padding: 0.4375rem 0.625rem 0.4375rem 0.75rem;
     font-family: var(--font-display);
@@ -1281,18 +1304,18 @@
     font-weight: 600;
     color: var(--color-graphite-900);
     cursor: pointer;
-    box-shadow: 0 1px 2px rgb(18 51 74 / 0.06);
+    box-shadow: 0 1px 2px rgb(33 21 102 / 0.06);
     transition:
       border-color 0.25s var(--ease-out-soft),
       background-color 0.25s var(--ease-out-soft),
       box-shadow 0.25s var(--ease-out-soft);
   }
 
-  .pos-picker:hover { border-color: var(--frozen-water); background: var(--sky-wash); }
+  .pos-picker:hover { border-color: var(--wisteria); background: var(--lilac-wash); }
 
   .pos-picker[aria-expanded="true"] {
-    border-color: var(--deep-sky);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--fresh-sky) 24%, transparent);
+    border-color: var(--mulberry);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--amethyst) 24%, transparent);
   }
 
   /* The chevron leans back when the list is open; the label never moves. */
@@ -1300,7 +1323,7 @@
 
   .pos-picker-caret {
     flex: none;
-    color: var(--harbour);
+    color: var(--imperial);
     transition: transform 0.25s var(--ease-out-soft);
   }
 
@@ -1327,11 +1350,11 @@
       color 0.18s var(--ease-out-soft);
   }
 
-  .pos-option:hover { background: var(--sky-wash); color: var(--yale-blue); }
+  .pos-option:hover { background: var(--lilac-wash); color: var(--indigo-deep); }
 
   .pos-option[aria-checked="true"] {
-    background: var(--frozen-water);
-    color: var(--yale-blue);
+    background: var(--wisteria);
+    color: var(--indigo-deep);
     font-weight: 600;
   }
 
@@ -1344,7 +1367,7 @@
     display: grid;
     place-items: end center;
     padding: 0;
-    background: rgb(18 51 74 / 0.42);
+    background: rgb(33 21 102 / 0.42);
     backdrop-filter: blur(3px);
     animation: float-in 0.2s var(--ease-out-soft) both;
   }
@@ -1364,9 +1387,9 @@
     max-height: 92dvh;
     overflow-y: auto;
     border-radius: 20px 20px 0 0;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
-    box-shadow: 0 -20px 60px -30px rgb(13 71 161 / 0.6);
+    box-shadow: 0 -20px 60px -30px rgb(59 40 204 / 0.6);
     animation: sheet-up 0.26s var(--ease-out-soft) both;
   }
 
@@ -1374,7 +1397,7 @@
     .pos-sheet {
       width: min(100%, 618px);
       border-radius: 18px;
-      box-shadow: 0 40px 80px -36px rgb(13 71 161 / 0.62);
+      box-shadow: 0 40px 80px -36px rgb(59 40 204 / 0.62);
       animation: float-in 0.24s var(--ease-out-soft) both;
     }
 
@@ -1419,7 +1442,7 @@
       color 0.16s var(--ease-out-soft);
   }
 
-  .pos-day:hover:not(:disabled) { background: var(--pale-sky); color: var(--yale-blue); }
+  .pos-day:hover:not(:disabled) { background: var(--pale-lilac); color: var(--indigo-deep); }
 
   .pos-day:disabled {
     color: var(--color-paper-300);
@@ -1428,20 +1451,20 @@
 
   /* The body of the range, including the half-drawn one under the cursor. */
   .pos-day[data-in="true"] {
-    background: var(--pale-sky);
-    color: var(--yale-blue);
+    background: var(--pale-lilac);
+    color: var(--indigo-deep);
   }
 
   /* Both ends, filled. The cells are gapped, so end caps are round rather than
      a continuous bar — which is also what makes a one-day range read right. */
   .pos-day[data-edge="true"] {
-    background: var(--harbour);
+    background: var(--imperial);
     color: #fff;
     font-weight: 600;
   }
 
   .pos-day[data-edge="true"]:hover:not(:disabled) {
-    background: var(--yale-blue);
+    background: var(--indigo-deep);
     color: #fff;
   }
 
@@ -1457,7 +1480,7 @@
 
   .pos-chip {
     border-radius: 999px;
-    border: 1px solid var(--pale-sky);
+    border: 1px solid var(--pale-lilac);
     background: var(--color-paper-50);
     padding: 0.3125rem 0.6875rem;
     font-size: 0.75rem;
@@ -1471,34 +1494,34 @@
   }
 
   .pos-chip:hover {
-    background: var(--sky-wash);
-    border-color: var(--frozen-water);
-    color: var(--yale-blue);
+    background: var(--lilac-wash);
+    border-color: var(--wisteria);
+    color: var(--indigo-deep);
   }
 
   /* ---------------- Console overrides of the dark base ---------------- */
 
-  .pos-root :focus-visible { outline-color: var(--deep-sky); }
+  .pos-root :focus-visible { outline-color: var(--mulberry); }
 
   .pos-root ::selection {
-    background: color-mix(in oklab, var(--fresh-sky) 28%, transparent);
-    color: var(--midnight-harbour);
+    background: color-mix(in oklab, var(--amethyst) 28%, transparent);
+    color: var(--midnight-violet);
   }
 
-  .pos-root ::-webkit-scrollbar-track { background: var(--sky-wash); }
+  .pos-root ::-webkit-scrollbar-track { background: var(--lilac-wash); }
 
   .pos-root ::-webkit-scrollbar-thumb {
-    background: var(--frozen-water);
-    border-color: var(--sky-wash);
+    background: var(--wisteria);
+    border-color: var(--lilac-wash);
   }
 
-  .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--shallow); }
+  .pos-root ::-webkit-scrollbar-thumb:hover { background: var(--heather); }
 
   /* ---------------- Solid plates ----------------
      A filled square or circle carrying an initial, a step number or a count.
      These are classes rather than two utilities apiece because the pairing has
      to survive the theme flip: the fill and the glyph on top of it must move
-     together, and `bg-azure-800 text-white` only moves one of them. */
+     together, and `bg-orchid-800 text-white` only moves one of them. */
 
   .pos-stamp {
     display: grid;
@@ -1507,7 +1530,7 @@
     font-family: var(--font-display);
     font-weight: 700;
     color: #fff;
-    background: var(--yale-blue);
+    background: var(--indigo-deep);
   }
 
   .pos-count {
@@ -1535,13 +1558,13 @@
 
    It is done entirely by re-pointing the console's own tokens at the marketing
    site's ink/iris/mist stack. Nothing below re-styles a component that could be
-   re-coloured instead, which is why 40-odd files of `border-azure-100` and
+   re-coloured instead, which is why 40-odd files of `border-orchid-100` and
    `text-graphite-500` need no edit at all and cannot drift out of step.
 
    Two things the scale cannot carry on its own, and they are the only reason
    any rules follow the variables:
 
-   - azure-800 is a text colour in six places and a filled avatar in five. On
+   - orchid-800 is a text colour in six places and a filled avatar in five. On
      dark those want opposite ends of the ramp, so the avatars became
      `.pos-stamp` above and the token is now free to be pure bright accent.
    - The interactive ramp inverts direction. On the counter, higher means
@@ -1566,30 +1589,32 @@
   --color-graphite-700: var(--color-mist-200);
   --color-graphite-500: var(--color-mist-400);
 
-  /* The blue ramp, re-pointed at iris. 50–200 are surfaces and borders lit
-     slightly *above* the card, 400–800 are accents lit well above it. */
-  --color-azure-50: var(--color-ink-750);
-  --color-azure-100: var(--color-ink-700);
-  --color-azure-200: var(--color-ink-600);
-  --color-azure-300: color-mix(in oklab, var(--color-iris-400) 40%, var(--color-ink-700));
-  --color-azure-400: var(--color-iris-300);
-  --color-azure-500: var(--color-iris-500);
-  --color-azure-600: var(--color-iris-400);
-  --color-azure-700: var(--color-iris-300);
-  --color-azure-800: var(--color-iris-200);
-  /* 900 is only ever a shadow, and a shadow on ink is black, not navy. */
-  --color-azure-900: var(--color-ink-950);
+  /* The ramp, re-pointed at iris — which is the same violet, one rung brighter
+     at every step. 50–200 are surfaces and borders lit slightly *above* the
+     card, 400–800 are accents lit well above it. */
+  --color-orchid-50: var(--color-ink-750);
+  --color-orchid-100: var(--color-ink-700);
+  --color-orchid-200: var(--color-ink-600);
+  --color-orchid-300: color-mix(in oklab, var(--color-iris-400) 40%, var(--color-ink-700));
+  --color-orchid-400: var(--color-iris-300);
+  --color-orchid-500: var(--color-iris-500);
+  --color-orchid-600: var(--color-iris-400);
+  --color-orchid-700: var(--color-iris-300);
+  --color-orchid-800: var(--color-iris-200);
+  /* 900 is only ever a shadow, and a shadow on violet-black is black. */
+  --color-orchid-900: var(--color-ink-950);
 
-  /* Signals, from the site's three. Pink for "bad" is the site's own flare,
-     and it survives here because the rule upstairs still holds: every badge
-     built on these carries a word, so nothing is colour alone. */
+  /* Signals, from the site's three. Pink for "bad" sits closer to the accent
+     hue than it did beside blue, which is exactly why the rule upstairs still
+     matters: every badge built on these carries a word, so nothing here is
+     colour alone. */
   --color-signal-good: var(--color-mint-400);
   --color-signal-warn: var(--color-sun-400);
   --color-signal-bad: var(--color-flare-400);
 
-  /* Two series that have to stay apart on ink. Pale against saturated rather
-     than dark against light, which is the light theme's separation and does
-     not survive the flip. */
+  /* Two series that have to stay apart on violet-black. Pale against saturated
+     rather than dark against light, which is the light theme's separation and
+     does not survive the flip. */
   --chart-sales: var(--color-iris-200);
   --chart-profit: var(--color-iris-400);
   --chart-bar: var(--color-iris-300);
@@ -1599,7 +1624,8 @@
 @layer components {
   /* The site's own primary button, lifted whole — same gradient, same rim,
      same bloom. It is the one control on the screen that should look like it
-     came off the marketing page, because it is the one people press. */
+     came off the marketing page, because it is the one people press, and now
+     that the brand is one violet it can be that button exactly. */
   .pos-root[data-theme="dark"] .pos-btn-primary {
     color: #fff;
     background: linear-gradient(
@@ -1607,7 +1633,7 @@
       var(--color-iris-500) 0%,
       var(--color-iris-600) 100%
     );
-    border-color: rgb(173 215 246 / 0.35);
+    border-color: rgb(220 212 255 / 0.35);
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.22),
       0 10px 30px -10px rgb(59 40 204 / 0.75);
@@ -1621,7 +1647,7 @@
     );
     box-shadow:
       inset 0 1px 0 0 rgb(255 255 255 / 0.28),
-      0 14px 34px -12px rgb(38 103 255 / 0.85);
+      0 14px 34px -12px rgb(111 82 220 / 0.85);
   }
 
   /* White glyphs on a bright fill are the one thing that cannot survive the
@@ -1642,26 +1668,29 @@
   }
 
   /* The wordmark is white artwork. On the counter it needs a plate to sit on;
-     on ink it does not, so the plate steps back to a border. */
+     in the dark it does not, so the plate steps back to a surface. */
   .pos-root[data-theme="dark"] .pos-logo-plate {
     background: var(--color-ink-700);
   }
 
   /* On the counter an input is white on a white card and the border carries
-     it. On ink there is no lighter left to go, so the field goes the other
-     way and reads as a well cut into the card. */
+     it. In the dark there is no lighter left to go, so the field goes the
+     other way and reads as a well cut into the card. */
   .pos-root[data-theme="dark"] :is(.pos-field, .pos-picker) {
     background-color: var(--color-ink-900);
   }
 
-  .pos-root[data-theme="dark"] .pos-scrim { background: rgb(3 6 14 / 0.66); }
+  .pos-root[data-theme="dark"] .pos-scrim { background: rgb(6 4 15 / 0.7); }
 
+  /* In the dark the card already stands off the canvas by two steps, so the
+     hairline the white counter needs would read as an outline here. */
   .pos-root[data-theme="dark"] .pos-card {
+    border-color: color-mix(in oklab, var(--pale-lilac) 72%, var(--tint-base));
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
   }
 
-  /* The lifted surfaces drop navy glows and take black ones — a blue shadow
-     on a blue-black ground is a halo, not a shadow. */
+  /* The lifted surfaces drop violet glows and take black ones — a lit shadow
+     on a violet-black ground is a halo, not a shadow. */
   .pos-root[data-theme="dark"] :is(.pos-menu, .pos-tip, .pos-sheet) {
     box-shadow: 0 30px 60px -28px rgb(0 0 0 / 0.85);
   }

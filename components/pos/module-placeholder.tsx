@@ -27,7 +27,7 @@ export function ModulePlaceholder({
   return (
     <div className="mx-auto max-w-2xl">
       <div className="pos-card p-6 sm:p-8">
-        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-azure-50 text-azure-700">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orchid-50 text-orchid-700">
           <Icon className="h-5 w-5" />
         </span>
 
@@ -36,17 +36,17 @@ export function ModulePlaceholder({
           {lede}
         </p>
 
-        <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-azure-50 px-3 py-1.5 text-[0.75rem] font-semibold text-azure-800">
+        <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-orchid-50 px-3 py-1.5 text-[0.75rem] font-semibold text-orchid-800">
           Arriving {arriving}
         </p>
 
-        <ul className="mt-5 space-y-2 border-t border-azure-100 pt-5">
+        <ul className="mt-5 space-y-2 border-t border-orchid-100 pt-5">
           {bullets.map((bullet) => (
             <li
               key={bullet}
               className="flex gap-2.5 text-[0.875rem] leading-relaxed text-graphite-700"
             >
-              <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-azure-300" />
+              <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-orchid-300" />
               {bullet}
             </li>
           ))}

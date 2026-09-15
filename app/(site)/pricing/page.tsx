@@ -217,7 +217,7 @@ export default function PricingPage() {
                         <path
                           d="M3 8.4 6.4 11.8 13 5"
                           fill="none"
-                          stroke={plan.featured ? "#fff" : "#87bfff"}
+                          stroke={plan.featured ? "#fff" : "#c4b6fb"}
                           strokeWidth="2"
                           strokeLinecap="round"
                           strokeLinejoin="round"

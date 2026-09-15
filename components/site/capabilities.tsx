@@ -231,13 +231,13 @@ const MESSAGES = [
   {
     id: "#1043",
     status: "Preparing",
-    tint: "#2667ff",
+    tint: "#6f52dc",
     ago: "7m",
     body: "Karahi is on the fire — about ten minutes for your table.",
     name: "Ayesha Siddiqui",
     contact: "+92 321 455 9032",
     initials: "AS",
-    avatar: "linear-gradient(135deg,#34d399,#3f8efc)",
+    avatar: "linear-gradient(135deg,#34d399,#9b85ea)",
   },
 ];
 
@@ -268,9 +268,9 @@ function MiniDashboard() {
         <div className="mt-2 grid grid-cols-4 gap-1.5">
           {[
             { w: "22%", c: "#f472b6" },
-            { w: "34%", c: "#87bfff" },
-            { w: "46%", c: "#3f8efc" },
-            { w: "18%", c: "#66758f" },
+            { w: "34%", c: "#c4b6fb" },
+            { w: "46%", c: "#9b85ea" },
+            { w: "18%", c: "#776d91" },
           ].map((bar) => (
             <div key={bar.c} className="h-2 rounded-full bg-white/6">
               <div
@@ -301,7 +301,7 @@ function MiniDashboard() {
               <path
                 d="M2 40 C 20 34, 30 16, 46 22 S 74 44, 90 30 S 118 8, 134 18 S 152 30, 158 24"
                 fill="none"
-                stroke="#3f8efc"
+                stroke="#9b85ea"
                 strokeWidth="1.6"
                 strokeLinecap="round"
               />

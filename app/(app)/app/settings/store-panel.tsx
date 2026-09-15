@@ -178,9 +178,9 @@ export function StorePanel({
           {shop.branches.map((branch) => (
             <li
               key={branch.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-azure-100 px-3.5 py-3"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-orchid-100 px-3.5 py-3"
             >
-              <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-azure-50 text-azure-700">
+              <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-orchid-50 text-orchid-700">
                 <IconStore className="h-4 w-4" />
               </span>
 
@@ -292,13 +292,13 @@ export function StorePanel({
           <legend className="pos-label">Your shelf prices</legend>
 
           <div className="grid gap-2 sm:grid-cols-2">
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-azure-100 px-3.5 py-3">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-orchid-100 px-3.5 py-3">
               <input
                 type="radio"
                 name="tax-mode"
                 value="inclusive"
                 defaultChecked
-                className="mt-0.5 h-4 w-4 flex-none accent-azure-700"
+                className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
               />
               <span>
                 <span className="block text-[0.875rem] font-semibold text-graphite-900">
@@ -311,12 +311,12 @@ export function StorePanel({
               </span>
             </label>
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-azure-100 px-3.5 py-3">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-orchid-100 px-3.5 py-3">
               <input
                 type="radio"
                 name="tax-mode"
                 value="exclusive"
-                className="mt-0.5 h-4 w-4 flex-none accent-azure-700"
+                className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
               />
               <span>
                 <span className="block text-[0.875rem] font-semibold text-graphite-900">
@@ -385,7 +385,7 @@ export function StorePanel({
                         type="radio"
                         name="default-tax"
                         defaultChecked={tax.isDefault}
-                        className="h-4 w-4 accent-azure-700"
+                        className="h-4 w-4 accent-orchid-700"
                         aria-label={`Use ${tax.name} for new items`}
                       />
                     </td>
@@ -396,7 +396,7 @@ export function StorePanel({
           </div>
 
           <p className="pos-hint flex items-start gap-1.5">
-            <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-azure-600" />
+            <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-orchid-600" />
             An item added to stock takes the rate ticked here unless you give it
             its own. These three are starting points — check them against what
             your accountant actually files.

@@ -60,7 +60,7 @@ export default function LoginPage() {
   return (
     <div className="relative isolate grid min-h-dvh lg:grid-cols-[1.05fr_minmax(0,0.95fr)]">
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_20%_0%,#12132b_0%,#08080f_52%,#03060e_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_20%_0%,#171133_0%,#0a0712_52%,#06040f_100%)]" />
         <Starfield className="absolute inset-0 h-full w-full" />
         <div className="glow left-[10%] top-[8%] h-80 w-[36rem] animate-breathe bg-iris-600/20" />
         <div className="glow right-[4%] bottom-[6%] h-72 w-[28rem] bg-iris-500/12" />

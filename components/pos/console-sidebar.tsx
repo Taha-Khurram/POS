@@ -91,7 +91,7 @@ export function ConsoleSidebar({
     >
       {/* Only the drawer needs a header. At lg the wordmark is in the topbar
           and the rail can start straight in on the navigation. */}
-      <div className="flex h-[var(--pos-header)] flex-none items-center justify-end border-b border-azure-100 px-3 lg:hidden">
+      <div className="flex h-[var(--pos-header)] flex-none items-center justify-end border-b border-orchid-100 px-3 lg:hidden">
         <button
           type="button"
           onClick={onClose}
@@ -129,7 +129,7 @@ export function ConsoleSidebar({
                       <Icon className="h-[18px] w-[18px] flex-none" />
                       <span className="pos-rail-text flex-1">{item.label}</span>
                       {item.soon && !tight ? (
-                        <span className="pos-rail-text rounded-full bg-azure-50 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide text-graphite-500">
+                        <span className="pos-rail-text rounded-full bg-orchid-50 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide text-graphite-500">
                           SOON
                         </span>
                       ) : null}
@@ -145,9 +145,9 @@ export function ConsoleSidebar({
       {/* Who is signed in, at the foot of the rail. The same identity is behind
           the topbar avatar; down here it is readable without a click, which is
           what a shared counter tablet actually needs. */}
-      <div className="flex-none border-t border-azure-100 p-2.5">
+      <div className="flex-none border-t border-orchid-100 p-2.5">
         {tight ? null : (
-          <div className="mb-2 flex items-center gap-1.5 rounded-xl bg-azure-50 px-3 py-2">
+          <div className="mb-2 flex items-center gap-1.5 rounded-xl bg-orchid-50 px-3 py-2">
             <span className="h-1.5 w-1.5 flex-none rounded-full bg-signal-good" />
             <p className="text-[0.75rem] font-medium text-graphite-700">
               Counter online

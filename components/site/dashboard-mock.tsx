@@ -9,9 +9,9 @@ const TABS = ["Overview", "Bills", "Stock", "Khata", "Staff"];
 
 const METERS = [
   { label: "Cash", value: 38, tint: "#f472b6" },
-  { label: "Card", value: 24, tint: "#87bfff" },
-  { label: "Raast & wallets", value: 26, tint: "#3f8efc" },
-  { label: "Udhaar", value: 12, tint: "#66758f" },
+  { label: "Card", value: 24, tint: "#c4b6fb" },
+  { label: "Raast & wallets", value: 26, tint: "#9b85ea" },
+  { label: "Udhaar", value: 12, tint: "#776d91" },
 ];
 
 const STATS = [
@@ -21,8 +21,8 @@ const STATS = [
 ];
 
 const FLOW = [
-  { label: "Paid", count: 1234, tint: "#3f8efc" },
-  { label: "Returns", count: 3, tint: "#66758f" },
+  { label: "Paid", count: 1234, tint: "#9b85ea" },
+  { label: "Returns", count: 3, tint: "#776d91" },
   { label: "On udhaar", count: 24, tint: "#f472b6" },
 ];
 

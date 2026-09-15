@@ -140,7 +140,7 @@ export function ConsoleHeader({
           </label>
         ) : (
           <p className="hidden items-center gap-1.5 px-2 text-[0.8125rem] text-graphite-700 sm:flex">
-            <IconStore className="h-4 w-4 text-azure-600" />
+            <IconStore className="h-4 w-4 text-orchid-600" />
             {branches[0]?.label ?? "Main counter"}
           </p>
         )}
@@ -175,14 +175,14 @@ export function ConsoleHeader({
                 {notices.map((notice) => (
                   <li
                     key={notice.id}
-                    className="rounded-[9px] px-2.5 py-2 hover:bg-azure-50"
+                    className="rounded-[9px] px-2.5 py-2 hover:bg-orchid-50"
                   >
                     <p className="flex items-center gap-2 text-[0.8125rem] font-medium text-graphite-900">
                       <span
                         className={`h-1.5 w-1.5 flex-none rounded-full ${
                           notice.tone === "warn"
                             ? "bg-signal-warn"
-                            : "bg-azure-600"
+                            : "bg-orchid-600"
                         }`}
                       />
                       {notice.title}
@@ -215,7 +215,7 @@ export function ConsoleHeader({
 
           {profileOpen ? (
             <div className="pos-menu" role="menu">
-              <div className="border-b border-azure-100 px-2.5 pt-1.5 pb-2.5">
+              <div className="border-b border-orchid-100 px-2.5 pt-1.5 pb-2.5">
                 <p className="truncate font-display text-[0.875rem] font-semibold text-graphite-900">
                   {shopName}
                 </p>

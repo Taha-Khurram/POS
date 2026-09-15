@@ -287,10 +287,10 @@ export function ImportPanel() {
               void takeFile(event.dataTransfer.files[0]);
             }}
             className={`rounded-2xl border-2 border-dashed px-4 py-10 text-center transition-colors ${
-              dragging ? "border-azure-400 bg-azure-50" : "border-azure-100"
+              dragging ? "border-orchid-400 bg-orchid-50" : "border-orchid-100"
             }`}
           >
-            <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-azure-50 text-azure-700">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-orchid-50 text-orchid-700">
               <IconUpload className="h-5 w-5" />
             </span>
 
@@ -329,7 +329,7 @@ export function ImportPanel() {
           </div>
 
           {problem ? (
-            <p className="mt-3 flex items-start gap-2 rounded-xl border border-azure-100 bg-azure-50/60 px-3.5 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
+            <p className="mt-3 flex items-start gap-2 rounded-xl border border-orchid-100 bg-orchid-50/60 px-3.5 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
               <IconAlert className="mt-0.5 h-4 w-4 flex-none text-signal-warn" />
               {problem}
             </p>
@@ -518,7 +518,7 @@ function Steps({ current }: { current: number }) {
           <li key={label} className="flex items-center gap-2">
             <span
               className={`grid h-6 w-6 flex-none place-items-center rounded-lg font-display text-[0.6875rem] font-bold ${
-                done || live ? "pos-stamp" : "bg-azure-50 text-graphite-500"
+                done || live ? "pos-stamp" : "bg-orchid-50 text-graphite-500"
               }`}
             >
               {done ? <IconCheck className="h-3.5 w-3.5" /> : at}
@@ -531,7 +531,7 @@ function Steps({ current }: { current: number }) {
               {label}
             </span>
             {at < STEPS.length ? (
-              <span className="hidden h-px w-6 bg-azure-100 sm:block" />
+              <span className="hidden h-px w-6 bg-orchid-100 sm:block" />
             ) : null}
           </li>
         );
