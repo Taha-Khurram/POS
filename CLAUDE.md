@@ -202,7 +202,27 @@ queries that replace the sample data, and `Plan.md` has the order the modules
 arrive in.
 
 Settings is real. `tenant_settings` and `role_permissions` (migration `0009`)
-back the currency/clock and permissions cards, read through the shop's own JWT
-in `lib/pos/shop.ts` and written by `app/(app)/app/settings/actions.ts` on the
-service role. Writes are owner-only; `readOnly` on the panels is presentation,
-and the action checks the role again for itself.
+and `counters` (`0010`) back the currency/clock, permissions and counter cards,
+read through the shop's own JWT in `lib/pos/shop.ts` and written by
+`app/(app)/app/settings/actions.ts` on the service role. Writes are owner-only;
+`readOnly` on the panels is presentation, and the action checks the role again
+for itself.
+
+The register bills but does not yet record. `counters.is_active` is the gate —
+shut, `/app/register` shows the switch and links to it; open, it is the till in
+`app/(app)/app/register/till.tsx`: scan or search, one line per item, and a
+total. `lib/pos/counter.ts` holds every figure on that screen and carries no
+`server-only`, because the till is a client component and `saveCounter` has to
+validate against the same lists. Payment is cash or card, and the bill prints
+through the `@media print` block at the foot of `globals.css` — the receipt
+element is left visible and everything else is hidden, so what is on screen is
+what comes off the roll. `@page` is mounted in `receipt.tsx` rather than in the
+stylesheet, because it cannot be scoped and would otherwise set the marketing
+site's pages to 80 mm too.
+
+Nothing is written to `sales`, `sale_lines` or `sale_tenders`. That wants a
+branch row (`sales.branch_id` is not-null), real `items` rows, and the offline
+outbox, which is Part 4 — so receipt numbers are the counter's own daily series
+kept in `localStorage`, and `/app/sales` is still a placeholder. The items the
+till rings up are `SAMPLE_ITEMS`, the same rows Products & stock shows, so the
+two screens cannot disagree about what is on the shelf.

@@ -1,23 +1,27 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { IconEmployees, IconStore } from "@/components/pos/icons";
+import { IconEmployees, IconRegister, IconStore } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
 import {
+  getCounter,
   getRolePermissions,
   getShopProfile,
   getShopSettings,
 } from "@/lib/pos/shop";
+import { CounterForm } from "./counter-form";
 import { RolesPanel } from "./roles-panel";
 import { StorePanel } from "./store-panel";
 
 export const metadata: Metadata = {
   title: "Settings",
-  description: "Shop details, currency and clock, and who can do what.",
+  description:
+    "Shop details, currency and clock, the counter, and who can do what.",
 };
 
 const TABS = [
   { id: "store", label: "Shop & currency", icon: IconStore },
+  { id: "counter", label: "Counter", icon: IconRegister },
   { id: "roles", label: "Roles & permissions", icon: IconEmployees },
 ] as const;
 
@@ -33,7 +37,7 @@ const isTab = (value: unknown): value is TabId =>
  * the dashboard's period does: the page stays a server component, and a half
  * filled screen can be sent to whoever actually knows the NTN.
  *
- * Both tabs are read through the shop's own JWT and written through a Server
+ * Every tab is read through the shop's own JWT and written through a Server
  * Action on the service role. `readOnly` here is presentation only — it greys
  * the forms out for a manager, and the action checks the role again for itself,
  * because a disabled input is a suggestion and not a control.
@@ -50,9 +54,10 @@ export default async function SettingsPage({
     return <NotAttached />;
   }
 
-  const [shop, settings, permissions] = await Promise.all([
+  const [shop, settings, counter, permissions] = await Promise.all([
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
+    getCounter(session.tenantId),
     getRolePermissions(session.tenantId),
   ]);
 
@@ -91,13 +96,15 @@ export default async function SettingsPage({
 
       {tab === "store" ? (
         <StorePanel shop={shop} settings={settings} readOnly={readOnly} />
+      ) : tab === "counter" ? (
+        <CounterForm counter={counter} readOnly={readOnly} />
       ) : (
         <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}
 
       <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
-        Receipt layout, the 80 mm printer test page, and your plan and invoices
-        arrive in Part 7 — week of 6 October.
+        A second counter, the 80 mm printer test page, and your plan and
+        invoices arrive in Part 7 — week of 6 October.
       </p>
     </div>
   );

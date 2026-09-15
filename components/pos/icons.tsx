@@ -147,6 +147,12 @@ export const IconPlus = (props: IconProps) => (
   </Glyph>
 );
 
+export const IconMinus = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M5 12h14" />
+  </Glyph>
+);
+
 export const IconRail = (props: IconProps) => (
   <Glyph {...props}>
     <rect x="3" y="4" width="18" height="16" rx="2.5" />
@@ -261,4 +267,38 @@ export const IconTrend = ({
       <path d={direction === "up" ? "M6 2l4.5 7h-9z" : "M6 10 1.5 3h9z"} />
     )}
   </svg>
+);
+
+/* ---------------- The counter ---------------- */
+
+export const IconCash = (props: IconProps) => (
+  <Glyph {...props}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2" />
+    <circle cx="12" cy="12" r="2.6" />
+    <path d="M6 9.5v5M18 9.5v5" />
+  </Glyph>
+);
+
+export const IconCard = (props: IconProps) => (
+  <Glyph {...props}>
+    <rect x="2.5" y="5" width="19" height="14" rx="2.4" />
+    <path d="M2.5 9.5h19" />
+    <path d="M6 14.5h3.5" />
+  </Glyph>
+);
+
+export const IconPrinter = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M7 9V4h10v5" />
+    <path d="M7 18H5.5A2.5 2.5 0 0 1 3 15.5v-4A2.5 2.5 0 0 1 5.5 9h13a2.5 2.5 0 0 1 2.5 2.5v4a2.5 2.5 0 0 1-2.5 2.5H17" />
+    <rect x="7" y="14" width="10" height="6.5" rx="1.2" />
+  </Glyph>
+);
+
+export const IconCart = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3 4h2.2l2.2 10.4a1.8 1.8 0 0 0 1.8 1.4h7.9a1.8 1.8 0 0 0 1.75-1.35L20.5 7.5H6" />
+    <circle cx="9.5" cy="19.5" r="1.4" />
+    <circle cx="17" cy="19.5" r="1.4" />
+  </Glyph>
 );

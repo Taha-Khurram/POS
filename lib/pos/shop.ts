@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
+import { DEFAULT_COUNTER, type CounterSettings } from "@/lib/pos/counter";
 import {
   CURRENCIES,
   CURRENCY_FORMATS,
@@ -193,3 +194,39 @@ export async function getRolePermissions(
 
   return permissions;
 }
+
+/**
+ * The counter, as Settings writes it and the register reads it.
+ *
+ * A shop with no row reads the column defaults from 0010 — which have
+ * `isActive: false`, so "never set up" and "switched off" arrive at the
+ * register as the same thing and it only has to handle one of them.
+ *
+ * Cached for the request: Settings reads it once and the register reads it
+ * once, and neither should pay for the other.
+ */
+export const getCounter = cache(
+  async (tenantId: string): Promise<CounterSettings> => {
+    const supabase = createClient(await cookies());
+
+    const { data } = await supabase
+      .from("counters")
+      .select(
+        "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
+      )
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    if (!data) return DEFAULT_COUNTER;
+
+    return {
+      name: data.name,
+      isActive: data.is_active,
+      receiptPrefix: data.receipt_prefix,
+      acceptsCash: data.accepts_cash,
+      acceptsCard: data.accepts_card,
+      receiptFooter: data.receipt_footer,
+      autoPrint: data.auto_print,
+    };
+  },
+);

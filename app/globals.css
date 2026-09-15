@@ -907,6 +907,24 @@
     background: var(--lilac-wash);
   }
 
+  /* The register's quantity box. Narrow, centred and tabular, because it sits
+     between a minus and a plus and the number has to stay put as it changes.
+     The spinners go: they are four pixels wide on a tablet and the buttons
+     either side of them are the actual control. */
+  .pos-qty {
+    width: 3.25rem;
+    padding-inline: 0.375rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    appearance: textfield;
+  }
+
+  .pos-qty::-webkit-outer-spin-button,
+  .pos-qty::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
   /* ---- Dropdowns ---------------------------------------------------------
      Settings has seven of them, all closed lists, and the native control draws
      each one differently on every platform we ship to — a grey Windows box, a
@@ -1835,4 +1853,75 @@
     transform: none !important;
     filter: none !important;
   }
+}
+
+/* ==========================================================================
+   The 80 mm roll
+   ==========================================================================
+
+   The receipt is printed out of the register's own dialog rather than drawn a
+   second time for the printer, so what the cashier is looking at is what comes
+   off the paper. A preview rendered separately is a preview that eventually
+   disagrees with the roll, and nobody finds out until a customer does.
+
+   `visibility` rather than `display` is the whole trick: the receipt sits
+   several levels inside a fixed dialog, and hiding an ancestor by display would
+   take the receipt down with it. Hiding everything and then re-showing this one
+   subtree leaves it exactly where it is in the document.
+
+   The page size itself is NOT here. `@page` cannot be scoped by a selector, so
+   a rule in this stylesheet would set the marketing site's pricing page to
+   80 mm too — it is mounted with the receipt instead, in `receipt.tsx`.
+   ========================================================================== */
+
+@media print {
+  /* The console's own ground, in case the reader has background graphics on
+     and the counter is running the dark theme. */
+  body { background: #fff; }
+
+  body * { visibility: hidden; }
+
+  .pos-receipt,
+  .pos-receipt * { visibility: visible; }
+
+  .pos-receipt {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    /* Thermal paper is white and the ink is black whatever the console is
+       dressed as. A dark receipt is a black rectangle and an empty roll. */
+    background: #fff;
+    color: #000;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .pos-receipt-rule { border-color: #000; }
+
+  /* The dialog the roll is printed out of, flattened back into the page. */
+  .pos-modal {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    animation: none;
+  }
+
+  .pos-sheet {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  /* Buttons and the dialog's own chrome. Visible on screen, never on paper. */
+  .print-hide { display: none !important; }
 }

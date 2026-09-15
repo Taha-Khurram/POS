@@ -49,6 +49,7 @@ const TABLES = [
   "sync_outbox",
   "tenant_settings",
   "role_permissions",
+  "counters",
 ];
 
 const CLAIMS = ["tenant_id", "tenant_role", "branch_id", "platform_role"];

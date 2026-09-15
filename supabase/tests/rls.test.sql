@@ -111,6 +111,13 @@ values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'manager', 15),
   ('bbbbbbbb-0000-4000-8000-000000000001', 'cashier', 5);
 
+-- 0010 backfills nothing, so both counters are created here. B's is switched
+-- off, which is the state a shop that has never opened Settings is in.
+insert into public.counters (tenant_id, name, is_active, receipt_prefix)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'Front counter', true, 'ALM'),
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'Counter 1', false, 'BKK');
+
 -- =============================================================================
 -- Tenant A's owner
 -- =============================================================================
@@ -238,6 +245,27 @@ select throws_ok(
   'tenant user cannot change its own currency directly'
 );
 
+-- The counter, added in 0010. The one that matters commercially: a tenant that
+-- could switch its own counter on could bill without the owner ever agreeing
+-- the prices, and one that could read another's would read its receipt series.
+select is(
+  (select count(*) from public.counters), 1::bigint,
+  'tenant A sees only its own counter'
+);
+
+select is_empty(
+  $$ select 1 from public.counters
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B counter'
+);
+
+select throws_ok(
+  $$ update public.counters set is_active = true $$,
+  '42501',
+  null,
+  'tenant user cannot open its own counter directly'
+);
+
 -- No write policy exists anywhere, and the write privileges are revoked, so
 -- these fail on privilege (42501) rather than on a policy — belt and braces.
 select throws_ok(
@@ -292,6 +320,8 @@ select is_empty($$ select 1 from public.tenant_settings $$,
   'a user with no tenant sees no settings');
 select is_empty($$ select 1 from public.role_permissions $$,
   'a user with no tenant sees no permissions');
+select is_empty($$ select 1 from public.counters $$,
+  'a user with no tenant sees no counter');
 select is(
   (select count(*) from public.profiles), 1::bigint,
   'a user with no tenant still sees its own profile row, and only that'
@@ -364,6 +394,8 @@ select throws_ok($$ select 1 from public.tenant_settings $$, '42501', null,
   'anon cannot read shop settings');
 select throws_ok($$ select 1 from public.role_permissions $$, '42501', null,
   'anon cannot read what a cashier is allowed to do');
+select throws_ok($$ select 1 from public.counters $$, '42501', null,
+  'anon cannot read the counter or its receipt series');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it

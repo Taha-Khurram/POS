@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireSession, type SessionContext } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
+import { RECEIPT_FOOTER_MAX, RECEIPT_PREFIX_RE } from "@/lib/pos/counter";
 import {
   ACCESS_LEVELS,
   CURRENCIES,
@@ -21,7 +22,7 @@ import {
 import { createAdminClient } from "@/utils/supabase/admin";
 
 /**
- * The three Settings forms.
+ * The four Settings forms.
  *
  * Every one of them writes with the service role, because the schema has no
  * update policy for a tenant JWT anywhere — `0001` revoked insert/update/delete
@@ -290,5 +291,89 @@ export async function saveRolePermissions(
   });
 
   revalidatePath("/app/settings");
+  return done();
+}
+
+// -----------------------------------------------------------------------------
+// The counter — the `counters` row the register opens against.
+// -----------------------------------------------------------------------------
+export async function saveCounter(
+  _previous: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const owner = await requireOwner();
+  if (!owner.ok) return fail(owner.error);
+  const { session } = owner;
+
+  const name = text(formData.get("name"));
+  if (!name) return fail("Give the counter a name — the receipt prints it.");
+
+  // Typed in lower case as often as not, and the constraint only accepts upper.
+  // Correcting it here is kinder than bouncing the form for a shift key.
+  const receiptPrefix = text(formData.get("receipt_prefix")).toUpperCase();
+  if (!RECEIPT_PREFIX_RE.test(receiptPrefix)) {
+    return fail(
+      "The receipt prefix must be 1 to 8 letters, digits or dashes — ALM, or SHOP-1.",
+    );
+  }
+
+  const footer = text(formData.get("receipt_footer"));
+  if (footer.length > RECEIPT_FOOTER_MAX) {
+    return fail(`The footer line has to fit the roll — ${RECEIPT_FOOTER_MAX} characters at most.`);
+  }
+
+  const acceptsCash = checked(formData, "accepts_cash");
+  const acceptsCard = checked(formData, "accepts_card");
+  const isActive = checked(formData, "is_active");
+
+  // An open counter that can take neither cash nor card is a register with a
+  // Charge button that cannot finish a sale. Refused here rather than
+  // discovered by a cashier with a queue.
+  if (isActive && !acceptsCash && !acceptsCard) {
+    return fail("An open counter has to take cash, card, or both.");
+  }
+
+  const after = {
+    tenant_id: session.tenantId,
+    name,
+    is_active: isActive,
+    receipt_prefix: receiptPrefix,
+    accepts_cash: acceptsCash,
+    accepts_card: acceptsCard,
+    receipt_footer: footer || null,
+    auto_print: checked(formData, "auto_print"),
+  };
+
+  const supabase = createAdminClient();
+
+  const { data: before } = await supabase
+    .from("counters")
+    .select(
+      "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
+    )
+    .eq("tenant_id", session.tenantId)
+    .maybeSingle();
+
+  // Upsert, like the currency card: 0010 backfills nothing, so the first save
+  // is the insert and every one after it is the update.
+  const { error } = await supabase
+    .from("counters")
+    .upsert(after, { onConflict: "tenant_id" });
+
+  if (error) return fail("We could not save the counter. Please try again.");
+
+  await recordAudit(session, {
+    // Opening and closing a counter is the entry somebody will come looking for
+    // after an argument about a missing afternoon of sales, so it is named for
+    // the switch rather than for the form.
+    action: isActive ? "counter.opened" : "counter.closed",
+    subjectType: "counter",
+    subjectId: session.tenantId,
+    before,
+    after,
+  });
+
+  revalidatePath("/app/settings");
+  revalidatePath("/app/register");
   return done();
 }
