@@ -215,14 +215,14 @@ export function SelectField({
                   <span className="min-w-0 flex-1">
                     {option.label}
                     {option.description ? (
-                      <span className="mt-0.5 block text-[0.75rem] leading-snug font-normal text-graphite-500">
+                      <span className="pos-option-note">
                         {option.description}
                       </span>
                     ) : null}
                   </span>
 
                   {selected ? (
-                    <IconCheck className="h-4 w-4 flex-none text-orchid-700" />
+                    <IconCheck className="h-4 w-4 flex-none" />
                   ) : null}
                 </div>
               );

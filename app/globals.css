@@ -1436,6 +1436,21 @@
 
   .pos-option:hover { background: var(--lilac-wash); color: var(--indigo-deep); }
 
+  /* The second line inside a row. Mixed out of the row's OWN colour rather
+     than named as a grey: the selected row flips to a light lavender ground in
+     both themes — the alias tokens are substituted on `:root` and do not
+     re-point under `[data-theme]` — so a fixed `graphite-500` caption is
+     readable on the counter and 2:1 on a dark console. currentColor cannot
+     drift from the row it is inside. */
+  .pos-option-note {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: color-mix(in oklab, currentColor 64%, transparent);
+  }
+
   /* `aria-checked` is the menuitemradio the dashboard filter uses;
      `aria-selected` is the listbox one the settings dropdowns use. Same row,
      same paint, and it wins over the active wash above because it is later. */

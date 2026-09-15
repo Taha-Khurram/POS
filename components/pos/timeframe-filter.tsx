@@ -114,14 +114,14 @@ export function TimeframeFilter({
                       trigger above it is showing the same dates, but the list
                       is where you go to change them. */}
                   {option.id === "custom" && selected && custom ? (
-                    <span className="mt-0.5 block text-[0.75rem] font-normal text-graphite-500">
+                    <span className="pos-option-note">
                       {custom.from.replace("T", " ")} → {custom.to.replace("T", " ")}
                     </span>
                   ) : null}
                 </span>
 
                 {selected ? (
-                  <IconCheck className="h-4 w-4 flex-none text-orchid-700" />
+                  <IconCheck className="h-4 w-4 flex-none" />
                 ) : null}
               </button>
             );
