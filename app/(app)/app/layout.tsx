@@ -76,7 +76,6 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
     <div className="pos-root" data-theme={theme}>
       <ConsoleShell
         shopName={SHOP_NAME}
-        subtitle="Flo dashboard"
         email={session.email}
         branches={BRANCHES}
         notices={notices}

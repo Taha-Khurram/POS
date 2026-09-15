@@ -98,6 +98,19 @@ select tenant_id, id, current_date, 7
 from public.subscriptions
 where tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001';
 
+-- 0009 backfills these for every tenant that existed when it ran; A and B are
+-- created inside this transaction, so they need their own rows.
+insert into public.tenant_settings (tenant_id, currency, day_ends_at)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'PKR', '00:00'),
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'PKR', '02:00');
+
+insert into public.role_permissions (tenant_id, access_level, discount_ceiling_pct)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'cashier', 5),
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'manager', 15),
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'cashier', 5);
+
 -- =============================================================================
 -- Tenant A's owner
 -- =============================================================================
@@ -187,6 +200,44 @@ select throws_ok(
   'tenant user cannot write support notes'
 );
 
+-- Settings, added in 0009. Same shape as everything else: readable by its own
+-- tenant, invisible to the other, and writable by neither.
+select is(
+  (select count(*) from public.tenant_settings), 1::bigint,
+  'tenant A sees only its own currency and clock settings'
+);
+
+select is_empty(
+  $$ select 1 from public.tenant_settings
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B settings'
+);
+
+select is(
+  (select count(*) from public.role_permissions), 2::bigint,
+  'tenant A sees only its own two access levels'
+);
+
+select is_empty(
+  $$ select 1 from public.role_permissions
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B permissions'
+);
+
+select throws_ok(
+  $$ update public.role_permissions set discount_ceiling_pct = 100 $$,
+  '42501',
+  null,
+  'tenant user cannot raise its own discount ceiling directly'
+);
+
+select throws_ok(
+  $$ update public.tenant_settings set currency = 'USD' $$,
+  '42501',
+  null,
+  'tenant user cannot change its own currency directly'
+);
+
 -- No write policy exists anywhere, and the write privileges are revoked, so
 -- these fail on privilege (42501) rather than on a policy — belt and braces.
 select throws_ok(
@@ -237,6 +288,10 @@ select is_empty($$ select 1 from public.branches $$,
   'a user with no tenant sees no branches');
 select is_empty($$ select 1 from public.subscriptions $$,
   'a user with no tenant sees no subscriptions');
+select is_empty($$ select 1 from public.tenant_settings $$,
+  'a user with no tenant sees no settings');
+select is_empty($$ select 1 from public.role_permissions $$,
+  'a user with no tenant sees no permissions');
 select is(
   (select count(*) from public.profiles), 1::bigint,
   'a user with no tenant still sees its own profile row, and only that'
@@ -305,6 +360,10 @@ select throws_ok($$ select 1 from public.renewal_reminders $$, '42501', null,
   'anon cannot read renewal reminders');
 select throws_ok($$ select 1 from public.request_rate_limits $$, '42501', null,
   'anon cannot inspect rate limits');
+select throws_ok($$ select 1 from public.tenant_settings $$, '42501', null,
+  'anon cannot read shop settings');
+select throws_ok($$ select 1 from public.role_permissions $$, '42501', null,
+  'anon cannot read what a cashier is allowed to do');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it

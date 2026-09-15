@@ -4,13 +4,17 @@ import Link from "next/link";
 import { IconEmployees, IconStore } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
 import { getEntitlements } from "@/lib/entitlements";
-import { getShopProfile } from "@/lib/pos/shop";
+import {
+  getRolePermissions,
+  getShopProfile,
+  getShopSettings,
+} from "@/lib/pos/shop";
 import { RolesPanel } from "./roles-panel";
 import { StorePanel } from "./store-panel";
 
 export const metadata: Metadata = {
   title: "Settings",
-  description: "Shop details, tax, and who can sign in.",
+  description: "Shop details, currency and clock, and who can do what.",
 };
 
 const TABS = [
@@ -29,6 +33,11 @@ const isTab = (value: unknown): value is TabId =>
  * The section lives in the URL rather than in React state, for the same reason
  * the dashboard's period does: the page stays a server component, and a half
  * filled screen can be sent to whoever actually knows the NTN.
+ *
+ * Both tabs are read through the shop's own JWT and written through a Server
+ * Action on the service role. `readOnly` here is presentation only — it greys
+ * the forms out for a manager, and the action checks the role again for itself,
+ * because a disabled input is a suggestion and not a control.
  */
 export default async function SettingsPage({
   searchParams,
@@ -42,8 +51,10 @@ export default async function SettingsPage({
     return <NotAttached />;
   }
 
-  const [shop, entitlements] = await Promise.all([
+  const [shop, settings, permissions, entitlements] = await Promise.all([
     getShopProfile(session.tenantId),
+    getShopSettings(session.tenantId),
+    getRolePermissions(session.tenantId),
     getEntitlements(session.tenantId),
   ]);
 
@@ -51,6 +62,8 @@ export default async function SettingsPage({
   // is the access-token hook switched off in the project, which is worth
   // saying out loud — it is silent everywhere else.
   if (!shop) return <NotAttached unreadable />;
+
+  const readOnly = session.tenantRole !== "owner";
 
   return (
     <div className="space-y-4">
@@ -79,13 +92,14 @@ export default async function SettingsPage({
       </nav>
 
       {tab === "store" ? (
-        <StorePanel shop={shop} maxBranches={entitlements?.maxBranches ?? null} />
-      ) : (
-        <RolesPanel
+        <StorePanel
           shop={shop}
-          ownerEmail={session.email}
-          ownerRole={session.tenantRole}
+          settings={settings}
+          maxBranches={entitlements?.maxBranches ?? null}
+          readOnly={readOnly}
         />
+      ) : (
+        <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}
 
       <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">

@@ -142,22 +142,16 @@ export function ConsoleSidebar({
         ))}
       </nav>
 
-      {/* Who is signed in, at the foot of the rail. The same identity is behind
-          the topbar avatar; down here it is readable without a click, which is
-          what a shared counter tablet actually needs. */}
-      <div className="flex-none border-t border-orchid-100 p-2.5">
-        {tight ? null : (
-          <div className="mb-2 flex items-center gap-1.5 rounded-xl bg-orchid-50 px-3 py-2">
-            <span className="h-1.5 w-1.5 flex-none rounded-full bg-signal-good" />
-            <p className="text-[0.75rem] font-medium text-graphite-700">
-              Counter online
-            </p>
-            <span className="ml-auto text-[0.6875rem] text-graphite-500">
-              Synced
-            </span>
-          </div>
-        )}
+      {/* Who is signed in, at the foot of the rail — and the only place the
+          console says it. The topbar used to carry a second copy; this one is
+          readable without a click, which is what a shared counter tablet
+          actually needs.
 
+          There is no sync indicator here. It was a hard-coded "Counter online /
+          Synced" that would have gone on saying so with the shop's internet
+          down, which is worse than saying nothing. It comes back when
+          `sync_outbox` is what answers it. */}
+      <div className="flex-none border-t border-orchid-100 p-2.5">
         <div className="flex items-center gap-2.5 px-1 py-1">
           <span className="pos-stamp h-8 w-8 rounded-full text-[0.75rem]">
             {initial}

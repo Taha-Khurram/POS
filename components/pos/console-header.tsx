@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 
-import { signOut } from "@/app/(app)/app/actions";
 import { FloMark } from "@/components/site/flo-mark";
 import {
   IconBell,
-  IconChevron,
   IconMenu,
   IconPlus,
   IconRail,
   IconSearch,
-  IconSignOut,
   IconStore,
-  IconUser,
 } from "./icons";
 import type { ConsoleTheme } from "./console-prefs";
 import { ThemeToggle } from "./theme-toggle";
@@ -38,11 +34,12 @@ export type Notice = {
  * That is deliberate — on a counter, the dashboard is what you look at between
  * customers, and the moment one arrives there should be exactly one obvious
  * thing to press, reachable without reading anything.
+ *
+ * Who is signed in, and which shop, is not up here. The foot of the rail says
+ * both and has the sign-out beside them; a second copy in the corner was one
+ * more place for the two to disagree.
  */
 export function ConsoleHeader({
-  shopName,
-  subtitle,
-  email,
   branches,
   notices,
   tight,
@@ -50,9 +47,6 @@ export function ConsoleHeader({
   onToggleRail,
   onOpenDrawer,
 }: {
-  shopName: string;
-  subtitle: string;
-  email: string | null;
   branches: Branch[];
   notices: Notice[];
   tight: boolean;
@@ -69,14 +63,7 @@ export function ConsoleHeader({
     setOpen: setBellOpen,
   } = useDismiss<HTMLDivElement>();
 
-  const {
-    ref: profileRef,
-    open: profileOpen,
-    setOpen: setProfileOpen,
-  } = useDismiss<HTMLDivElement>();
-
   const unread = notices.length;
-  const initial = (shopName.trim()[0] ?? "F").toUpperCase();
 
   return (
     <header className="pos-topbar">
@@ -193,56 +180,6 @@ export function ConsoleHeader({
                   </li>
                 ))}
               </ul>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="relative" ref={profileRef}>
-          <button
-            type="button"
-            onClick={() => setProfileOpen(!profileOpen)}
-            className="pos-btn pos-btn-quiet gap-2 px-1.5"
-            aria-expanded={profileOpen}
-          >
-            <span className="pos-stamp h-7 w-7 rounded-full text-[0.75rem]">
-              {initial}
-            </span>
-            <span className="hidden max-w-32 truncate text-left text-[0.8125rem] font-medium md:block">
-              {shopName}
-            </span>
-            <IconChevron className="hidden h-3.5 w-3.5 md:block" />
-          </button>
-
-          {profileOpen ? (
-            <div className="pos-menu" role="menu">
-              <div className="border-b border-orchid-100 px-2.5 pt-1.5 pb-2.5">
-                <p className="truncate font-display text-[0.875rem] font-semibold text-graphite-900">
-                  {shopName}
-                </p>
-                <p className="truncate text-[0.75rem] text-graphite-500">
-                  {email ?? subtitle}
-                </p>
-              </div>
-
-              <div className="pt-1">
-                <Link href="/app/settings" className="pos-menu-item" role="menuitem">
-                  <IconUser className="h-4 w-4" />
-                  Shop profile
-                </Link>
-
-                {/* A plain form posting to a Server Action, so signing out
-                    works even if this bundle has not hydrated yet. */}
-                <form action={signOut}>
-                  <button
-                    type="submit"
-                    className="pos-menu-item text-signal-bad hover:bg-signal-bad/10 hover:text-signal-bad"
-                    role="menuitem"
-                  >
-                    <IconSignOut className="h-4 w-4" />
-                    Sign out
-                  </button>
-                </form>
-              </div>
             </div>
           ) : null}
         </div>

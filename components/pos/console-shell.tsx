@@ -30,7 +30,6 @@ import { ConsoleSidebar } from "./console-sidebar";
  */
 export function ConsoleShell({
   shopName,
-  subtitle,
   email,
   branches,
   notices,
@@ -38,8 +37,8 @@ export function ConsoleShell({
   theme,
   children,
 }: {
+  /** The rail's account block. The topbar carries no identity of its own. */
   shopName: string;
-  subtitle: string;
   email: string | null;
   branches: Branch[];
   notices: Notice[];
@@ -82,9 +81,6 @@ export function ConsoleShell({
           both columns, so the rail begins under it and the wordmark lives in
           the bar rather than at the top of the navigation. */}
       <ConsoleHeader
-        shopName={shopName}
-        subtitle={subtitle}
-        email={email}
         branches={branches}
         notices={notices}
         tight={tight}
