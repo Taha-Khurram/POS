@@ -111,12 +111,33 @@ values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'manager', 15),
   ('bbbbbbbb-0000-4000-8000-000000000001', 'cashier', 5);
 
--- 0010 backfills nothing, so both counters are created here. B's is switched
--- off, which is the state a shop that has never opened Settings is in.
-insert into public.counters (tenant_id, name, is_active, receipt_prefix)
+-- 0010 backfills nothing, so the counters are created here. Tenant A has two,
+-- which is the whole point of 0011; B's single one is switched off, the state a
+-- shop that has never opened Settings is in.
+insert into public.counters (id, tenant_id, branch_id, name, is_active, receipt_prefix, sort_order)
+select
+  v.id, v.tenant_id, b.id, v.name, v.is_active, v.prefix, v.sort_order
+from (values
+  ('ccccccc1-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid, 'Front counter', true, 'ALM', 1::smallint),
+  ('ccccccc2-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid, 'Back counter', true, 'ALM2', 2::smallint),
+  ('ccccccc3-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid, 'Counter 1', false, 'BKK', 1::smallint)
+) as v (id, tenant_id, name, is_active, prefix, sort_order)
+join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+-- One recorded sale each, so the read tests have something to leak.
+insert into public.sales (id, tenant_id, branch_id, counter_id, receipt_number, business_day, subtotal, total)
+select
+  v.id, v.tenant_id, b.id, v.counter_id, v.receipt_number, current_date, v.total, v.total
+from (values
+  ('dddddddd-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid, 'ccccccc1-0000-4000-8000-000000000001'::uuid, 'ALM-260916-0001', 450.00),
+  ('dddddddd-0000-4000-8000-000000000002'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid, 'ccccccc3-0000-4000-8000-000000000001'::uuid, 'BKK-260916-0001', 1200.00)
+) as v (id, tenant_id, counter_id, receipt_number, total)
+join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+insert into public.sale_tenders (tenant_id, sale_id, method, amount)
 values
-  ('aaaaaaaa-0000-4000-8000-000000000001', 'Front counter', true, 'ALM'),
-  ('bbbbbbbb-0000-4000-8000-000000000001', 'Counter 1', false, 'BKK');
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001', 'cash', 450.00),
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000002', 'card', 1200.00);
 
 -- =============================================================================
 -- Tenant A's owner
@@ -249,8 +270,8 @@ select throws_ok(
 -- could switch its own counter on could bill without the owner ever agreeing
 -- the prices, and one that could read another's would read its receipt series.
 select is(
-  (select count(*) from public.counters), 1::bigint,
-  'tenant A sees only its own counter'
+  (select count(*) from public.counters), 2::bigint,
+  'tenant A sees both of its own counters and nothing else'
 );
 
 select is_empty(
@@ -264,6 +285,50 @@ select throws_ok(
   '42501',
   null,
   'tenant user cannot open its own counter directly'
+);
+
+-- Takings, added in 0011. The commercially expensive leak: one shop reading
+-- another's day, or writing itself a sale that never happened.
+select is(
+  (select count(*) from public.sales), 1::bigint,
+  'tenant A sees only its own sales'
+);
+
+select is(
+  (select count(*) from public.sale_tenders), 1::bigint,
+  'tenant A sees only its own tenders'
+);
+
+select is_empty(
+  $$ select 1 from public.sales
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B takings'
+);
+
+select throws_ok(
+  $$ insert into public.sales (id, tenant_id, branch_id, receipt_number, business_day, subtotal, total)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id, 'FORGED-1', current_date, 0, 0
+     from public.branches b where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '42501', null,
+  'tenant user cannot write itself a sale'
+);
+
+select throws_ok(
+  $$ update public.sales set total = 1 $$,
+  '42501', null,
+  'tenant user cannot rewrite what a sale was worth'
+);
+
+-- record_sale is the one write path, and it belongs to the service role. A
+-- tenant that could call it directly could claim receipt numbers on any counter
+-- it could name.
+select throws_ok(
+  $$ select public.record_sale(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       'ccccccc1-0000-4000-8000-000000000001'::uuid,
+       gen_random_uuid(), current_date, null, 0, 0, 'cash', '[]'::jsonb) $$,
+  '42501', null,
+  'tenant user cannot call record_sale'
 );
 
 -- No write policy exists anywhere, and the write privileges are revoked, so
@@ -322,6 +387,8 @@ select is_empty($$ select 1 from public.role_permissions $$,
   'a user with no tenant sees no permissions');
 select is_empty($$ select 1 from public.counters $$,
   'a user with no tenant sees no counter');
+select is_empty($$ select 1 from public.sales $$,
+  'a user with no tenant sees no sales');
 select is(
   (select count(*) from public.profiles), 1::bigint,
   'a user with no tenant still sees its own profile row, and only that'
@@ -395,7 +462,9 @@ select throws_ok($$ select 1 from public.tenant_settings $$, '42501', null,
 select throws_ok($$ select 1 from public.role_permissions $$, '42501', null,
   'anon cannot read what a cashier is allowed to do');
 select throws_ok($$ select 1 from public.counters $$, '42501', null,
-  'anon cannot read the counter or its receipt series');
+  'anon cannot read the counters or their receipt series');
+select throws_ok($$ select 1 from public.sales $$, '42501', null,
+  'anon cannot read a shop''s takings');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it

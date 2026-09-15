@@ -202,27 +202,60 @@ queries that replace the sample data, and `Plan.md` has the order the modules
 arrive in.
 
 Settings is real. `tenant_settings` and `role_permissions` (migration `0009`)
-and `counters` (`0010`) back the currency/clock, permissions and counter cards,
-read through the shop's own JWT in `lib/pos/shop.ts` and written by
-`app/(app)/app/settings/actions.ts` on the service role. Writes are owner-only;
-`readOnly` on the panels is presentation, and the action checks the role again
-for itself.
+and `counters` (`0010`, reshaped by `0011`) back the currency/clock, permissions
+and counter cards, read through the shop's own JWT in `lib/pos/shop.ts` and
+written by `app/(app)/app/settings/actions.ts` on the service role. Writes are
+owner-only; `readOnly` on the panels is presentation, and the action checks the
+role again for itself.
 
-The register bills but does not yet record. `counters.is_active` is the gate —
-shut, `/app/register` shows the switch and links to it; open, it is the till in
-`app/(app)/app/register/till.tsx`: scan or search, one line per item, and a
-total. `lib/pos/counter.ts` holds every figure on that screen and carries no
-`server-only`, because the till is a client component and `saveCounter` has to
-validate against the same lists. Payment is cash or card, and the bill prints
-through the `@media print` block at the foot of `globals.css` — the receipt
-element is left visible and everything else is hidden, so what is on screen is
-what comes off the roll. `@page` is mounted in `receipt.tsx` rather than in the
-stylesheet, because it cannot be scoped and would otherwise set the marketing
-site's pages to 80 mm too.
+**None of the four readers in `lib/pos/shop.ts` may be wrapped in React
+`cache()`.** It is scoped to the request, and a Server Action plus the re-render
+its `revalidatePath` triggers are one request — so a memoised read hands that
+re-render the row as it was before the write and the form redraws itself with
+the values the owner just changed away from. `getShopName` is the exception and
+is only read by the layout.
 
-Nothing is written to `sales`, `sale_lines` or `sale_tenders`. That wants a
-branch row (`sales.branch_id` is not-null), real `items` rows, and the offline
-outbox, which is Part 4 — so receipt numbers are the counter's own daily series
-kept in `localStorage`, and `/app/sales` is still a placeholder. The items the
-till rings up are `SAMPLE_ITEMS`, the same rows Products & stock shows, so the
-two screens cannot disagree about what is on the shelf.
+## The register
+
+A shop has as many counters as `subscriptions.max_registers` allows, each with
+its own receipt series, its own register and its own day-end total.
+`?tab=counter` is a list; `?tab=counter&counter=<id>` is one counter's editor.
+Which counter a tablet bills from is the `flo_counter` cookie beside the rail
+and theme prefs — a device preference, not a user one, because the till by the
+door is the till by the door whoever is standing at it. It is re-checked against
+the shop's open counters on every load.
+
+`app/(app)/app/register/till.tsx` is the till: scan or search, one line per
+item, a running total. `lib/pos/counter.ts` holds every figure on that screen
+and carries no `server-only`, because the till is a client component and the
+Server Actions have to validate against the same lists.
+
+**The browser never decides what anything costs.** It sends item ids and
+quantities; `app/(app)/app/register/actions.ts` re-prices every line from the
+catalog and recomputes the total with the same `billOf` the screen used. The
+write is `public.record_sale` — one security-definer function, one transaction —
+which claims the counter's next receipt number and inserts the sale, its lines
+and its tender together. A number claimed against a sale that then failed to
+insert is a hole in the shop's series. `saleId` is minted in the browser so a
+retry replays instead of recording twice.
+
+When that write fails the payment sheet says so and offers to print anyway. A
+sale printed that way carries an unmistakable `UNSAVED-` number, is stamped NOT
+RECORDED on the roll, and is not in the takings — the shop keeps selling and
+nothing lies about what was counted.
+
+Printing goes through the `@media print` block at the foot of `globals.css`: the
+receipt element is left visible and everything else is hidden, so what is on
+screen is what comes off the roll. `@page` is mounted in `receipt.tsx` rather
+than in the stylesheet, because it cannot be scoped and would otherwise set the
+marketing site's pages to 80 mm too.
+
+`sales.business_day` is stamped once by the register from the shop's own
+`day_ends_at`, so a dhaba that shuts at 1 am gets its last hour on the day it
+opened and no report re-derives that window. `/app/sales` reads it: each
+counter's cash, card and total, then all counters together.
+
+Still not real: the items the till rings up are `SAMPLE_ITEMS`, so
+`sale_lines.item_id` is always null and `name_snapshot` carries the line. There
+is no offline outbox, no shift, and no reprint or returns — `sync_outbox` and
+`shifts` exist in the schema and nothing writes them.

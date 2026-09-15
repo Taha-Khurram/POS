@@ -140,7 +140,9 @@ export function Till({
           id: item.id,
           name: item.name,
           urdu: item.urdu,
-          unit: unitShort(item.unit),
+          // The catalog's own unit, which is what `sale_lines.unit` stores.
+          // Shortened to "pc" or "kg" only where it is shown.
+          unit: item.unit,
           quantity: 1,
           price: item.price,
           taxRate: item.taxRate,
@@ -517,7 +519,7 @@ export function Till({
                         </button>
 
                         <span className="ml-0.5 text-[0.75rem] text-graphite-500">
-                          {line.unit}
+                          {unitShort(line.unit)}
                         </span>
                       </div>
 
@@ -621,7 +623,7 @@ function SaleDone({
 }: {
   sale: Sale;
   shop: ShopProfile;
-  counter: CounterSettings;
+  counter: Counter;
   settings: ShopSettings;
   onDone: () => void;
 }) {
@@ -759,7 +761,7 @@ function QuantityInput({
         onBlur={() => setDraft(null)}
         inputMode={line.fractional ? "decimal" : "numeric"}
         autoComplete="off"
-        aria-label={`${line.name} quantity in ${line.unit}`}
+        aria-label={`${line.name} quantity in ${unitShort(line.unit)}`}
       />
     </label>
   );

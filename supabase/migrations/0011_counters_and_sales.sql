@@ -41,6 +41,10 @@ alter table public.counters
 
 alter table public.counters add constraint counters_pkey primary key (id);
 
+-- Postgres keeps the NOT NULL when a primary key is dropped, but rule 1 from
+-- 0001 is not something to hold by inheritance. Stated outright.
+alter table public.counters alter column tenant_id set not null;
+
 -- The prefix is what tells two counters' receipts apart, so it has to be
 -- unique within the shop or the series is decoration. It is already
 -- upper-case-only by check constraint, so no case folding is needed here.
