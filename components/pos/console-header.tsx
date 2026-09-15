@@ -66,10 +66,10 @@ export function ConsoleHeader({
 
   return (
     <header className="pos-topbar">
-      {/* The artwork is white with a transparent ground, so on a white bar it
-          sits on a plate rather than being recoloured. */}
+      {/* The plate is the console's deep violet in both themes, so this is one
+          of the few places that still wants the white cut of the wordmark. */}
       <Link href="/app" className="pos-logo-plate hidden sm:grid" aria-label="Flo">
-        <FloMark className="h-4 w-auto" priority />
+        <FloMark className="h-4 w-auto" priority tone="white" />
       </Link>
 
       {/* Below lg the rail is a drawer, so the same corner does two jobs. */}

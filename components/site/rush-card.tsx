@@ -66,19 +66,19 @@ export function RushCard() {
                     {/* String */}
                     <span
                       aria-hidden
-                      className="w-px shrink-0 bg-gradient-to-b from-white/5 via-iris-300/25 to-iris-300/45"
+                      className="w-px shrink-0 bg-gradient-to-b from-ink-700 via-iris-400/40 to-iris-500/60"
                       style={{ height: tag.drop }}
                     />
                     {/* Bead where the string meets the tag */}
                     <span
                       aria-hidden
-                      className="-mb-1 h-1.5 w-1.5 rounded-full bg-iris-200 shadow-[0_0_10px_2px_rgb(165_180_252/0.55)]"
+                      className="-mb-1 h-1.5 w-1.5 rounded-full bg-iris-500 shadow-[0_0_10px_2px_rgb(111_82_220/0.35)]"
                     />
                     <span
                       className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 font-display text-[0.6875rem] font-medium transition-transform duration-500 ease-[var(--ease-out-back)] hover:scale-105 sm:text-xs ${
                         tag.accent
                           ? "border border-iris-200/40 bg-iris-600 text-white shadow-[0_10px_28px_-10px_rgb(99_102_241/0.9)]"
-                          : "border border-white/10 bg-ink-750/85 text-mist-200 shadow-[0_10px_26px_-14px_rgb(0_0_0/0.9)] backdrop-blur-sm"
+                          : "border border-ink-600 bg-ink-750/85 text-mist-200 shadow-[0_10px_26px_-14px_rgb(33_21_102/0.25)] backdrop-blur-sm"
                       }`}
                     >
                       {tag.text}

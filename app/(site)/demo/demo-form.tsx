@@ -207,7 +207,7 @@ export function DemoForm() {
       </div>
 
       <div className="relative mt-7 flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
-        {state.error ? <p className="text-[0.75rem] text-flare-300">{state.error}</p> : null}
+        {state.error ? <p className="text-[0.75rem] text-flare-400">{state.error}</p> : null}
         <p className="text-[0.75rem] text-mist-500">
           No advance, no obligation. We reply within one working day.
         </p>

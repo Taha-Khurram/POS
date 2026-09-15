@@ -32,8 +32,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#06040f",
-  colorScheme: "dark",
+  // The public site is what a phone browser tints its chrome from, and it is
+  // white. /app sets `color-scheme` itself on `.pos-root`, in both themes.
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 /**

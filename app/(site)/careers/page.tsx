@@ -201,7 +201,7 @@ export default function CareersPage() {
                     </p>
                   </div>
 
-                  <span className="flex shrink-0 items-center gap-2 font-display text-[0.8125rem] font-semibold text-iris-300">
+                  <span className="flex shrink-0 items-center gap-2 font-display text-[0.8125rem] font-semibold text-iris-600">
                     Apply
                     <svg
                       viewBox="0 0 16 16"

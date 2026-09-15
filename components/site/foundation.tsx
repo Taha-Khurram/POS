@@ -115,7 +115,7 @@ function Card({
         className={`fan-card group relative flex h-full flex-col items-center overflow-hidden rounded-[22px] p-5 text-center sm:min-h-[214px] sm:p-6 ${padClass} ${
           pillar.accent
             ? "border border-iris-200/30 bg-gradient-to-br from-iris-500 to-iris-700 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.3),0_28px_60px_-28px_rgb(79_70_229/0.9)]"
-            : "border border-white/8 bg-gradient-to-b from-ink-750 to-ink-900 shadow-[0_28px_60px_-34px_rgb(4_4_10/0.95)]"
+            : "border border-ink-700 bg-gradient-to-b from-ink-900 to-ink-750 shadow-[0_28px_60px_-34px_rgb(33_21_102/0.22)]"
         }`}
         style={{
           // Rotation applied via CSS var so hover can straighten it.
@@ -124,7 +124,7 @@ function Card({
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent"
+          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-iris-500/35 to-transparent"
         />
 
         <FoundationGlyph kind={pillar.glyph} accent={pillar.accent} />

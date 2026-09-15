@@ -38,17 +38,17 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/or
         <h1 className="heading mt-3">Finish your Flo activation</h1>
         <div className="panel rim mt-8 rounded-[24px] p-6 sm:p-8">
           {error ? <p className="mb-5 rounded-2xl border border-flare-400/30 bg-flare-400/10 px-4 py-3 text-[0.8125rem] text-mist-200">{error}</p> : null}
-          {success ? <p className="mb-5 rounded-2xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-[0.8125rem] text-mist-100">{success}</p> : null}
+          {success ? <p className="mb-5 rounded-2xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-[0.8125rem] text-mist-50">{success}</p> : null}
           <dl className="grid gap-3 text-[0.875rem] sm:grid-cols-2">
             <div><dt className="text-mist-400">Shop</dt><dd className="mt-1 text-mist-50">{order.shop_name}</dd></div>
             <div><dt className="text-mist-400">Status</dt><dd className="mt-1 text-mist-50">{order.status}</dd></div>
             <div><dt className="text-mist-400">Amount</dt><dd className="mt-1 text-mist-50">Rs {Number(order.quoted_price).toLocaleString("en-PK")}</dd></div>
             <div><dt className="text-mist-400">Billing</dt><dd className="mt-1 text-mist-50">{order.billing_cycle}</dd></div>
           </dl>
-          <div className="mt-7 border-t border-white/8 pt-6">
+          <div className="mt-7 border-t border-ink-700 pt-6">
             <h2 className="text-xl font-bold text-mist-50">Pay by bank or wallet</h2>
             <p className="mt-3 text-[0.875rem] leading-relaxed text-mist-300">Send the exact amount to your Flo payment account, and include {order.reference} in the transfer reference. Then upload the screenshot below.</p>
-            <p className="mt-4 rounded-2xl border border-white/8 bg-white/2 p-4 text-[0.875rem] text-mist-200">Bank details will be confirmed by Flo support on WhatsApp before you transfer.</p>
+            <p className="mt-4 rounded-2xl border border-ink-700 bg-ink-900 p-4 text-[0.875rem] text-mist-200">Bank details will be confirmed by Flo support on WhatsApp before you transfer.</p>
           </div>
           <form action={uploadPaymentProof} className="mt-7">
             <input type="hidden" name="reference" value={order.reference} />

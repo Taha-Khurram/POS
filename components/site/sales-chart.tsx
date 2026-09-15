@@ -128,12 +128,12 @@ export function SalesChart() {
         <div
           role="tablist"
           aria-label="Date range"
-          className="relative flex items-center gap-0.5 rounded-full border border-white/8 bg-white/[0.03] p-0.5"
+          className="relative flex items-center gap-0.5 rounded-full border border-ink-700 bg-ink-850 p-0.5"
         >
           {/* Sliding pill sits behind the labels */}
           <span
             aria-hidden
-            className="absolute inset-y-0.5 rounded-full bg-iris-600/85 shadow-[0_4px_14px_-6px_rgb(79_70_229/0.9)] transition-[left,width] duration-500 ease-[var(--ease-out-back)]"
+            className="absolute inset-y-0.5 rounded-full bg-iris-600/85 shadow-[0_4px_14px_-6px_rgb(59_40_204/0.55)] transition-[left,width] duration-500 ease-[var(--ease-out-back)]"
             style={{
               left: `calc(${(active * 100) / RANGES.length}% + 2px)`,
               width: `calc(${100 / RANGES.length}% - 4px)`,
@@ -176,8 +176,8 @@ export function SalesChart() {
             >
               <defs>
                 <linearGradient id="chart-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#9b85ea" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#9b85ea" stopOpacity="0" />
+                  <stop offset="0%" stopColor="var(--color-iris-500)" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="var(--color-iris-500)" stopOpacity="0" />
                 </linearGradient>
               </defs>
 
@@ -206,7 +206,7 @@ export function SalesChart() {
                 ref={compareRef}
                 d={comparePath}
                 fill="none"
-                stroke="#f472b6"
+                stroke="var(--color-mist-400)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -216,7 +216,7 @@ export function SalesChart() {
                 ref={primaryRef}
                 d={primaryPath}
                 fill="none"
-                stroke="#9b85ea"
+                stroke="var(--color-iris-600)"
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -230,14 +230,14 @@ export function SalesChart() {
                   cx={marker.x}
                   cy={marker.y}
                   r="8"
-                  fill="rgb(155 133 234 / 0.18)"
+                  fill="rgb(111 82 220 / 0.16)"
                 />
                 <circle
                   cx={marker.x}
                   cy={marker.y}
                   r="3.5"
-                  fill="#dcd4ff"
-                  stroke="#3b28cc"
+                  fill="var(--color-iris-200)"
+                  stroke="var(--color-iris-700)"
                   strokeWidth="1.5"
                 />
               </g>
@@ -248,7 +248,7 @@ export function SalesChart() {
               key={`callout-${range.id}`}
               className={`pointer-events-none absolute z-10 -translate-x-1/2 ${
                 markerHigh ? "translate-y-[34%]" : "-translate-y-[130%]"
-              } rounded-lg border border-white/10 bg-ink-750/95 px-2 py-1.5 text-center whitespace-nowrap shadow-[0_10px_30px_-14px_rgb(0_0_0/0.9)] backdrop-blur-sm [animation:fade-up_0.7s_var(--ease-out-back)_1.35s_both]`}
+              } rounded-lg border border-ink-600 bg-ink-950/95 px-2 py-1.5 text-center whitespace-nowrap shadow-[0_10px_30px_-14px_rgb(33_21_102/0.35)] backdrop-blur-sm [animation:fade-up_0.7s_var(--ease-out-back)_1.35s_both]`}
               style={{
                 left: `${(marker.x / W) * 100}%`,
                 top: `${(marker.y / H) * 100}%`,

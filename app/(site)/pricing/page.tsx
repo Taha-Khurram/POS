@@ -199,7 +199,7 @@ export default function PricingPage() {
 
                 <ul
                   className={`relative mt-7 grid gap-2.5 border-t pt-5 ${
-                    plan.featured ? "border-white/20" : "border-white/6"
+                    plan.featured ? "border-white/20" : "border-ink-700"
                   }`}
                 >
                   {plan.features.map((feature) => (
@@ -217,7 +217,7 @@ export default function PricingPage() {
                         <path
                           d="M3 8.4 6.4 11.8 13 5"
                           fill="none"
-                          stroke={plan.featured ? "#fff" : "#c4b6fb"}
+                          stroke={plan.featured ? "#fff" : "var(--color-iris-600)"}
                           strokeWidth="2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -240,7 +240,7 @@ export default function PricingPage() {
               Running more than ten branches, or a franchise network?{" "}
               <Link
                 href="/demo"
-                className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
+                className="font-medium text-iris-600 transition-colors duration-300 hover:text-iris-500"
               >
                 Talk to sales
               </Link>{" "}
@@ -302,7 +302,7 @@ export default function PricingPage() {
                   {faq.q}
                   <span
                     aria-hidden
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/12 text-mist-300 transition-transform duration-500 ease-[var(--ease-out-back)] group-open:rotate-45"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-ink-600 text-mist-300 transition-transform duration-500 ease-[var(--ease-out-back)] group-open:rotate-45"
                   >
                     +
                   </span>

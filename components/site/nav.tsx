@@ -109,7 +109,7 @@ export function Nav() {
               aria-expanded={menuOpen}
               aria-controls="mobile-menu"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
-              className="relative grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 transition-colors duration-300 hover:border-iris-300/40 lg:hidden"
+              className="relative grid h-10 w-10 place-items-center rounded-full border border-ink-600 bg-ink-950 transition-colors duration-300 hover:border-iris-500/50 lg:hidden"
             >
               <span className="sr-only">Menu</span>
               <span
@@ -143,16 +143,16 @@ export function Nav() {
             opacity: menuOpen ? 1 : 0,
           }}
         >
-          <ul className="mt-3 grid gap-1 border-t border-white/8 px-2 pt-3 pb-2">
+          <ul className="mt-3 grid gap-1 border-t border-ink-700 px-2 pt-3 pb-2">
             {LINKS.map((link, index) => (
               <li key={link.label}>
                 <Link
                   href={link.href}
                   aria-current={isCurrent(link.href) ? "page" : undefined}
                   onClick={() => setMenuOpen(false)}
-                  className={`block rounded-2xl px-4 py-3 font-display text-[0.9375rem] transition-colors duration-300 hover:bg-white/5 hover:text-mist-50 ${
+                  className={`block rounded-2xl px-4 py-3 font-display text-[0.9375rem] transition-colors duration-300 hover:bg-ink-850 hover:text-mist-50 ${
                     isCurrent(link.href)
-                      ? "bg-white/5 text-mist-50"
+                      ? "bg-ink-850 text-mist-50"
                       : "text-mist-300"
                   }`}
                   style={{

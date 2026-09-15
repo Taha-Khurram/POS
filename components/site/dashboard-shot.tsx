@@ -12,15 +12,15 @@ import { Tilt } from "@/components/motion/tilt";
  * your own product drifts the moment the product moves, and drifts silently,
  * because nothing links the two files. This cannot: it is the product.
  *
- * The dark console rather than the default light one, because the hero is dark
- * and the violet carries straight through from the page into the window. The
- * light counter is captured too (`dashboard-light.png`) for anywhere on the
- * site that wants the till as a shopkeeper actually meets it.
+ * The light console — the one a shopkeeper actually meets, and now also the one
+ * the page around it is dressed as, so the violet carries straight through from
+ * the hero into the window. The night console is captured too
+ * (`dashboard-dark.png`) for anywhere that wants to show the 11pm till.
  */
 
 /** Viewport 1280×820 at 2x, straight from `scripts/shots.mjs`. */
 const SHOT = {
-  src: "/shots/dashboard-dark.png",
+  src: "/shots/dashboard-light.png",
   width: 2560,
   height: 1640,
 };
@@ -34,7 +34,7 @@ export function DashboardShot() {
         className="glow inset-x-8 -bottom-10 top-16 bg-iris-600/20 blur-[80px]"
       />
 
-      <div className="panel rim relative overflow-hidden rounded-[20px] shadow-[0_50px_120px_-50px_rgb(4_4_10/0.95)] sm:rounded-[26px]">
+      <div className="panel rim relative overflow-hidden rounded-[20px] shadow-[0_50px_120px_-50px_rgb(33_21_102/0.28)] sm:rounded-[26px]">
         <Image
           src={SHOT.src}
           width={SHOT.width}

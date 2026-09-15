@@ -7,7 +7,7 @@ export function Cta() {
     <section className="relative isolate overflow-hidden pt-8 pb-28 sm:pb-36">
       {/* ---------- Light pool ---------- */}
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-x-0 bottom-0 h-[78%] bg-[radial-gradient(80%_100%_at_50%_100%,#312e81_0%,#1b1b45_38%,#0a0a16_70%,transparent_100%)]" />
+        <div className="absolute inset-x-0 bottom-0 h-[78%] bg-[radial-gradient(80%_100%_at_50%_100%,var(--wash-near)_0%,var(--wash-mid)_38%,var(--wash-far)_70%,transparent_100%)]" />
         <div className="stars absolute inset-0 opacity-80" />
 
         {/* Beam behind the button */}
@@ -16,7 +16,7 @@ export function Cta() {
           className="absolute bottom-[30%] left-1/2 h-[3px] w-[46rem] max-w-[92vw] -translate-x-1/2 blur-[2px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(220 212 255 / 0.65) 45%, rgb(255 255 255 / 0.85) 50%, rgb(220 212 255 / 0.65) 55%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(111 82 220 / 0.45) 45%, rgb(59 40 204 / 0.75) 50%, rgb(111 82 220 / 0.45) 55%, transparent)",
           }}
         />
 
@@ -24,7 +24,7 @@ export function Cta() {
         {MOTES.map((mote, index) => (
           <span
             key={index}
-            className="absolute rounded-full bg-iris-200"
+            className="absolute rounded-full bg-iris-400"
             style={{
               left: `${mote.x}%`,
               bottom: `${mote.y}%`,

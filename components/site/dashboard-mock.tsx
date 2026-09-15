@@ -8,10 +8,13 @@ import { SalesChart } from "./sales-chart";
 const TABS = ["Overview", "Bills", "Stock", "Khata", "Staff"];
 
 const METERS = [
-  { label: "Cash", value: 38, tint: "#f472b6" },
-  { label: "Card", value: 24, tint: "#c4b6fb" },
-  { label: "Raast & wallets", value: 26, tint: "#9b85ea" },
-  { label: "Udhaar", value: 12, tint: "#776d91" },
+  // Each meter carries its label in white on the fill, so every tint has to
+  // clear 4.5:1 on its own — which the old pink-and-lavender set did against
+  // violet-black and does not against paper.
+  { label: "Cash", value: 38, tint: "var(--color-iris-700)" },
+  { label: "Card", value: 24, tint: "var(--color-iris-600)" },
+  { label: "Raast & wallets", value: 26, tint: "var(--color-iris-500)" },
+  { label: "Udhaar", value: 12, tint: "var(--color-mist-500)" },
 ];
 
 const STATS = [
@@ -21,9 +24,9 @@ const STATS = [
 ];
 
 const FLOW = [
-  { label: "Paid", count: 1234, tint: "#9b85ea" },
-  { label: "Returns", count: 3, tint: "#776d91" },
-  { label: "On udhaar", count: 24, tint: "#f472b6" },
+  { label: "Paid", count: 1234, tint: "var(--color-iris-600)" },
+  { label: "Returns", count: 3, tint: "var(--color-mist-500)" },
+  { label: "On udhaar", count: 24, tint: "var(--color-iris-400)" },
 ];
 
 export function DashboardMock() {
@@ -35,20 +38,20 @@ export function DashboardMock() {
         className="glow inset-x-8 -bottom-10 top-16 bg-iris-600/20 blur-[80px]"
       />
 
-      <div className="panel rim relative overflow-hidden rounded-[20px] shadow-[0_50px_120px_-50px_rgb(4_4_10/0.95)] sm:rounded-[26px]">
+      <div className="panel rim relative overflow-hidden rounded-[20px] shadow-[0_50px_120px_-50px_rgb(33_21_102/0.28)] sm:rounded-[26px]">
         {/* ---------- App chrome ---------- */}
-        <div className="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
             <FloMark className="h-5 w-auto" />
           </div>
 
-          <div className="hidden items-center gap-0.5 rounded-full border border-white/8 bg-white/[0.03] p-0.5 md:flex">
+          <div className="hidden items-center gap-0.5 rounded-full border border-ink-700 bg-ink-850 p-0.5 md:flex">
             {TABS.map((tab, index) => (
               <span
                 key={tab}
                 className={`cursor-default rounded-full px-3 py-1 text-[0.6875rem] transition-colors duration-300 ${
                   index === 0
-                    ? "bg-white/8 text-mist-50"
+                    ? "bg-ink-950 text-mist-50 shadow-[0_1px_2px_rgb(33_21_102/0.10)]"
                     : "text-mist-400 hover:text-mist-200"
                 }`}
               >
@@ -103,7 +106,7 @@ export function DashboardMock() {
             <div className="min-w-[240px] flex-1">
               <h3 className="font-display text-lg font-bold sm:text-xl">
                 Assalam-o-alaikum,{" "}
-                <span className="text-iris-300">Bilal</span>
+                <span className="text-iris-600">Bilal</span>
               </h3>
 
               <div className="mt-3.5 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
@@ -137,7 +140,7 @@ export function DashboardMock() {
           {/* ---------- Lower row ---------- */}
           <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.9fr)_minmax(0,1fr)]">
             {/* Order flow */}
-            <div className="rounded-2xl border border-white/6 bg-white/[0.02] p-3.5">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-3.5">
               <h4 className="font-display text-[0.8125rem] font-semibold text-mist-200">
                 Bill flow
               </h4>
@@ -145,7 +148,7 @@ export function DashboardMock() {
                 {FLOW.map((row) => (
                   <li
                     key={row.label}
-                    className="flex items-center justify-between rounded-xl border border-white/6 bg-ink-800/80 px-2.5 py-2 transition-colors duration-300 hover:border-iris-300/25 hover:bg-ink-750"
+                    className="flex items-center justify-between rounded-xl border border-ink-700 bg-ink-800/80 px-2.5 py-2 transition-colors duration-300 hover:border-iris-400/45 hover:bg-ink-750"
                   >
                     <span className="flex items-center gap-1.5 text-[0.6875rem] text-mist-300">
                       <span
@@ -154,7 +157,7 @@ export function DashboardMock() {
                       />
                       {row.label}
                     </span>
-                    <span className="font-display text-[0.6875rem] font-semibold text-mist-100">
+                    <span className="font-display text-[0.6875rem] font-semibold text-mist-50">
                       <CountUp to={row.count} delay={600} />
                     </span>
                   </li>
@@ -167,7 +170,7 @@ export function DashboardMock() {
             </div>
 
             {/* Chart */}
-            <div className="rounded-2xl border border-white/6 bg-white/[0.02] p-3.5">
+            <div className="rounded-2xl border border-ink-700 bg-ink-900 p-3.5">
               <SalesChart />
             </div>
 
@@ -237,7 +240,7 @@ export function DashboardMock() {
 
 function IconButton({ children }: { children: React.ReactNode }) {
   return (
-    <span className="grid h-6 w-6 place-items-center rounded-full border border-white/8 bg-white/[0.03] text-mist-400 transition-colors duration-300 hover:border-iris-300/35 hover:text-mist-100">
+    <span className="grid h-6 w-6 place-items-center rounded-full border border-ink-700 bg-ink-850 text-mist-400 transition-colors duration-300 hover:border-iris-400/50 hover:text-mist-50">
       {children}
     </span>
   );
@@ -257,7 +260,7 @@ function Meter({
   return (
     <div>
       <p className="text-[0.5625rem] text-mist-500">{label}</p>
-      <div className="mt-1.5 h-4 overflow-hidden rounded-full bg-white/6">
+      <div className="mt-1.5 h-4 overflow-hidden rounded-full bg-ink-800">
         <div
           className="flex h-full items-center justify-center rounded-full font-display text-[0.5rem] font-bold text-white"
           style={{

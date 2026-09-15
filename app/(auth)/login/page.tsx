@@ -60,7 +60,7 @@ export default function LoginPage() {
   return (
     <div className="relative isolate grid min-h-dvh lg:grid-cols-[1.05fr_minmax(0,0.95fr)]">
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_20%_0%,#171133_0%,#0a0712_52%,#06040f_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(110%_80%_at_20%_0%,var(--wash-near)_0%,var(--wash-mid)_52%,var(--wash-far)_100%)]" />
         <Starfield className="absolute inset-0 h-full w-full" />
         <div className="glow left-[10%] top-[8%] h-80 w-[36rem] animate-breathe bg-iris-600/20" />
         <div className="glow right-[4%] bottom-[6%] h-72 w-[28rem] bg-iris-500/12" />
@@ -111,7 +111,7 @@ export default function LoginPage() {
         </div>
 
         <dl
-          className="flex flex-wrap gap-x-10 gap-y-5 border-t border-white/10 pt-7"
+          className="flex flex-wrap gap-x-10 gap-y-5 border-t border-ink-600 pt-7"
           style={entrance(620)}
         >
           {PROOF.map((item) => (
@@ -158,7 +158,7 @@ export default function LoginPage() {
             Locked out, or not set up yet?{" "}
             <Link
               href="/demo"
-              className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
+              className="font-medium text-iris-600 transition-colors duration-300 hover:text-iris-500"
             >
               Message us
             </Link>{" "}
@@ -175,7 +175,7 @@ export default function LoginPage() {
             >
               Back to flo.pk
             </Link>
-            <span aria-hidden className="px-2 text-mist-600">
+            <span aria-hidden className="px-2 text-mist-400">
               ·
             </span>
             <Link

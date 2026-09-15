@@ -164,7 +164,7 @@ export function Capabilities() {
               <div className="relative">
                 <h3 className="font-display text-[1.3rem] font-bold leading-tight sm:text-[1.45rem]">
                   Flo AI orders stock like your best munshi —{" "}
-                  <span className="text-iris-300">on its own.</span>
+                  <span className="text-iris-600">on its own.</span>
                 </h3>
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-mist-400">
                   Sees what is running out before Eid, drafts the purchase
@@ -177,7 +177,7 @@ export function Capabilities() {
                   AI
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-800">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-iris-400 to-iris-200"
                       style={{
@@ -244,13 +244,13 @@ const MESSAGES = [
 /** Static, lightweight stand-in for the product UI inside the bento cell. */
 function MiniDashboard() {
   return (
-    <div className="panel overflow-hidden rounded-xl shadow-[0_40px_90px_-40px_rgb(4_4_10/0.95)]">
-      <div className="flex items-center justify-between border-b border-white/6 px-3 py-2">
+    <div className="panel overflow-hidden rounded-xl shadow-[0_40px_90px_-40px_rgb(33_21_102/0.30)]">
+      <div className="flex items-center justify-between border-b border-ink-700 px-3 py-2">
         <div className="flex items-center gap-1.5">
           <FloMark className="h-3.5 w-auto" />
         </div>
         <div className="flex items-center gap-2 text-[0.4375rem] text-mist-500">
-          <span className="rounded-full bg-white/8 px-1.5 py-[2px] text-mist-200">
+          <span className="rounded-full bg-ink-800 px-1.5 py-[2px] text-mist-200">
             Overview
           </span>
           <span>Bills</span>
@@ -262,17 +262,17 @@ function MiniDashboard() {
 
       <div className="p-3">
         <p className="font-display text-[0.6875rem] font-bold text-mist-50">
-          Assalam-o-alaikum, <span className="text-iris-300">Bilal</span>
+          Assalam-o-alaikum, <span className="text-iris-600">Bilal</span>
         </p>
 
         <div className="mt-2 grid grid-cols-4 gap-1.5">
           {[
-            { w: "22%", c: "#f472b6" },
-            { w: "34%", c: "#c4b6fb" },
-            { w: "46%", c: "#9b85ea" },
-            { w: "18%", c: "#776d91" },
+            { w: "22%", c: "var(--color-iris-700)" },
+            { w: "34%", c: "var(--color-iris-600)" },
+            { w: "46%", c: "var(--color-iris-500)" },
+            { w: "18%", c: "var(--color-mist-500)" },
           ].map((bar) => (
-            <div key={bar.c} className="h-2 rounded-full bg-white/6">
+            <div key={bar.c} className="h-2 rounded-full bg-ink-800">
               <div
                 className="h-full rounded-full"
                 style={{ width: bar.w, backgroundColor: bar.c }}
@@ -282,33 +282,33 @@ function MiniDashboard() {
         </div>
 
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
-          <div className="rounded-lg border border-white/6 bg-white/[0.02] p-2">
+          <div className="rounded-lg border border-ink-700 bg-ink-900 p-2">
             {["Paid", "Returns", "Udhaar"].map((row) => (
               <div
                 key={row}
                 className="mt-1 flex items-center justify-between rounded bg-ink-800/70 px-1.5 py-1 first:mt-0"
               >
                 <span className="text-[0.4375rem] text-mist-400">{row}</span>
-                <span className="text-[0.4375rem] font-semibold text-mist-100">
+                <span className="text-[0.4375rem] font-semibold text-mist-50">
                   {row === "Paid" ? "1234" : row === "Returns" ? "3" : "24"}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="rounded-lg border border-white/6 bg-white/[0.02] p-2">
+          <div className="rounded-lg border border-ink-700 bg-ink-900 p-2">
             <svg viewBox="0 0 160 54" className="h-full w-full" aria-hidden>
               <path
                 d="M2 40 C 20 34, 30 16, 46 22 S 74 44, 90 30 S 118 8, 134 18 S 152 30, 158 24"
                 fill="none"
-                stroke="#9b85ea"
+                stroke="var(--color-iris-600)"
                 strokeWidth="1.6"
                 strokeLinecap="round"
               />
               <path
                 d="M2 22 C 22 30, 34 42, 52 36 S 76 16, 94 24 S 122 40, 158 34"
                 fill="none"
-                stroke="#f472b6"
+                stroke="var(--color-mist-400)"
                 strokeWidth="1.6"
                 strokeLinecap="round"
               />

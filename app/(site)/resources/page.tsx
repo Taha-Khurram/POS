@@ -126,7 +126,7 @@ export default function ResourcesPage() {
                 <p className="mt-2 flex-1 text-[0.8125rem] leading-relaxed text-mist-400">
                   {article.copy}
                 </p>
-                <p className="mt-5 border-t border-white/6 pt-4 text-[0.75rem] text-mist-500">
+                <p className="mt-5 border-t border-ink-700 pt-4 text-[0.75rem] text-mist-500">
                   {article.meta}
                 </p>
               </Reveal>

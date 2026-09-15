@@ -133,7 +133,7 @@ export default function SolutionsPage() {
                   </h2>
                   <p
                     className={`mt-2 font-display text-[0.9375rem] font-medium ${
-                      industry.accent ? "text-white/85" : "text-iris-300"
+                      industry.accent ? "text-white/85" : "text-iris-600"
                     }`}
                   >
                     {industry.lede}
@@ -154,7 +154,7 @@ export default function SolutionsPage() {
                       className={`rounded-full px-3 py-1.5 font-display text-[0.6875rem] font-medium ${
                         industry.accent
                           ? "border border-white/30 bg-white/12 text-white"
-                          : "border border-white/10 bg-white/[0.03] text-mist-300"
+                          : "border border-ink-600 bg-ink-850 text-mist-300"
                       }`}
                     >
                       {win}

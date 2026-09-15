@@ -27,7 +27,7 @@ const COLUMNS = [
 
 export function Footer() {
   return (
-    <footer className="relative border-t border-white/6 bg-ink-950/60 py-12">
+    <footer className="relative border-t border-ink-700 bg-ink-950/60 py-12">
       <div className="shell">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
           <div>
@@ -58,7 +58,7 @@ export function Footer() {
           ))}
         </div>
 
-        <p className="mt-10 border-t border-white/6 pt-6 text-center text-[0.75rem] text-mist-500">
+        <p className="mt-10 border-t border-ink-700 pt-6 text-center text-[0.75rem] text-mist-500">
           © {new Date().getFullYear()} Flo. Point of sale for Pakistani retail
           and hospitality.
         </p>

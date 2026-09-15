@@ -30,29 +30,31 @@ export function Hero() {
     <section id="top" className="relative isolate overflow-hidden">
       {/* ---------- Ambient background ---------- */}
       <div aria-hidden className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(120%_75%_at_50%_-10%,#171133_0%,#0a0712_45%,#06040f_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(120%_75%_at_50%_-10%,var(--wash-near)_0%,var(--wash-mid)_45%,var(--wash-far)_100%)]" />
 
         <Starfield className="absolute inset-0 h-full w-full" />
 
-        {/* The comet: a hard core streak, a wide diffuse wedge, and a hot head */}
+        {/* The comet: a hard core streak, a wide diffuse wedge, and a hot head.
+            Violet rather than white-hot — on paper the streak is what shows,
+            not the light in it. */}
         <div
           className="absolute -left-[24%] top-[4%] h-[3px] w-[82%] origin-left rotate-[33deg] blur-[1px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(220 212 255 / 0.25) 14%, rgb(255 255 255 / 0.7) 48%, rgb(255 255 255 / 1) 68%, rgb(220 212 255 / 0.5) 88%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(155 133 234 / 0.22) 14%, rgb(111 82 220 / 0.55) 48%, rgb(59 40 204 / 0.78) 68%, rgb(111 82 220 / 0.32) 88%, transparent)",
           }}
         />
         <div
           className="absolute -left-[28%] top-[-2%] h-[260px] w-[92%] origin-left rotate-[33deg] blur-[64px]"
           style={{
             background:
-              "linear-gradient(90deg, transparent, rgb(111 82 220 / 0.30) 26%, rgb(196 182 251 / 0.50) 62%, rgb(155 133 234 / 0.18) 84%, transparent)",
+              "linear-gradient(90deg, transparent, rgb(111 82 220 / 0.20) 26%, rgb(155 133 234 / 0.34) 62%, rgb(155 133 234 / 0.12) 84%, transparent)",
           }}
         />
-        <div className="glow left-[26%] top-[30%] h-40 w-40 bg-iris-200/45 blur-[52px]" />
+        <div className="glow left-[26%] top-[30%] h-40 w-40 bg-iris-400/30 blur-[52px]" />
         <div className="glow left-[42%] top-[16%] h-[260px] w-[260px] animate-breathe bg-iris-500/25" />
 
-        {/* Vignette so the panel below reads as emerging from the dark */}
+        {/* Fade to the page, so the panel below reads as emerging from it */}
         <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-b from-transparent to-ink-950" />
       </div>
 

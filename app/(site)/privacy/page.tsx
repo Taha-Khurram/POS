@@ -153,7 +153,7 @@ export default function PrivacyPage() {
                   terms of the service, see your order form, or{" "}
                   <Link
                     href="/demo"
-                    className="font-medium text-iris-300 transition-colors duration-300 hover:text-iris-200"
+                    className="font-medium text-iris-600 transition-colors duration-300 hover:text-iris-500"
                   >
                     ask us for a copy
                   </Link>

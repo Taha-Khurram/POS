@@ -125,7 +125,7 @@ export default function ProductsPage() {
                   {module.copy}
                 </p>
 
-                <ul className="mt-5 grid gap-2 border-t border-white/6 pt-4">
+                <ul className="mt-5 grid gap-2 border-t border-ink-700 pt-4">
                   {module.points.map((point) => (
                     <li
                       key={point}

@@ -14,9 +14,18 @@ type Star = {
 
 const STAR_COUNT = 190;
 
+/** Ceiling on a mote's opacity. See the note on the component. */
+const MOTE_ALPHA = 0.42;
+
 /**
- * Drifting starfield with pointer + scroll parallax. Canvas rather than DOM
- * because ~190 independently twinkling nodes is more than compositing wants.
+ * Drifting field of motes with pointer + scroll parallax. Canvas rather than
+ * DOM because ~190 independently twinkling nodes is more than compositing
+ * wants.
+ *
+ * It was literally a starfield when the site was violet-black. On paper the
+ * same drift reads as dust in a shaft of light, so the specks are brand violet
+ * rather than white — and much fainter, because a dark speck on a white page
+ * carries roughly three times the weight of a light one on black.
  */
 export function Starfield({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -86,16 +95,16 @@ export function Starfield({ className }: { className?: string }) {
 
         context.beginPath();
         context.arc(x, y, star.r, 0, Math.PI * 2);
-        context.fillStyle = `rgba(226, 232, 255, ${
-          star.twinkle * flicker * (0.3 + star.depth * 0.7)
+        context.fillStyle = `rgba(59, 40, 204, ${
+          star.twinkle * flicker * (0.3 + star.depth * 0.7) * MOTE_ALPHA
         })`;
         context.fill();
 
         // Brightest few get a soft bloom.
         if (star.depth > 0.86) {
           const glow = context.createRadialGradient(x, y, 0, x, y, star.r * 9);
-          glow.addColorStop(0, "rgba(165, 180, 252, 0.28)");
-          glow.addColorStop(1, "rgba(165, 180, 252, 0)");
+          glow.addColorStop(0, "rgba(111, 82, 220, 0.16)");
+          glow.addColorStop(1, "rgba(111, 82, 220, 0)");
           context.fillStyle = glow;
           context.beginPath();
           context.arc(x, y, star.r * 9, 0, Math.PI * 2);
