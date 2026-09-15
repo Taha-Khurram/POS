@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { IconEmployees, IconStore } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
-import { getEntitlements } from "@/lib/entitlements";
 import {
   getRolePermissions,
   getShopProfile,
@@ -18,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 const TABS = [
-  { id: "store", label: "Store & location", icon: IconStore },
+  { id: "store", label: "Shop & currency", icon: IconStore },
   { id: "roles", label: "Roles & permissions", icon: IconEmployees },
 ] as const;
 
@@ -51,11 +50,10 @@ export default async function SettingsPage({
     return <NotAttached />;
   }
 
-  const [shop, settings, permissions, entitlements] = await Promise.all([
+  const [shop, settings, permissions] = await Promise.all([
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
     getRolePermissions(session.tenantId),
-    getEntitlements(session.tenantId),
   ]);
 
   // The claim says there is a shop but RLS returned nothing. In practice that
@@ -92,12 +90,7 @@ export default async function SettingsPage({
       </nav>
 
       {tab === "store" ? (
-        <StorePanel
-          shop={shop}
-          settings={settings}
-          maxBranches={entitlements?.maxBranches ?? null}
-          readOnly={readOnly}
-        />
+        <StorePanel shop={shop} settings={settings} readOnly={readOnly} />
       ) : (
         <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}

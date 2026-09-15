@@ -8,7 +8,13 @@
  * so a value that slips past this file still cannot reach the table.
  */
 
-export type Option<T extends string> = { id: T; label: string };
+export type Option<T extends string> = {
+  id: T;
+  label: string;
+  /** Rendered as a second line inside the dropdown row. Only worth having
+   *  where the label alone does not say which one to pick. */
+  description?: string;
+};
 
 export const SHOP_TYPES = [
   { id: "kiryana", label: "Kiryana / general store" },
@@ -28,11 +34,24 @@ export const CURRENCIES = [
 ] as const satisfies readonly Option<string>[];
 
 /** How the rupee is written on the receipt. The shop that prints "₨" on a
- *  thermal roll usually finds out the printer cannot. */
+ *  thermal roll usually finds out the printer cannot — which is the one thing
+ *  worth knowing here, so each row carries it. */
 export const CURRENCY_FORMATS = [
-  { id: "rs-prefix", label: "Rs 1,250" },
-  { id: "symbol", label: "₨ 1,250" },
-  { id: "suffix", label: "1,250 PKR" },
+  {
+    id: "rs-prefix",
+    label: "Rs 1,250",
+    description: "Prints on every thermal roll. The safe one.",
+  },
+  {
+    id: "symbol",
+    label: "₨ 1,250",
+    description: "Many 80 mm printers cannot draw this glyph.",
+  },
+  {
+    id: "suffix",
+    label: "1,250 PKR",
+    description: "Unambiguous on an invoice you email.",
+  },
 ] as const satisfies readonly Option<string>[];
 
 export const TIMEZONES = [

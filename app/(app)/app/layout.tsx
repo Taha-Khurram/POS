@@ -1,7 +1,7 @@
 import type { Viewport } from "next";
 import { cookies } from "next/headers";
 
-import type { Branch, Notice } from "@/components/pos/console-header";
+import type { Notice } from "@/components/pos/console-header";
 import {
   RAIL_COOKIE,
   THEME_COOKIE,
@@ -9,6 +9,7 @@ import {
 } from "@/components/pos/console-prefs";
 import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
+import { getShopName } from "@/lib/pos/shop";
 
 export const viewport: Viewport = {
   // orchid-800. The one colour that cannot come from a token — the browser
@@ -19,16 +20,6 @@ export const viewport: Viewport = {
   // this only stops the UA assuming one and painting form controls to match.
   colorScheme: "light dark",
 };
-
-/**
- * The shop the console is dressed as. A fixed label for now: the tenant and
- * branch lookups that used to run here are gone, so the layout makes no
- * database round-trip at all and a signed-in account lands on the dashboard
- * whether or not a shop row exists for it yet. Restore the queries here, not in
- * the pages, when shops come back.
- */
-const SHOP_NAME = "Your shop";
-const BRANCHES: Branch[] = [{ id: "main", label: "Main counter" }];
 
 /**
  * The client's product. Route protection is a layout-level check, not proxy
@@ -42,6 +33,12 @@ const BRANCHES: Branch[] = [{ id: "main", label: "Main counter" }];
  */
 export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   const session = await requireSession();
+
+  // The shop the console is dressed as. One column, read through the shop's own
+  // JWT, and it falls back to a fixed label rather than failing — an account
+  // with no tenant still lands on the dashboard, which is the whole reason the
+  // lookup that used to live here was taken out.
+  const shopName = await getShopName(session.tenantId);
 
   // Both display preferences, read before the first byte so the shell renders
   // at the right width and in the right palette instead of correcting itself a
@@ -75,9 +72,8 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   return (
     <div className="pos-root" data-theme={theme}>
       <ConsoleShell
-        shopName={SHOP_NAME}
+        shopName={shopName}
         email={session.email}
-        branches={BRANCHES}
         notices={notices}
         initialTight={initialTight}
         theme={theme}

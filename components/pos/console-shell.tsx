@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { ConsoleHeader, type Branch, type Notice } from "./console-header";
+import { ConsoleHeader, type Notice } from "./console-header";
 import { RAIL_COOKIE, rememberPref, type ConsoleTheme } from "./console-prefs";
 import { ConsoleSidebar } from "./console-sidebar";
 
@@ -31,7 +31,6 @@ import { ConsoleSidebar } from "./console-sidebar";
 export function ConsoleShell({
   shopName,
   email,
-  branches,
   notices,
   initialTight,
   theme,
@@ -40,7 +39,6 @@ export function ConsoleShell({
   /** The rail's account block. The topbar carries no identity of its own. */
   shopName: string;
   email: string | null;
-  branches: Branch[];
   notices: Notice[];
   initialTight: boolean;
   /** Read from the cookie by the layout, so the first paint is already right. */
@@ -81,7 +79,6 @@ export function ConsoleShell({
           both columns, so the rail begins under it and the wordmark lives in
           the bar rather than at the top of the navigation. */}
       <ConsoleHeader
-        branches={branches}
         notices={notices}
         tight={tight}
         theme={theme}

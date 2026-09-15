@@ -9,13 +9,10 @@ import {
   IconPlus,
   IconRail,
   IconSearch,
-  IconStore,
 } from "./icons";
 import type { ConsoleTheme } from "./console-prefs";
 import { ThemeToggle } from "./theme-toggle";
 import { useDismiss } from "./use-dismiss";
-
-export type Branch = { id: string; label: string };
 
 export type Notice = {
   id: string;
@@ -26,9 +23,9 @@ export type Notice = {
 };
 
 /**
- * The fixed top bar: the wordmark, find something, pick a branch, see what
- * needs attention, and start a sale. It spans the full width of the shell, so
- * the rail hangs beneath it.
+ * The fixed top bar: the wordmark, find something, see what needs attention,
+ * and start a sale. It spans the full width of the shell, so the rail hangs
+ * beneath it.
  *
  * The "New sale" button is the only primary-weight control on the whole screen.
  * That is deliberate — on a counter, the dashboard is what you look at between
@@ -38,16 +35,18 @@ export type Notice = {
  * Who is signed in, and which shop, is not up here. The foot of the rail says
  * both and has the sign-out beside them; a second copy in the corner was one
  * more place for the two to disagree.
+ *
+ * Nor is there a branch tag. It read "Main counter" off a constant for every
+ * shop in the country; the picker comes back when a shop can actually have a
+ * second counter to pick.
  */
 export function ConsoleHeader({
-  branches,
   notices,
   tight,
   theme,
   onToggleRail,
   onOpenDrawer,
 }: {
-  branches: Branch[];
   notices: Notice[];
   tight: boolean;
   theme: ConsoleTheme;
@@ -95,7 +94,7 @@ export function ConsoleHeader({
         <IconRail />
       </button>
 
-      {/* Search. Grows into the space the branch picker gives up on tablets. */}
+      {/* Search. Takes the width the bar has left after the wordmark. */}
       <form
         role="search"
         className="relative min-w-0 flex-1 md:max-w-sm"
@@ -112,26 +111,6 @@ export function ConsoleHeader({
       </form>
 
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Branch selector. A single-branch shop gets a label, not a control
-            it can never change — a dead dropdown is worse than no dropdown. */}
-        {branches.length > 1 ? (
-          <label className="hidden sm:block">
-            <span className="sr-only">Branch</span>
-            <select className="pos-field w-auto" defaultValue={branches[0].id}>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <p className="hidden items-center gap-1.5 px-2 text-[0.8125rem] text-graphite-700 sm:flex">
-            <IconStore className="h-4 w-4 text-orchid-600" />
-            {branches[0]?.label ?? "Main counter"}
-          </p>
-        )}
-
         <ThemeToggle initial={theme} />
 
         <div className="relative" ref={bellRef}>

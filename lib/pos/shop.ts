@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 import {
   CURRENCIES,
@@ -71,6 +72,36 @@ export async function getShopProfile(
     strn: data.strn,
   };
 }
+
+/** What the console is dressed as when there is no shop row to read. */
+export const FALLBACK_SHOP_NAME = "Your shop";
+
+/**
+ * Just the name, for the chrome.
+ *
+ * The rail's account block is on every `/app` page, so this is deliberately one
+ * column and nothing else rather than a `getShopProfile()` the layout would
+ * throw eight fields of away. Cached for the request, so a page that also asks
+ * costs no second round-trip.
+ *
+ * A null tenant, or a row RLS will not return, falls back to the label the
+ * layout used to hard-code — an account that is not attached to a shop yet
+ * still reaches the dashboard, and that stays true.
+ */
+export const getShopName = cache(
+  async (tenantId: string | null): Promise<string> => {
+    if (!tenantId) return FALLBACK_SHOP_NAME;
+
+    const supabase = createClient(await cookies());
+    const { data } = await supabase
+      .from("tenants")
+      .select("shop_name")
+      .eq("id", tenantId)
+      .maybeSingle();
+
+    return data?.shop_name ?? FALLBACK_SHOP_NAME;
+  },
+);
 
 /**
  * Currency and clock. A shop with no row reads the application defaults rather

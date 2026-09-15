@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
+import { SelectField } from "@/components/pos/select-field";
 import {
   CURRENCIES,
   CURRENCY_FORMATS,
@@ -30,6 +31,7 @@ export function CurrencyClockForm({
   readOnly: boolean;
 }) {
   const [state, action, pending] = useActionState(saveCurrencyClock, IDLE);
+  const locked = readOnly || pending;
 
   return (
     <form action={action}>
@@ -38,109 +40,56 @@ export function CurrencyClockForm({
         caption="How money is written, and where the day is cut."
         footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
       >
-        <fieldset
-          disabled={readOnly || pending}
-          className="grid gap-4 sm:grid-cols-2"
-        >
-          <label className="block">
-            <span className="pos-label">Currency</span>
-            <select
-              name="currency"
-              className="pos-field"
-              defaultValue={settings.currency}
-            >
-              {CURRENCIES.map((currency) => (
-                <option key={currency.id} value={currency.id}>
-                  {currency.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">
+          <SelectField
+            name="currency"
+            label="Currency"
+            value={settings.currency}
+            options={CURRENCIES}
+            disabled={locked}
+          />
 
-          <label className="block">
-            <span className="pos-label">Written as</span>
-            <select
-              name="currency_format"
-              className="pos-field"
-              defaultValue={settings.currencyFormat}
-            >
-              {CURRENCY_FORMATS.map((style) => (
-                <option key={style.id} value={style.id}>
-                  {style.label}
-                </option>
-              ))}
-            </select>
-            <p className="pos-hint">
-              Most 80 mm thermal printers cannot draw ₨. Rs is safe everywhere.
-            </p>
-          </label>
+          <SelectField
+            name="currency_format"
+            label="Written as"
+            value={settings.currencyFormat}
+            options={CURRENCY_FORMATS}
+            disabled={locked}
+          />
 
-          <label className="block">
-            <span className="pos-label">Timezone</span>
-            <select
-              name="timezone"
-              className="pos-field"
-              defaultValue={settings.timezone}
-            >
-              {TIMEZONES.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.label}
-                </option>
-              ))}
-            </select>
-            <p className="pos-hint">
-              Pakistan has not observed daylight saving since 2009, so the
-              offset never moves.
-            </p>
-          </label>
+          <SelectField
+            name="timezone"
+            label="Timezone"
+            value={settings.timezone}
+            options={TIMEZONES}
+            disabled={locked}
+            hint="Pakistan has not observed daylight saving since 2009, so the offset never moves."
+          />
 
-          <label className="block">
-            <span className="pos-label">The sales day ends at</span>
-            <select
-              name="day_ends_at"
-              className="pos-field"
-              defaultValue={settings.dayEndsAt}
-            >
-              {DAY_ENDS.map((end) => (
-                <option key={end.id} value={end.id}>
-                  {end.label}
-                </option>
-              ))}
-            </select>
-            <p className="pos-hint">
-              A dhaba that shuts at 1 am wants that sale on the day it opened.
-            </p>
-          </label>
+          <SelectField
+            name="day_ends_at"
+            label="The sales day ends at"
+            value={settings.dayEndsAt}
+            options={DAY_ENDS}
+            disabled={locked}
+            hint="A dhaba that shuts at 1 am wants that sale on the day it opened."
+          />
 
-          <label className="block">
-            <span className="pos-label">The week starts on</span>
-            <select
-              name="week_starts_on"
-              className="pos-field"
-              defaultValue={settings.weekStartsOn}
-            >
-              {WEEK_STARTS.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {day.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            name="week_starts_on"
+            label="The week starts on"
+            value={settings.weekStartsOn}
+            options={WEEK_STARTS}
+            disabled={locked}
+          />
 
-          <label className="block">
-            <span className="pos-label">Financial year starts</span>
-            <select
-              name="fiscal_year_starts"
-              className="pos-field"
-              defaultValue={settings.fiscalYearStarts}
-            >
-              {FISCAL_YEAR_STARTS.map((start) => (
-                <option key={start.id} value={start.id}>
-                  {start.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            name="fiscal_year_starts"
+            label="Financial year starts"
+            value={settings.fiscalYearStarts}
+            options={FISCAL_YEAR_STARTS}
+            disabled={locked}
+          />
         </fieldset>
       </ChartCard>
     </form>

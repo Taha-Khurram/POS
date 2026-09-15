@@ -192,9 +192,17 @@ address, checked *before* Supabase verifies the password, and every successful
 sign-in lands on `/app` — there is no `next` return path and no role-based
 fork. Delete the constant and its check to open it up.
 
-There is no platform console and no shop lookup. `/app` reads no `tenants` or
-`branches` row: the layout dresses the console from constants and the dashboard
-seeds its sample figures off the signed-in account, so an account with a null
-`tenant_id` still reaches the dashboard. `lib/pos/dashboard.ts` documents the
+There is no platform console. `/app` reads one `tenants` column and nothing
+else: the layout calls `getShopName()` for the rail's account block, and both
+that and the dashboard's sample figures fall back rather than fail, so an
+account with a null `tenant_id` still reaches the dashboard — keep that true.
+Nothing reads `branches`; there is no branch picker and no counters list until
+a shop can actually have a second one. `lib/pos/dashboard.ts` documents the
 queries that replace the sample data, and `Plan.md` has the order the modules
 arrive in.
+
+Settings is real. `tenant_settings` and `role_permissions` (migration `0009`)
+back the currency/clock and permissions cards, read through the shop's own JWT
+in `lib/pos/shop.ts` and written by `app/(app)/app/settings/actions.ts` on the
+service role. Writes are owner-only; `readOnly` on the panels is presentation,
+and the action checks the role again for itself.

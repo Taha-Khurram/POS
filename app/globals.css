@@ -897,6 +897,90 @@
     background-repeat: no-repeat;
   }
 
+  /* A select that is disabled is not a select that is broken. Settings shows a
+     manager the whole screen and lets them change none of it, so the fields
+     have to read as "not yours" rather than as "not loaded". */
+  .pos-field:disabled,
+  .pos-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+    background: var(--lilac-wash);
+  }
+
+  /* ---- Dropdowns ---------------------------------------------------------
+     Settings has seven of them, all closed lists, and the native control draws
+     each one differently on every platform we ship to — a grey Windows box, a
+     blue macOS pill, and on Android a full-screen sheet that hides the field
+     you were reading. This is the same listbox idiom as `.pos-picker` on the
+     dashboard, sized to a form field instead of a toolbar: one shape, one
+     caret, one tick, and the popup can carry a second line the native option
+     cannot.
+
+     It is built from the field's own shape rather than beside it, so a row of
+     inputs and selects lines up to the pixel. */
+
+  .pos-select {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--pale-lilac);
+    background: var(--color-paper-50);
+    /* The field's padding, less the right side the caret occupies. */
+    padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    text-align: left;
+    color: var(--color-graphite-900);
+    cursor: pointer;
+    transition:
+      border-color 0.25s var(--ease-out-soft),
+      background-color 0.25s var(--ease-out-soft),
+      box-shadow 0.25s var(--ease-out-soft);
+  }
+
+  .pos-select:hover:not(:disabled) { border-color: var(--wisteria); }
+
+  .pos-select:focus-visible,
+  .pos-select[aria-expanded="true"] {
+    outline: none;
+    border-color: var(--mulberry);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--amethyst) 28%, transparent);
+  }
+
+  .pos-select-caret {
+    flex: none;
+    color: var(--imperial);
+    transition: transform 0.25s var(--ease-out-soft);
+  }
+
+  .pos-select[aria-expanded="true"] .pos-select-caret { transform: rotate(180deg); }
+
+  /* Anchors the popup, and nothing else — the hint below a field must not be
+     pushed around by a list that is only sometimes there. */
+  .pos-select-wrap { position: relative; }
+
+  /* Left-aligned and exactly as wide as the trigger, unlike `.pos-menu`, which
+     hangs off the right edge of a toolbar button. */
+  .pos-select-menu {
+    left: 0;
+    right: auto;
+    width: 100%;
+    min-width: 0;
+    max-height: min(17rem, 60dvh);
+    overflow-y: auto;
+    top: calc(100% + 6px);
+  }
+
+  /* The active row is where the arrow keys are, which is not the same thing as
+     the chosen row — so it is drawn with the hover wash and the tick stays on
+     whatever is actually selected. */
+  .pos-option[data-active="true"] {
+    background: var(--lilac-wash);
+    color: var(--indigo-deep);
+  }
+
   .pos-btn {
     display: inline-flex;
     align-items: center;
@@ -1352,7 +1436,11 @@
 
   .pos-option:hover { background: var(--lilac-wash); color: var(--indigo-deep); }
 
-  .pos-option[aria-checked="true"] {
+  /* `aria-checked` is the menuitemradio the dashboard filter uses;
+     `aria-selected` is the listbox one the settings dropdowns use. Same row,
+     same paint, and it wins over the active wash above because it is later. */
+  .pos-option[aria-checked="true"],
+  .pos-option[aria-selected="true"] {
     background: var(--wisteria);
     color: var(--indigo-deep);
     font-weight: 600;
@@ -1676,8 +1764,15 @@
   /* On the counter an input is white on a white card and the border carries
      it. In the dark there is no lighter left to go, so the field goes the
      other way and reads as a well cut into the card. */
-  .pos-root[data-theme="dark"] :is(.pos-field, .pos-picker) {
+  .pos-root[data-theme="dark"] :is(.pos-field, .pos-picker, .pos-select) {
     background-color: var(--color-ink-900);
+  }
+
+  /* The disabled wash is a *lighter* fill on the counter. In a well cut into
+     the card there is no lighter left, so it goes back to the card's own face
+     and the opacity carries the rest. */
+  .pos-root[data-theme="dark"] :is(.pos-field, .pos-select):disabled {
+    background: var(--color-paper-50);
   }
 
   .pos-root[data-theme="dark"] .pos-scrim { background: rgb(6 4 15 / 0.7); }

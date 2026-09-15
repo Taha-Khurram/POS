@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
+import { SelectField } from "@/components/pos/select-field";
 import { SHOP_TYPES } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
 import { saveShopDetails } from "./actions";
@@ -28,6 +29,7 @@ export function ShopDetailsForm({
   readOnly: boolean;
 }) {
   const [state, action, pending] = useActionState(saveShopDetails, IDLE);
+  const locked = readOnly || pending;
 
   return (
     <form action={action}>
@@ -36,10 +38,7 @@ export function ShopDetailsForm({
         caption="What prints at the top of every receipt."
         footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
       >
-        <fieldset
-          disabled={readOnly || pending}
-          className="grid gap-4 sm:grid-cols-2"
-        >
+        <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <span className="pos-label">Shop name</span>
             <input
@@ -95,24 +94,14 @@ export function ShopDetailsForm({
             />
           </label>
 
-          <label className="block">
-            <span className="pos-label">Shop type</span>
-            <select
-              name="shop_type"
-              className="pos-field"
-              defaultValue={shop.shopType}
-            >
-              {SHOP_TYPES.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-            <p className="pos-hint">
-              Sets the register&apos;s default units — plates for a dhaba,
-              kilos for a kiryana.
-            </p>
-          </label>
+          <SelectField
+            name="shop_type"
+            label="Shop type"
+            value={shop.shopType}
+            options={SHOP_TYPES}
+            disabled={locked}
+            hint="Sets the register's default units — plates for a dhaba, kilos for a kiryana."
+          />
 
           <label className="block">
             <span className="pos-label">NTN</span>
