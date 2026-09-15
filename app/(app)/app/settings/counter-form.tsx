@@ -16,14 +16,22 @@ import { IDLE, SaveBar } from "./save-bar";
 /**
  * The counter switch, and what the register does once it is on.
  *
- * One controlled value in an otherwise uncontrolled form: `is_active`, because
- * the card above the fields says in words what the switch means, and a sentence
- * that only updates after a save is a sentence nobody trusts. Everything else
- * is `defaultValue`, the same as the other three cards.
+ * Three controlled values in an otherwise uncontrolled form — the switch and
+ * the two tenders — because the copy beside them reads back what they mean, and
+ * a sentence that only catches up after a save is a sentence nobody trusts.
+ * Everything else is `defaultValue`, the same as the other three cards.
  *
- * The tender checkboxes are the one pairing worth guarding on the client too.
- * The action refuses an open counter that takes neither — but a cashier finding
- * that out is a cashier with a queue, so the card says it here first.
+ * That split is why the sync below exists. React resets an uncontrolled field
+ * to its `defaultValue` once a form action settles, but it cannot reset a value
+ * held in `useState` — so after a save the text fields follow the row that came
+ * back and the checkboxes would follow whatever was last clicked. They agree
+ * when the save succeeds and disagree the moment it is refused: the name snaps
+ * back to what is stored while the switch still reads open. Re-seeding the
+ * three from the server's own row keeps the whole card telling one story.
+ *
+ * The tender pair is also worth guarding on the client. The action refuses an
+ * open counter that takes neither — but a cashier finding that out is a cashier
+ * with a queue, so the card says it here first.
  */
 export function CounterForm({
   counter,
@@ -38,6 +46,18 @@ export function CounterForm({
   const [open, setOpen] = useState(counter.isActive);
   const [cash, setCash] = useState(counter.acceptsCash);
   const [card, setCard] = useState(counter.acceptsCard);
+
+  // Re-seed from the row the server just sent, the way React documents
+  // adjusting state when a prop changes: set it during the render rather than
+  // in an effect, so the card never paints one frame of the old answer.
+  const [seed, setSeed] = useState(counter);
+
+  if (seed !== counter) {
+    setSeed(counter);
+    setOpen(counter.isActive);
+    setCash(counter.acceptsCash);
+    setCard(counter.acceptsCard);
+  }
 
   const noTender = open && !cash && !card;
 

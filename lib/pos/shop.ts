@@ -202,31 +202,36 @@ export async function getRolePermissions(
  * `isActive: false`, so "never set up" and "switched off" arrive at the
  * register as the same thing and it only has to handle one of them.
  *
- * Cached for the request: Settings reads it once and the register reads it
- * once, and neither should pay for the other.
+ * Deliberately NOT wrapped in `cache()`, like the three readers above it.
+ * `cache()` is scoped to the request, and a Server Action plus the re-render
+ * its `revalidatePath` triggers are one request — so a memoised read hands the
+ * re-render the row as it was before the write, and Settings redraws itself
+ * with the values the owner just changed away from. It looks like the save
+ * failed until you navigate away and come back on a fresh request, which is
+ * the worst possible way for a settings screen to be wrong. There is nothing
+ * to dedupe here in any case: Settings reads this once, the register reads it
+ * once, and those are two different requests.
  */
-export const getCounter = cache(
-  async (tenantId: string): Promise<CounterSettings> => {
-    const supabase = createClient(await cookies());
+export async function getCounter(tenantId: string): Promise<CounterSettings> {
+  const supabase = createClient(await cookies());
 
-    const { data } = await supabase
-      .from("counters")
-      .select(
-        "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
-      )
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
+  const { data } = await supabase
+    .from("counters")
+    .select(
+      "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
+    )
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
 
-    if (!data) return DEFAULT_COUNTER;
+  if (!data) return DEFAULT_COUNTER;
 
-    return {
-      name: data.name,
-      isActive: data.is_active,
-      receiptPrefix: data.receipt_prefix,
-      acceptsCash: data.accepts_cash,
-      acceptsCard: data.accepts_card,
-      receiptFooter: data.receipt_footer,
-      autoPrint: data.auto_print,
-    };
-  },
-);
+  return {
+    name: data.name,
+    isActive: data.is_active,
+    receiptPrefix: data.receipt_prefix,
+    acceptsCash: data.accepts_cash,
+    acceptsCard: data.accepts_card,
+    receiptFooter: data.receipt_footer,
+    autoPrint: data.auto_print,
+  };
+}
