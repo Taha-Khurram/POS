@@ -16,6 +16,7 @@ import {
   type StaffRole,
 } from "@/lib/pos/staff-options";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { IDLE, type StaffState } from "./state";
 
 /**
  * Hiring, editing and removing staff.
@@ -32,24 +33,6 @@ import { createAdminClient } from "@/utils/supabase/admin";
  * themselves to owner in two taps and there would be no record of who had
  * agreed to it.
  */
-
-export type StaffState = {
-  error: string | null;
-  savedAt: number | null;
-  /**
-   * The password, exactly once.
-   *
-   * It is never stored — not on `profiles`, not in the audit entry, nowhere.
-   * Supabase keeps a hash and nothing on this side can read it back, so this
-   * round-trip to the owner's screen is the only moment the plain text exists.
-   * That is the honest design rather than a limitation: if the owner loses it
-   * before it reaches the cashier, the fix is to mint a new one, and the shop's
-   * database never held a readable password.
-   */
-  credentials: { name: string; email: string; password: string } | null;
-};
-
-export const IDLE: StaffState = { error: null, savedAt: null, credentials: null };
 
 const fail = (error: string): StaffState => ({ ...IDLE, error });
 const done = (): StaffState => ({ ...IDLE, savedAt: Date.now() });

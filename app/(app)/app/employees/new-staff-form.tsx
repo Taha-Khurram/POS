@@ -11,7 +11,8 @@ import {
   STAFF_ROLES,
   workEmail,
 } from "@/lib/pos/staff-options";
-import { IDLE, addStaff } from "./actions";
+import { addStaff } from "./actions";
+import { IDLE } from "./state";
 import { CredentialsCard } from "./credentials-card";
 
 /**

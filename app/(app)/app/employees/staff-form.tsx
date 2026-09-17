@@ -7,7 +7,8 @@ import { IconAlert, IconCheck, IconKey, IconTrash, IconUser } from "@/components
 import { SelectField } from "@/components/pos/select-field";
 import type { StaffMember } from "@/lib/pos/staff";
 import { STAFF_NAME_MAX, STAFF_ROLES } from "@/lib/pos/staff-options";
-import { IDLE, deleteStaff, resetStaffPassword, saveStaff } from "./actions";
+import { deleteStaff, resetStaffPassword, saveStaff } from "./actions";
+import { IDLE } from "./state";
 import { CredentialsCard } from "./credentials-card";
 
 /**

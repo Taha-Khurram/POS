@@ -61,6 +61,7 @@ export default async function EmployeesPage({
         }
         adding={query.new === "1"}
         shopName={shop.shopName}
+        viewerId={session.userId}
         readOnly={session.tenantRole !== "owner"}
       />
     </div>

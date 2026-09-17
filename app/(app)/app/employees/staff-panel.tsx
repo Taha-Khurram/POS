@@ -1,11 +1,6 @@
 import Link from "next/link";
 
-import {
-  IconChevron,
-  IconEmployees,
-  IconPlus,
-  IconUser,
-} from "@/components/pos/icons";
+import { IconChevron, IconEmployees, IconPlus, IconUser } from "@/components/pos/icons";
 import type { StaffMember } from "@/lib/pos/staff";
 import { staffRoleLabel, type StaffRole } from "@/lib/pos/staff-options";
 import { NewStaffForm } from "./new-staff-form";
@@ -18,12 +13,21 @@ import { StaffForm } from "./staff-form";
  * the page stays a server component, the owner can send "fix Bilal's role" as a
  * link, and a tablet that lost the network mid-tap comes back to the screen it
  * was on.
+ *
+ * Everybody is in one list, including the owner and whoever is reading it, and
+ * the badges say which is which. The earlier draft had a separate "You" card
+ * that drew the owner's row — which is the same thing only while the owner is
+ * the one looking, and introduced a manager to their boss as themselves the
+ * moment one signed in. A card addressed to a person it never checked the
+ * identity of is a card that will eventually be wrong; a badge read off
+ * `viewerId` cannot be.
  */
 export function StaffPanel({
   staff,
   selected,
   adding,
   shopName,
+  viewerId,
   readOnly,
 }: {
   staff: StaffMember[];
@@ -31,6 +35,8 @@ export function StaffPanel({
   selected: StaffMember | null;
   adding: boolean;
   shopName: string;
+  /** Whose session this is, so one row can be marked as theirs. */
+  viewerId: string;
   readOnly: boolean;
 }) {
   if (!readOnly && adding) {
@@ -51,11 +57,9 @@ export function StaffPanel({
     );
   }
 
-  // Everyone but the owner. The owner's own row is drawn separately below,
-  // without controls — it is not a staff account and nothing on this screen may
-  // touch it.
-  const hired = staff.filter((member) => !member.isOwner);
-  const owner = staff.find((member) => member.isOwner) ?? null;
+  // The owner is in the list but is not one of them: they are not an account
+  // this screen made, and not one it can touch.
+  const hired = staff.filter((member) => !member.isOwner).length;
 
   return (
     <div className="space-y-4">
@@ -63,71 +67,53 @@ export function StaffPanel({
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pt-4 pb-3">
           <div className="min-w-0">
             <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
-              Staff accounts
+              Everyone at {shopName}
             </h2>
             <p className="mt-0.5 text-[0.75rem] text-graphite-500">
-              {hired.length === 0
-                ? "Nobody yet. Add one and they can sign in at the counter."
-                : `${hired.length} ${hired.length === 1 ? "person" : "people"}, each with their own work email and password.`}
+              {hired === 0
+                ? "The owner, and nobody else yet."
+                : `The owner, and ${hired} ${hired === 1 ? "person" : "people"} with their own work email and password.`}
             </p>
           </div>
 
           {!readOnly ? (
-            <Link href="/app/employees?new=1" className="pos-btn pos-btn-primary" scroll={false}>
+            <Link
+              href="/app/employees?new=1"
+              className="pos-btn pos-btn-primary"
+              scroll={false}
+            >
               <IconPlus className="h-4 w-4" />
               Add staff
             </Link>
           ) : null}
         </header>
 
-        {hired.length === 0 ? (
-          <p className="px-4 pb-5 text-[0.875rem] leading-relaxed text-graphite-700">
+        <ul className="divide-y divide-orchid-100 border-t border-orchid-100">
+          {staff.map((member) => (
+            <li key={member.id}>
+              <Row
+                member={member}
+                isViewer={member.id === viewerId}
+                readOnly={readOnly}
+              />
+            </li>
+          ))}
+        </ul>
+
+        {hired === 0 && !readOnly ? (
+          <p className="border-t border-orchid-100 px-4 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
             Only your own account can sign in at the moment. Add a cashier and
             Flo makes them a work email and a password — you copy both and send
             them on WhatsApp.
           </p>
-        ) : (
-          <ul className="divide-y divide-orchid-100 border-t border-orchid-100">
-            {hired.map((member) => (
-              <li key={member.id}>
-                <Row member={member} readOnly={readOnly} />
-              </li>
-            ))}
-          </ul>
-        )}
+        ) : null}
+
+        <p className="pos-hint border-t border-orchid-100 px-4 py-3">
+          There is one owner per shop. This screen cannot make another, change
+          that one, or remove it — prices, the plan and the reports belong to it
+          alone.
+        </p>
       </section>
-
-      {owner ? (
-        <section className="pos-card p-4">
-          <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
-            You
-          </h2>
-
-          <div className="mt-2.5 flex items-center gap-3">
-            <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
-              <IconUser className="h-[18px] w-[18px]" />
-            </span>
-
-            <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-2">
-                <span className="truncate font-medium text-graphite-900">
-                  {owner.name}
-                </span>
-                <span className="pos-badge pos-badge-info">Owner</span>
-              </p>
-              <p className="mt-0.5 truncate text-[0.75rem] text-graphite-500">
-                {owner.email ?? "—"}
-              </p>
-            </div>
-          </div>
-
-          <p className="pos-hint mt-3">
-            There is one owner per shop and this screen cannot make another,
-            change this one, or remove it. Everything else here — prices, the
-            plan, the reports — is yours alone.
-          </p>
-        </section>
-      ) : null}
 
       <section className="pos-card p-4">
         <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
@@ -148,63 +134,89 @@ export function StaffPanel({
 }
 
 const NOTES = [
-  "Flo makes the work email from their name and your shop's — bilal@almadina.flopos.pk. Nothing is ever sent to it; it is a login, not an inbox.",
-  "The password is shown once, when you make it. We keep a scrambled copy we cannot read back, so if it is lost you make a new one rather than look the old one up.",
+  "Flo makes the work email from their name and the shop's — bilal@almadina.flopos.pk. Nothing is ever sent to it; it is a login, not an inbox.",
+  "The password is shown once, when it is made. We keep a scrambled copy we cannot read back, so if it is lost the owner makes a new one rather than looks the old one up.",
   "Suspending shuts the account at the door, not just on this screen. A suspended cashier cannot sign in on any device, and switching it back on lets them in with the same password.",
   "What a cashier and a manager may actually do is set once for the whole shop on Settings → Roles & permissions, not per person.",
 ];
 
 function BackLink() {
   return (
-    <Link href="/app/employees" className="pos-btn pos-btn-quiet pos-btn-sm" scroll={false}>
+    <Link
+      href="/app/employees"
+      className="pos-btn pos-btn-quiet pos-btn-sm"
+      scroll={false}
+    >
       <IconChevron className="h-4 w-4 rotate-90" />
       All staff
     </Link>
   );
 }
 
-function Row({ member, readOnly }: { member: StaffMember; readOnly: boolean }) {
+function Row({
+  member,
+  isViewer,
+  readOnly,
+}: {
+  member: StaffMember;
+  isViewer: boolean;
+  readOnly: boolean;
+}) {
+  // The owner's row is never a link and never carries a sign-in badge: it is
+  // not an account this screen manages, and "Can sign in" against it reads like
+  // something that could be switched off.
+  const openable = !readOnly && !member.isOwner;
+
   const body = (
     <>
       <span
         className={`grid h-9 w-9 flex-none place-items-center rounded-xl ${
-          member.isActive
+          member.isOwner || member.isActive
             ? "bg-orchid-200 text-orchid-800"
             : "bg-orchid-50 text-graphite-500"
         }`}
       >
-        <IconEmployees className="h-[18px] w-[18px]" />
+        {member.isOwner ? (
+          <IconUser className="h-[18px] w-[18px]" />
+        ) : (
+          <IconEmployees className="h-[18px] w-[18px]" />
+        )}
       </span>
 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-graphite-900">
-            {member.name}
-          </span>
-          <span
-            className={`pos-badge ${member.isActive ? "pos-badge-good" : "pos-badge-warn"}`}
-          >
-            {member.isActive ? "Can sign in" : "Suspended"}
-          </span>
+          <span className="truncate font-medium text-graphite-900">{member.name}</span>
+
+          {isViewer ? <span className="pos-badge pos-badge-info">You</span> : null}
+
+          {member.isOwner ? null : (
+            <span
+              className={`pos-badge ${member.isActive ? "pos-badge-good" : "pos-badge-warn"}`}
+            >
+              {member.isActive ? "Can sign in" : "Suspended"}
+            </span>
+          )}
         </span>
 
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.75rem] text-graphite-500">
           <span className="truncate font-mono">{member.email ?? "no work email"}</span>
           <span aria-hidden>·</span>
-          <span>{staffRoleLabel(member.role as StaffRole)}</span>
+          <span>
+            {member.isOwner ? "Owner" : staffRoleLabel(member.role as StaffRole)}
+          </span>
         </span>
       </span>
 
-      {readOnly ? null : (
+      {openable ? (
         <IconChevron className="h-4 w-4 flex-none -rotate-90 text-graphite-500" />
-      )}
+      ) : null}
     </>
   );
 
   // A manager gets the roster and no way into it. The action refuses them
   // anyway, but a row that opens an editor where every control is dead is worse
   // than a row that does not open.
-  if (readOnly) {
+  if (!openable) {
     return <span className="flex items-center gap-3 px-4 py-3">{body}</span>;
   }
 
