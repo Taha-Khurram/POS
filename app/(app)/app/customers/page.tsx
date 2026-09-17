@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 
 import { IconCustomers } from "@/components/pos/icons";
 import { ModulePlaceholder } from "@/components/pos/module-placeholder";
-import { requireSession } from "@/lib/auth";
+import { requireModule } from "@/lib/pos/access";
 
 export const metadata: Metadata = {
   title: "Customers & khata",
 };
 
 export default async function CustomersPage() {
-  await requireSession();
+  await requireModule("customers");
 
   return (
     <ModulePlaceholder

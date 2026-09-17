@@ -9,6 +9,7 @@ import {
 } from "@/components/pos/console-prefs";
 import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
+import { getModuleAccess } from "@/lib/pos/access";
 import { getShopName } from "@/lib/pos/shop";
 
 export const viewport: Viewport = {
@@ -38,7 +39,13 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   // JWT, and it falls back to a fixed label rather than failing — an account
   // with no tenant still lands on the dashboard, which is the whole reason the
   // lookup that used to live here was taken out.
-  const shopName = await getShopName(session.tenantId);
+  // Which rail rows this person gets. Permissions decide the working modules
+  // and the role decides the two administration screens — `lib/pos/modules.ts`
+  // is the whole of that reasoning, and every page re-checks it for itself.
+  const [shopName, access] = await Promise.all([
+    getShopName(session.tenantId),
+    getModuleAccess(session),
+  ]);
 
   // Both display preferences, read before the first byte so the shell renders
   // at the right width and in the right palette instead of correcting itself a
@@ -75,6 +82,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
         shopName={shopName}
         email={session.email}
         notices={notices}
+        access={access}
         initialTight={initialTight}
         theme={theme}
       >

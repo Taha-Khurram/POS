@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { requireSession } from "@/lib/auth";
+import { requireModule } from "@/lib/pos/access";
 import { getShopProfile } from "@/lib/pos/shop";
 import { listStaff } from "@/lib/pos/staff";
 import { StaffPanel } from "./staff-panel";
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 export default async function EmployeesPage({
   searchParams,
 }: PageProps<"/app/employees">) {
-  const session = await requireSession();
+  const session = await requireModule("staff");
 
   if (!session.tenantId) return <NotAttached />;
 

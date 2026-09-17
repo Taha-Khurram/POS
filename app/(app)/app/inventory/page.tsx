@@ -7,7 +7,7 @@ import {
   IconTag,
   IconUpload,
 } from "@/components/pos/icons";
-import { requireSession } from "@/lib/auth";
+import { requireModule } from "@/lib/pos/access";
 import { rupees } from "@/lib/format";
 import { SAMPLE_ITEMS, stockState } from "@/lib/pos/catalog";
 import { CatalogPanel } from "./catalog-panel";
@@ -45,7 +45,7 @@ const isTab = (value: unknown): value is TabId =>
 export default async function InventoryPage({
   searchParams,
 }: PageProps<"/app/inventory">) {
-  await requireSession();
+  await requireModule("inventory");
 
   const raw = (await searchParams).tab;
   const tab: TabId = isTab(raw) ? raw : "items";

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import type { ModuleAccess } from "@/lib/pos/modules";
+
 import { ConsoleHeader, type Notice } from "./console-header";
 import { RAIL_COOKIE, rememberPref, type ConsoleTheme } from "./console-prefs";
 import { ConsoleSidebar } from "./console-sidebar";
@@ -32,6 +34,7 @@ export function ConsoleShell({
   shopName,
   email,
   notices,
+  access,
   initialTight,
   theme,
   children,
@@ -40,6 +43,8 @@ export function ConsoleShell({
   shopName: string;
   email: string | null;
   notices: Notice[];
+  /** Which rail rows this session may see. Resolved by the layout. */
+  access: ModuleAccess;
   initialTight: boolean;
   /** Read from the cookie by the layout, so the first paint is already right. */
   theme: ConsoleTheme;
@@ -91,6 +96,7 @@ export function ConsoleShell({
         tight={tight}
         shopName={shopName}
         email={email}
+        access={access}
         onNavigate={() => setDrawer(false)}
         onClose={() => setDrawer(false)}
       />

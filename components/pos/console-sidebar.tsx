@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { signOut } from "@/app/(app)/app/actions";
+import type { ModuleAccess, ModuleKey } from "@/lib/pos/modules";
 import {
   IconClose,
   IconCustomers,
@@ -19,6 +20,8 @@ import {
 } from "./icons";
 
 type Item = {
+  /** What `moduleAccess` decided about this row. */
+  id: ModuleKey;
   href: string;
   label: string;
   icon: (props: IconProps) => React.ReactElement;
@@ -39,24 +42,24 @@ const GROUPS: { label: string; items: Item[] }[] = [
   {
     label: "Counter",
     items: [
-      { href: "/app", label: "Dashboard", icon: IconDashboard },
-      { href: "/app/register", label: "Register", icon: IconRegister },
-      { href: "/app/sales", label: "Sales history", icon: IconSales, soon: true },
+      { id: "dashboard", href: "/app", label: "Dashboard", icon: IconDashboard },
+      { id: "register", href: "/app/register", label: "Register", icon: IconRegister },
+      { id: "sales", href: "/app/sales", label: "Sales history", icon: IconSales, soon: true },
     ],
   },
   {
     label: "Shop",
     items: [
-      { href: "/app/inventory", label: "Products & stock", icon: IconInventory },
-      { href: "/app/customers", label: "Customers & khata", icon: IconCustomers, soon: true },
-      { href: "/app/employees", label: "Staff", icon: IconEmployees },
+      { id: "inventory", href: "/app/inventory", label: "Products & stock", icon: IconInventory },
+      { id: "customers", href: "/app/customers", label: "Customers & khata", icon: IconCustomers, soon: true },
+      { id: "staff", href: "/app/employees", label: "Staff", icon: IconEmployees },
     ],
   },
   {
     label: "Business",
     items: [
-      { href: "/app/reports", label: "Reports", icon: IconReports, soon: true },
-      { href: "/app/settings", label: "Settings", icon: IconSettings },
+      { id: "reports", href: "/app/reports", label: "Reports", icon: IconReports, soon: true },
+      { id: "settings", href: "/app/settings", label: "Settings", icon: IconSettings },
     ],
   },
 ];
@@ -66,6 +69,7 @@ export function ConsoleSidebar({
   tight,
   shopName,
   email,
+  access,
   onNavigate,
   onClose,
 }: {
@@ -75,11 +79,21 @@ export function ConsoleSidebar({
   tight: boolean;
   shopName: string;
   email: string | null;
+  /** Decided on the server by `moduleAccess`. A row this says false to is not
+   *  drawn — and its page returns 404 to anyone who types the path anyway. */
+  access: ModuleAccess;
   onNavigate: () => void;
   onClose: () => void;
 }) {
   const pathname = usePathname();
   const initial = (shopName.trim()[0] ?? "F").toUpperCase();
+
+  // A group whose every row is hidden takes its heading with it, rather than
+  // leaving "BUSINESS" over a gap.
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => access[item.id]),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <aside
@@ -103,7 +117,7 @@ export function ConsoleSidebar({
       </div>
 
       <nav className="hide-scrollbar flex-1 overflow-y-auto px-2.5 pt-4 pb-4">
-        {GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.label} className="mb-5 last:mb-0">
             <p className="pos-rail-section">{group.label}</p>
 

@@ -62,83 +62,58 @@ export function StaffPanel({
   const hired = staff.filter((member) => !member.isOwner).length;
 
   return (
-    <div className="space-y-4">
-      <section className="pos-card">
-        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pt-4 pb-3">
-          <div className="min-w-0">
-            <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
-              Everyone at {shopName}
-            </h2>
-            <p className="mt-0.5 text-[0.75rem] text-graphite-500">
-              {hired === 0
-                ? "The owner, and nobody else yet."
-                : `The owner, and ${hired} ${hired === 1 ? "person" : "people"} with their own work email and password.`}
-            </p>
-          </div>
-
-          {!readOnly ? (
-            <Link
-              href="/app/employees?new=1"
-              className="pos-btn pos-btn-primary"
-              scroll={false}
-            >
-              <IconPlus className="h-4 w-4" />
-              Add staff
-            </Link>
-          ) : null}
-        </header>
-
-        <ul className="divide-y divide-orchid-100 border-t border-orchid-100">
-          {staff.map((member) => (
-            <li key={member.id}>
-              <Row
-                member={member}
-                isViewer={member.id === viewerId}
-                readOnly={readOnly}
-              />
-            </li>
-          ))}
-        </ul>
-
-        {hired === 0 && !readOnly ? (
-          <p className="border-t border-orchid-100 px-4 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
-            Only your own account can sign in at the moment. Add a cashier and
-            Flo makes them a work email and a password — you copy both and send
-            them on WhatsApp.
+    <section className="pos-card">
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pt-4 pb-3">
+        <div className="min-w-0">
+          <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
+            Everyone at {shopName}
+          </h2>
+          <p className="mt-0.5 text-[0.75rem] text-graphite-500">
+            {hired === 0
+              ? "The owner, and nobody else yet."
+              : `The owner, and ${hired} ${hired === 1 ? "person" : "people"} with their own work email and password.`}
           </p>
+        </div>
+
+        {!readOnly ? (
+          <Link
+            href="/app/employees?new=1"
+            className="pos-btn pos-btn-primary"
+            scroll={false}
+          >
+            <IconPlus className="h-4 w-4" />
+            Add staff
+          </Link>
         ) : null}
+      </header>
 
-        <p className="pos-hint border-t border-orchid-100 px-4 py-3">
-          There is one owner per shop. This screen cannot make another, change
-          that one, or remove it — prices, the plan and the reports belong to it
-          alone.
+      <ul className="divide-y divide-orchid-100 border-t border-orchid-100">
+        {staff.map((member) => (
+          <li key={member.id}>
+            <Row
+              member={member}
+              isViewer={member.id === viewerId}
+              readOnly={readOnly}
+            />
+          </li>
+        ))}
+      </ul>
+
+      {hired === 0 && !readOnly ? (
+        <p className="border-t border-orchid-100 px-4 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
+          Only your own account can sign in at the moment. Add a cashier and Flo
+          makes them a work email and a password — you copy both and send them on
+          WhatsApp.
         </p>
-      </section>
+      ) : null}
 
-      <section className="pos-card p-4">
-        <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
-          How staff sign in
-        </h2>
-
-        <ul className="mt-3 space-y-2.5">
-          {NOTES.map((note) => (
-            <li key={note} className="flex gap-2.5 text-[0.875rem] leading-relaxed">
-              <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-orchid-300" />
-              <span className="text-graphite-700">{note}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+      <p className="pos-hint border-t border-orchid-100 px-4 py-3">
+        There is one owner per shop. This screen cannot make another, change that
+        one, or remove it — prices, the plan and the reports belong to it alone.
+      </p>
+    </section>
   );
 }
-
-const NOTES = [
-  "Flo makes the work email from their name and the shop's — bilal@almadina.flopos.pk. Nothing is ever sent to it; it is a login, not an inbox.",
-  "The password is shown once, when it is made. We keep a scrambled copy we cannot read back, so if it is lost the owner makes a new one rather than looks the old one up.",
-  "Suspending shuts the account at the door, not just on this screen. A suspended cashier cannot sign in on any device, and switching it back on lets them in with the same password.",
-  "What a cashier and a manager may actually do is set once for the whole shop on Settings → Roles & permissions, not per person.",
-];
 
 function BackLink() {
   return (

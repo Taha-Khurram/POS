@@ -152,28 +152,6 @@ export function CountersPanel({
           </p>
         ) : null}
       </section>
-
-      <section className="pos-card p-4">
-        <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
-          How a second counter works
-        </h2>
-
-        <ul className="mt-3 space-y-2.5">
-          {NOTES.map((note) => (
-            <li key={note} className="flex gap-2.5 text-[0.875rem] leading-relaxed">
-              <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-orchid-300" />
-              <span className="text-graphite-700">{note}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }
-
-const NOTES = [
-  "Each tablet picks its counter once, on the register, and remembers it. The cashier on counter 2 never sees counter 1's bills.",
-  "Receipt numbers are per counter — ALM-260916-0042 and BACK-260916-0007 on the same day, so a bill says which till it came off.",
-  "Sales & takings totals each counter separately and then together, so you can count one drawer against one number at close.",
-  "A counter that has rung up a sale cannot be deleted, only shut. Its takings stay in the day it took them.",
-];

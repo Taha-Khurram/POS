@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { IconEmployees, IconRegister, IconStore } from "@/components/pos/icons";
-import { requireSession } from "@/lib/auth";
+import { requireModule } from "@/lib/pos/access";
 import { getEntitlements } from "@/lib/entitlements";
 import {
   getRolePermissions,
@@ -46,7 +46,7 @@ const isTab = (value: unknown): value is TabId =>
 export default async function SettingsPage({
   searchParams,
 }: PageProps<"/app/settings">) {
-  const session = await requireSession();
+  const session = await requireModule("settings");
 
   const query = await searchParams;
   const tab: TabId = isTab(query.tab) ? query.tab : "store";
@@ -113,11 +113,6 @@ export default async function SettingsPage({
       ) : (
         <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}
-
-      <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
-        A second counter, the 80 mm printer test page, and your plan and
-        invoices arrive in Part 7 — week of 6 October.
-      </p>
     </div>
   );
 }
