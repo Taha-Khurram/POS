@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { IconChevron, IconEmployees, IconPlus, IconUser } from "@/components/pos/icons";
+import type { Counter } from "@/lib/pos/counter";
 import type { StaffMember } from "@/lib/pos/staff";
 import { staffRoleLabel, type StaffRole } from "@/lib/pos/staff-options";
 import { NewStaffForm } from "./new-staff-form";
@@ -24,6 +25,7 @@ import { StaffForm } from "./staff-form";
  */
 export function StaffPanel({
   staff,
+  counters,
   selected,
   adding,
   shopName,
@@ -31,6 +33,8 @@ export function StaffPanel({
   readOnly,
 }: {
   staff: StaffMember[];
+  /** Every counter the shop has, open or shut, for the assignment select. */
+  counters: Counter[];
   /** The person being edited, if the URL names one of the shop's own. */
   selected: StaffMember | null;
   adding: boolean;
@@ -43,7 +47,7 @@ export function StaffPanel({
     return (
       <div className="space-y-4">
         <BackLink />
-        <NewStaffForm shopName={shopName} />
+        <NewStaffForm shopName={shopName} counters={counters} />
       </div>
     );
   }
@@ -52,7 +56,7 @@ export function StaffPanel({
     return (
       <div className="space-y-4">
         <BackLink />
-        <StaffForm staff={selected} />
+        <StaffForm staff={selected} counters={counters} />
       </div>
     );
   }
@@ -92,6 +96,10 @@ export function StaffPanel({
           <li key={member.id}>
             <Row
               member={member}
+              counterName={
+                counters.find((counter) => counter.id === member.counterId)
+                  ?.name ?? null
+              }
               isViewer={member.id === viewerId}
               readOnly={readOnly}
             />
@@ -130,10 +138,13 @@ function BackLink() {
 
 function Row({
   member,
+  counterName,
   isViewer,
   readOnly,
 }: {
   member: StaffMember;
+  /** Their assigned counter's name, if the owner put them on one. */
+  counterName: string | null;
   isViewer: boolean;
   readOnly: boolean;
 }) {
@@ -179,6 +190,13 @@ function Row({
           <span>
             {member.isOwner ? "Owner" : staffRoleLabel(member.role as StaffRole)}
           </span>
+
+          {counterName ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>{counterName}</span>
+            </>
+          ) : null}
         </span>
       </span>
 

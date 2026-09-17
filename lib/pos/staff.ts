@@ -30,6 +30,8 @@ export type StaffMember = {
   email: string | null;
   phone: string | null;
   role: TenantRole;
+  /** The counter the owner put them on, if any. `0013`. */
+  counterId: string | null;
   isActive: boolean;
   /** The one account that hires, edits and removes. Never editable from here. */
   isOwner: boolean;
@@ -41,7 +43,9 @@ export async function listStaff(tenantId: string): Promise<StaffMember[]> {
 
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, tenant_role, is_active, created_at")
+    .select(
+      "id, full_name, email, phone, tenant_role, counter_id, is_active, created_at",
+    )
     .eq("tenant_id", tenantId)
     .order("created_at");
 
@@ -55,6 +59,7 @@ export async function listStaff(tenantId: string): Promise<StaffMember[]> {
       email: row.email,
       phone: row.phone,
       role: (row.tenant_role ?? "cashier") as TenantRole,
+      counterId: row.counter_id,
       isActive: row.is_active,
       isOwner: row.tenant_role === "owner",
       createdAt: row.created_at,
@@ -72,4 +77,30 @@ export async function getStaffMember(
 ): Promise<StaffMember | null> {
   const roster = await listStaff(tenantId);
   return roster.find((member) => member.id === staffId) ?? null;
+}
+
+/**
+ * The counter this person was put on, if the owner put them on one.
+ *
+ * Read through their own JWT: `profiles_read_own_tenant` lets a user see their
+ * own row whatever their role, which is the whole of what this needs. It is a
+ * separate query from `listStaff` because the register wants one column for one
+ * person and has no business reading its colleagues' rows to get it.
+ *
+ * Not `cache()`d, like everything else in this file and in `shop.ts` — an owner
+ * who reassigns somebody and lands back on the register must not be shown the
+ * counter they just moved them off.
+ */
+export async function getAssignedCounterId(
+  userId: string,
+): Promise<string | null> {
+  const supabase = createClient(await cookies());
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("counter_id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return data?.counter_id ?? null;
 }

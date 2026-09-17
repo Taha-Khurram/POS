@@ -7,6 +7,7 @@ import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
 import { SAMPLE_ITEMS } from "@/lib/pos/catalog";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
+import { getAssignedCounterId } from "@/lib/pos/staff";
 import { CounterPicker } from "./counter-picker";
 import { Till } from "./till";
 
@@ -24,11 +25,21 @@ export const metadata: Metadata = {
  * component. Nothing about the bill is worked out here; the arithmetic is in
  * `lib/pos/counter.ts` so that it holds on a tablet with a bad connection.
  *
- * Which counter is a per-device cookie, not a per-user setting: the till by the
- * door is the till by the door whoever is standing at it. It is re-checked
- * against the shop's own open counters on every load, so a counter that was
- * shut overnight sends the tablet back to the picker rather than to a register
- * whose every sale would be refused.
+ * Which counter, in order: the one the owner put this person on, then the one
+ * this device was set to. The assignment wins because it is the more specific
+ * statement — an owner who says "Bilal bills from counter 2" has said something
+ * about Bilal, and the cookie only ever said something about a tablet. Without
+ * an assignment the cookie resolves exactly as it always did, which is still
+ * right for the shared tablet bolted to the counter by the door.
+ *
+ * The owner can never have an assignment, so their own behaviour is untouched:
+ * the staff editor refuses their row, which is what makes `?pick=1` still mean
+ * what it meant.
+ *
+ * Both are re-checked against the shop's own open counters on every load, so a
+ * counter shut overnight sends the tablet back to the picker — or, for somebody
+ * assigned to it, quietly back to the device's counter — rather than to a
+ * register whose every sale would be refused.
  *
  * The item list is still `SAMPLE_ITEMS`, the same rows Products & stock shows,
  * so the register and the catalog cannot disagree about what is on the shelf.
@@ -41,10 +52,11 @@ export default async function RegisterPage({
 
   if (!session.tenantId) return <NotAttached />;
 
-  const [counters, shop, settings, jar] = await Promise.all([
+  const [counters, shop, settings, assigned, jar] = await Promise.all([
     listCounters(session.tenantId),
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
+    getAssignedCounterId(session.userId),
     cookies(),
   ]);
 
@@ -57,7 +69,12 @@ export default async function RegisterPage({
   if (open.length === 0) return <CounterShut hasShop counters={counters.length} />;
 
   const remembered = jar.get(COUNTER_COOKIE)?.value ?? null;
-  const chosen = open.find((counter) => counter.id === remembered) ?? null;
+
+  // The person first, then the device. `find` on the open list is what makes a
+  // shut assignment fall through rather than strand somebody on a till that
+  // cannot bill — the same re-check the cookie has always had.
+  const mine = open.find((counter) => counter.id === assigned) ?? null;
+  const chosen = mine ?? open.find((counter) => counter.id === remembered) ?? null;
 
   // Which till a device bills from is the owner's call, not the cashier's: a
   // cashier who could re-point the tablet mid-shift could drop a sale into

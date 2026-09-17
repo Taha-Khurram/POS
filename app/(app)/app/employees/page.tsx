@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { requireModule } from "@/lib/pos/access";
-import { getShopProfile } from "@/lib/pos/shop";
+import { getShopProfile, listCounters } from "@/lib/pos/shop";
 import { listStaff } from "@/lib/pos/staff";
 import { StaffPanel } from "./staff-panel";
 
@@ -33,9 +33,10 @@ export default async function EmployeesPage({
 
   const query = await searchParams;
 
-  const [shop, staff] = await Promise.all([
+  const [shop, staff, counters] = await Promise.all([
     getShopProfile(session.tenantId),
     listStaff(session.tenantId),
+    listCounters(session.tenantId),
   ]);
 
   // The claim says there is a shop but RLS returned nothing — in practice the
@@ -53,6 +54,7 @@ export default async function EmployeesPage({
 
       <StaffPanel
         staff={staff}
+        counters={counters}
         // A staff id in the URL that is not one of this shop's simply falls back
         // to the list, the same way an unknown counter does.
         selected={

@@ -82,7 +82,15 @@ function generatePassword(): string {
 // Validation, shared by hiring and editing
 // -----------------------------------------------------------------------------
 
-type Details = { name: string; phone: string | null; role: StaffRole };
+type Details = {
+  name: string;
+  phone: string | null;
+  role: StaffRole;
+  /** The counter id as submitted. Checked against the shop's own before it
+   *  is written — the composite foreign key from `0013` refuses a stranger's
+   *  counter outright, but a clear sentence beats a 23503. */
+  counterId: string | null;
+};
 
 /** The details, or the sentence to put under the form. */
 function readDetails(formData: FormData): Details | string {
@@ -100,7 +108,36 @@ function readDetails(formData: FormData): Details | string {
   const role = text(formData.get("tenant_role"));
   if (!isStaffRole(role)) return "Pick cashier or store manager.";
 
-  return { name, phone: phone || null, role };
+  // "" is the "ask this device" option, which is the absence of an assignment
+  // rather than a counter named the empty string.
+  const counterId = text(formData.get("counter_id")) || null;
+
+  return { name, phone: phone || null, role, counterId };
+}
+
+/**
+ * Is that counter this shop's?
+ *
+ * Any of them, not only the open ones: the select offers shut counters too, so
+ * that an owner shutting a till for the afternoon does not silently unassign
+ * everybody who stands at it. The register is what refuses to bill from a shut
+ * counter, and it already does.
+ */
+async function ownCounter(
+  tenantId: string,
+  counterId: string | null,
+): Promise<boolean> {
+  if (!counterId) return true;
+
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("counters")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", counterId)
+    .maybeSingle();
+
+  return Boolean(data);
 }
 
 /**
@@ -161,7 +198,7 @@ async function ownStaff(tenantId: string, staffId: unknown) {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, tenant_role, is_active")
+    .select("id, full_name, email, phone, tenant_role, counter_id, is_active")
     .eq("tenant_id", tenantId)
     .eq("id", staffId)
     .maybeSingle();
@@ -194,6 +231,10 @@ export async function addStaff(
 
   const details = readDetails(formData);
   if (typeof details === "string") return fail(details);
+
+  if (!(await ownCounter(session.tenantId, details.counterId))) {
+    return fail("That counter is not one of yours. Reload and try again.");
+  }
 
   const supabase = createAdminClient();
 
@@ -236,6 +277,7 @@ export async function addStaff(
     tenant_role: details.role,
     full_name: details.name,
     phone: details.phone,
+    counter_id: details.counterId,
     email,
     created_by: session.userId,
   });
@@ -251,7 +293,12 @@ export async function addStaff(
     subjectId: created.user.id,
     // No password, here or anywhere. The trail records that an account was made
     // and by whom, which is the question it exists to answer.
-    after: { email, tenant_role: details.role, full_name: details.name },
+    after: {
+      email,
+      tenant_role: details.role,
+      full_name: details.name,
+      counter_id: details.counterId,
+    },
   });
 
   revalidatePath("/app/employees");
@@ -296,6 +343,10 @@ export async function saveStaff(
   const details = readDetails(formData);
   if (typeof details === "string") return fail(details);
 
+  if (!(await ownCounter(session.tenantId, details.counterId))) {
+    return fail("That counter is not one of yours. Reload and try again.");
+  }
+
   const isActive = formData.get("is_active") === "on";
 
   const supabase = createAdminClient();
@@ -304,6 +355,7 @@ export async function saveStaff(
     full_name: details.name,
     phone: details.phone,
     tenant_role: details.role,
+    counter_id: details.counterId,
     is_active: isActive,
   };
 

@@ -5,9 +5,11 @@ import { useActionState, useState } from "react";
 import { ChartCard } from "@/components/pos/chart-card";
 import { IconAlert, IconCheck, IconKey, IconTrash, IconUser } from "@/components/pos/icons";
 import { SelectField } from "@/components/pos/select-field";
+import type { Counter } from "@/lib/pos/counter";
 import type { StaffMember } from "@/lib/pos/staff";
 import { STAFF_NAME_MAX, STAFF_ROLES } from "@/lib/pos/staff-options";
 import { deleteStaff, resetStaffPassword, saveStaff } from "./actions";
+import { NO_COUNTER, counterOptions } from "./counter-options";
 import { IDLE } from "./state";
 import { CredentialsCard } from "./credentials-card";
 
@@ -29,7 +31,13 @@ import { CredentialsCard } from "./credentials-card";
  * to the stored row and cannot put `useState` back, so the card would claim
  * they were suspended when they are not.
  */
-export function StaffForm({ staff }: { staff: StaffMember }) {
+export function StaffForm({
+  staff,
+  counters,
+}: {
+  staff: StaffMember;
+  counters: Counter[];
+}) {
   const [state, action, pending] = useActionState(saveStaff, IDLE);
   const [active, setActive] = useState(staff.isActive);
 
@@ -156,6 +164,20 @@ export function StaffForm({ staff }: { staff: StaffMember }) {
                   Takes effect the next time they sign in — the level is stamped
                   into their session, so somebody promoted mid-shift stays a
                   cashier until they sign out and back in.
+                </>
+              }
+            />
+
+            <SelectField
+              name="counter_id"
+              label="Their counter"
+              value={staff.counterId ?? NO_COUNTER}
+              options={counterOptions(counters)}
+              hint={
+                <>
+                  The counter their register opens on. Unlike the role above, it
+                  takes effect on their next page load — it is read from the row,
+                  not from their session.
                 </>
               }
             />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
+import type { Counter } from "@/lib/pos/counter";
 import { SelectField } from "@/components/pos/select-field";
 import { IconAlert, IconPlus } from "@/components/pos/icons";
 import {
@@ -12,6 +13,7 @@ import {
   workEmail,
 } from "@/lib/pos/staff-options";
 import { addStaff } from "./actions";
+import { NO_COUNTER, counterOptions } from "./counter-options";
 import { IDLE } from "./state";
 import { CredentialsCard } from "./credentials-card";
 
@@ -30,7 +32,13 @@ import { CredentialsCard } from "./credentials-card";
  * the first one is taken, which is the only place the answer can actually be
  * settled.
  */
-export function NewStaffForm({ shopName }: { shopName: string }) {
+export function NewStaffForm({
+  shopName,
+  counters,
+}: {
+  shopName: string;
+  counters: Counter[];
+}) {
   const [state, action, pending] = useActionState(addStaff, IDLE);
   const [name, setName] = useState("");
 
@@ -159,6 +167,21 @@ export function NewStaffForm({ shopName }: { shopName: string }) {
                   Roles &amp; permissions
                 </Link>
                 , and applies to everybody at that level.
+              </>
+            }
+          />
+
+          <SelectField
+            name="counter_id"
+            label="Their counter"
+            value={NO_COUNTER}
+            options={counterOptions(counters)}
+            hint={
+              <>
+                The counter their register opens on. Without one they get
+                whatever counter the device is set to, which is right for a
+                shared tablet and wrong for a phone they carry to whichever
+                till is free.
               </>
             }
           />
