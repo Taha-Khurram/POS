@@ -33,6 +33,21 @@ export const THEME_COOKIE = "flo_theme";
  */
 export const COUNTER_COOKIE = "flo_counter";
 
+/**
+ * The last set of notices this device looked at.
+ *
+ * Holds the signature `lib/pos/notices.ts` computes, not a date and not a list
+ * of ids: the bell has nothing to mark read on the server — every notice is
+ * derived from rows that are already there — so "seen" can only mean "the
+ * shop's worries were these when somebody last opened it". The badge comes back
+ * by itself the moment one of them changes.
+ *
+ * A cookie rather than storage for the same reason as the rest of this file:
+ * the layout decides whether the badge is lit before the first byte, so it does
+ * not light up and then go out a frame after hydration.
+ */
+export const NOTICES_COOKIE = "flo_seen";
+
 export type ConsoleTheme = "light" | "dark";
 
 /** A year, path-wide, lax: these are display preferences, not sessions. */

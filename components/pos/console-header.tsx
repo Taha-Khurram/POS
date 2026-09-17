@@ -1,26 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { FloMark } from "@/components/site/flo-mark";
+import type { Notice } from "@/lib/pos/notices";
 import {
   IconBell,
+  IconCheck,
   IconMenu,
   IconPlus,
   IconRail,
   IconSearch,
 } from "./icons";
-import type { ConsoleTheme } from "./console-prefs";
+import {
+  NOTICES_COOKIE,
+  rememberPref,
+  type ConsoleTheme,
+} from "./console-prefs";
 import { ThemeToggle } from "./theme-toggle";
 import { useDismiss } from "./use-dismiss";
-
-export type Notice = {
-  id: string;
-  title: string;
-  detail: string;
-  at: string;
-  tone: "info" | "warn";
-};
 
 /**
  * The fixed top bar: the wordmark, find something, see what needs attention,
@@ -42,12 +41,19 @@ export type Notice = {
  */
 export function ConsoleHeader({
   notices,
+  signature,
+  unseen,
   tight,
   theme,
   onToggleRail,
   onOpenDrawer,
 }: {
+  /** Already filtered to what this person may be told — see `visibleNotices`. */
   notices: Notice[];
+  /** What this exact set of notices hashes to, written to the cookie on open. */
+  signature: string;
+  /** Whether the shop's worries have changed since this device last looked. */
+  unseen: boolean;
   tight: boolean;
   theme: ConsoleTheme;
   onToggleRail: () => void;
@@ -62,7 +68,22 @@ export function ConsoleHeader({
     setOpen: setBellOpen,
   } = useDismiss<HTMLDivElement>();
 
-  const unread = notices.length;
+  // Starts at what the server worked out from the cookie, then follows the
+  // person: opening the bell is what "seen" means, so the badge goes out on the
+  // press rather than on the next navigation.
+  const [seen, setSeen] = useState(!unseen);
+
+  const waiting = notices.length;
+  const lit = waiting > 0 && !seen;
+
+  const openBell = (next: boolean) => {
+    setBellOpen(next);
+
+    if (next && !seen) {
+      setSeen(true);
+      rememberPref(NOTICES_COOKIE, signature);
+    }
+  };
 
   return (
     <header className="pos-topbar">
@@ -116,17 +137,21 @@ export function ConsoleHeader({
         <div className="relative" ref={bellRef}>
           <button
             type="button"
-            onClick={() => setBellOpen(!bellOpen)}
+            onClick={() => openBell(!bellOpen)}
             className="pos-icon-btn relative"
             aria-expanded={bellOpen}
             aria-label={
-              unread > 0 ? `Notifications, ${unread} waiting` : "Notifications"
+              lit
+                ? `Notifications, ${waiting} waiting`
+                : waiting > 0
+                  ? `Notifications, ${waiting}`
+                  : "Notifications, nothing waiting"
             }
           >
             <IconBell />
-            {unread > 0 ? (
+            {lit ? (
               <span className="pos-count absolute top-1.5 right-1.5 h-4 min-w-4 rounded-full px-1">
-                {unread}
+                {waiting}
               </span>
             ) : null}
           </button>
@@ -137,28 +162,22 @@ export function ConsoleHeader({
                 Needs a look
               </p>
 
-              <ul className="max-h-80 overflow-y-auto">
-                {notices.map((notice) => (
-                  <li
-                    key={notice.id}
-                    className="rounded-[9px] px-2.5 py-2 hover:bg-orchid-50"
-                  >
-                    <p className="flex items-center gap-2 text-[0.8125rem] font-medium text-graphite-900">
-                      <span
-                        className={`h-1.5 w-1.5 flex-none rounded-full ${
-                          notice.tone === "warn"
-                            ? "bg-signal-warn"
-                            : "bg-orchid-600"
-                        }`}
-                      />
-                      {notice.title}
-                    </p>
-                    <p className="mt-0.5 pl-3.5 text-[0.75rem] leading-snug text-graphite-500">
-                      {notice.detail} · {notice.at}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              {/* Nothing wrong is a state worth drawing. An empty popover reads
+                  as a screen that failed to load. */}
+              {waiting === 0 ? (
+                <p className="flex items-center gap-2 px-2.5 pt-1 pb-3 text-[0.8125rem] text-graphite-500">
+                  <IconCheck className="h-4 w-4 flex-none text-signal-good" />
+                  Nothing needs a look. Shukriya.
+                </p>
+              ) : (
+                <ul className="max-h-80 overflow-y-auto">
+                  {notices.map((notice) => (
+                    <li key={notice.id}>
+                      <NoticeRow notice={notice} onFollow={() => setBellOpen(false)} />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ) : null}
         </div>
@@ -169,5 +188,55 @@ export function ConsoleHeader({
         </Link>
       </div>
     </header>
+  );
+}
+
+/**
+ * One line of the bell.
+ *
+ * A notice that has somewhere to go is a link, because the first thing anybody
+ * does with "4 items are out of stock" is try to press it. One without — there
+ * are none today, but there will be — stays plain text rather than becoming a
+ * button that does nothing.
+ */
+function NoticeRow({
+  notice,
+  onFollow,
+}: {
+  notice: Notice;
+  onFollow: () => void;
+}) {
+  const body = (
+    <>
+      <p className="flex items-center gap-2 text-[0.8125rem] font-medium text-graphite-900">
+        <span
+          className={`h-1.5 w-1.5 flex-none rounded-full ${
+            notice.tone === "bad"
+              ? "bg-signal-bad"
+              : notice.tone === "warn"
+                ? "bg-signal-warn"
+                : "bg-orchid-600"
+          }`}
+        />
+        {notice.title}
+      </p>
+      <p className="mt-0.5 pl-3.5 text-[0.75rem] leading-snug text-graphite-500">
+        {notice.detail} · {notice.at}
+      </p>
+    </>
+  );
+
+  if (!notice.href) {
+    return <div className="rounded-[9px] px-2.5 py-2">{body}</div>;
+  }
+
+  return (
+    <Link
+      href={notice.href}
+      onClick={onFollow}
+      className="block rounded-[9px] px-2.5 py-2 hover:bg-orchid-50"
+    >
+      {body}
+    </Link>
   );
 }
