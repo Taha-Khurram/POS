@@ -19,6 +19,12 @@ import { listCounters } from "@/lib/pos/shop";
  * open counters. It is a device preference and cannot grant anything on its
  * own — every sale re-reads the counter and re-checks it — but a cookie that
  * can hold a stranger's uuid is still a cookie worth not writing.
+ *
+ * Re-pointing a tablet that is already set up is the owner's call, checked here
+ * and not only by the hidden button: a cashier who could move the device
+ * mid-shift would be moving a sale into another drawer's takings and another
+ * counter's receipt series. Setting up a tablet that has no counter yet is open
+ * to anyone, or a new tablet could not ring up its first sale.
  */
 export async function chooseCounter(formData: FormData): Promise<void> {
   const session = await requireSession();
@@ -33,6 +39,15 @@ export async function chooseCounter(formData: FormData): Promise<void> {
   if (!counter) redirect("/app/register");
 
   const jar = await cookies();
+
+  if (session.tenantRole !== "owner") {
+    const current = jar.get(COUNTER_COOKIE)?.value ?? null;
+    const settled = counters.some(
+      (item) => item.id === current && item.isActive,
+    );
+
+    if (settled) redirect("/app/register");
+  }
 
   // A year, path-wide, lax — the same terms as the rail and the theme. This is
   // a display preference, not a session.

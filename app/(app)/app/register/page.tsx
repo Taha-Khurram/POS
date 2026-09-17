@@ -59,9 +59,16 @@ export default async function RegisterPage({
   const remembered = jar.get(COUNTER_COOKIE)?.value ?? null;
   const chosen = open.find((counter) => counter.id === remembered) ?? null;
 
-  // `?pick=1` is the cashier asking to switch. Without it, one open counter
-  // needs no question — a single-till shop should never see this screen.
-  const switching = (await searchParams).pick === "1";
+  // Which till a device bills from is the owner's call, not the cashier's: a
+  // cashier who could re-point the tablet mid-shift could drop a sale into
+  // another counter's drawer and its receipt series. So `?pick=1` — the ask to
+  // switch — is owner-only. A device that has not been set up yet still gets
+  // the picker whoever unlocks it, or a new tablet could not bill at all.
+  const maySwitch = session.tenantRole === "owner";
+
+  // Without it, one open counter needs no question — a single-till shop should
+  // never see this screen.
+  const switching = maySwitch && (await searchParams).pick === "1";
 
   if (switching || !chosen) {
     if (switching || open.length > 1) {
@@ -84,20 +91,12 @@ export default async function RegisterPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {open.length > 1 ? (
+          {maySwitch && open.length > 1 ? (
             <Link href="/app/register?pick=1" className="pos-btn pos-btn-soft pos-btn-sm">
               <IconRegister className="h-4 w-4" />
               Switch counter
             </Link>
           ) : null}
-
-          <Link
-            href={`/app/settings?tab=counter&counter=${counter.id}`}
-            className="pos-btn pos-btn-quiet pos-btn-sm"
-          >
-            <IconSettings className="h-4 w-4" />
-            Counter settings
-          </Link>
         </div>
       </header>
 
