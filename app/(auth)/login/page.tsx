@@ -40,6 +40,18 @@ const INSIDE: { title: string; detail: string }[] = [
   },
 ];
 
+/**
+ * Why a session ended by itself, in the words of somebody who did not expect
+ * it. Neither says more than the person is entitled to know: the owner made a
+ * decision about their account, and the owner is who they have to ask.
+ */
+const ENDED: Record<string, string> = {
+  removed:
+    "Your account was removed from this shop. Ask the owner if that was not meant to happen.",
+  suspended:
+    "Your account is suspended for now. The owner can switch it back on.",
+};
+
 /** Numbers that mean something at a counter, not vanity metrics. */
 const PROOF: { figure: string; label: string }[] = [
   { figure: "< 2s", label: "to ring up a basket" },
@@ -56,7 +68,13 @@ const PROOF: { figure: string; label: string }[] = [
  * disappearing, because a shopkeeper opening this on a phone at 8am still
  * wants to know they are in the right place before typing a password.
  */
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  // Set by `/logout` when the console ended the session rather than the person
+  // — they are looking at a login screen they did not ask for, and a screen
+  // that says nothing about why is a WhatsApp message to the owner either way.
+  const { ended } = await searchParams;
+  const notice = typeof ended === "string" ? ENDED[ended] : undefined;
+
   return (
     <div className="relative isolate grid min-h-dvh lg:grid-cols-[1.05fr_minmax(0,0.95fr)]">
       <div aria-hidden className="absolute inset-0 -z-10">
@@ -144,6 +162,15 @@ export default function LoginPage() {
               <p className="mt-1.5 text-[0.875rem] text-mist-400">
                 Sign in and we will take you straight to the dashboard.
               </p>
+
+              {notice ? (
+                <p
+                  role="status"
+                  className="mt-5 rounded-2xl border border-sun-400/30 bg-sun-400/10 px-4 py-3 text-[0.8125rem] leading-relaxed text-mist-200"
+                >
+                  {notice}
+                </p>
+              ) : null}
 
               <div className="mt-7">
                 <LoginForm />

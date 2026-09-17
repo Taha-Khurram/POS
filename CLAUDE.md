@@ -183,6 +183,18 @@ to stay green.
 `getSessionContext()` is wrapped in React `cache()`, so repeated gates in one
 request verify the token once.
 
+`requireSession()` then asks whether the account is still standing — one
+primary-key read of the caller's own `profiles` row, also `cache()`d. No row
+means the account was deleted (the row cascades from `auth.users`); `is_active`
+false means suspended. Either sends them to `/logout`, which is the only place
+that can clear the cookie, and on to `/login?ended=…`. The check exists because
+the access token is self-contained: deleting or banning somebody stops the next
+sign-in but leaves the token already in the tablet valid until it expires — and
+valid to RLS, which reads its claims. It is skipped for a token with no
+`tenant_id`, which is the unattached account that must still reach the dashboard
+to be told so, and it fails open, because an unreachable database is not
+evidence that anybody was sacked.
+
 ## Not built yet
 
 `app/(site)/demo/demo-form.tsx` swaps to a thank-you panel locally — nothing is

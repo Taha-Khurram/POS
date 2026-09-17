@@ -64,12 +64,77 @@ export const getSessionContext = cache(
 );
 
 /**
+ * Is this account still standing?
+ *
+ * The access token is signed and self-contained, which is what makes
+ * `getSessionContext()` free — and is also why removing somebody does not, on
+ * its own, get them off the till. Deleting the auth user takes their refresh
+ * token with it and suspending them bans it, so neither can start a new
+ * session; but the token already in the tablet's cookie stays valid until it
+ * expires, and it goes on satisfying every RLS policy in the database, because
+ * those read its claims. A cashier sacked at noon would keep billing until the
+ * hour was up.
+ *
+ * So the gate asks. One read of their own row, by primary key, through their
+ * own JWT:
+ *
+ *   - **No row** — the account was deleted. `profiles.id` cascades from
+ *     `auth.users`, so the row goes when the account does.
+ *   - **`is_active` false** — suspended. GoTrue bans the user at the same time,
+ *     which stops the next sign-in; this is what stops the current one.
+ *
+ * Only asked of a token that claims a shop. An account with no `tenant_id` has
+ * no `profiles` row to find, and is the one case that must go on reaching the
+ * dashboard to be told it is not attached yet.
+ *
+ * It fails open. An unreachable database is not evidence that anybody was
+ * sacked, and a shop mid-queue must not be signed out by a network blip.
+ *
+ * `cache()` is safe here where it is not in `lib/pos/shop.ts`: this is the
+ * reader's own standing, and nothing an actor does in one request changes it
+ * for themselves — the staff editor refuses the owner's own row for exactly
+ * that reason. Without it, the layout and the page it wraps would ask twice.
+ */
+type Standing = "ok" | "removed" | "suspended";
+
+const accountStanding = cache(
+  async (userId: string, tenantId: string | null): Promise<Standing> => {
+    if (!tenantId) return "ok";
+
+    const supabase = createClient(await cookies());
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) return "ok";
+    if (!data) return "removed";
+
+    return data.is_active ? "ok" : "suspended";
+  },
+);
+
+/**
  * Gate for `/app`. Signed out goes back to the login page, which has one
  * destination of its own — so there is no return path to carry.
+ *
+ * Every page, the layout and every Server Action come through here, so the
+ * standing check below covers the register's writes as well as its screens: a
+ * cashier removed while the payment sheet was open does not get to record the
+ * sale in it.
  */
 export async function requireSession(): Promise<SessionContext> {
   const session = await getSessionContext();
   if (!session) redirect("/login");
+
+  const standing = await accountStanding(session.userId, session.tenantId);
+
+  // Not `/login` directly: the cookie has to come off the device, and only a
+  // route handler can write one.
+  if (standing !== "ok") redirect(`/logout?ended=${standing}`);
+
   return session;
 }
 
