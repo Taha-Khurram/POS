@@ -43,7 +43,14 @@ export function PermissionsForm({
       <ChartCard
         title="Permissions and limits"
         caption="The register enforces this on the device; the server enforces it again."
-        footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
+        footer={
+          <SaveBar
+            state={state}
+            pending={pending}
+            readOnly={readOnly}
+            saved="Permissions saved"
+          />
+        }
       >
         <fieldset disabled={readOnly || pending}>
           <div className="overflow-x-auto">

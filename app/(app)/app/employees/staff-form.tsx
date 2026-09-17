@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import { IconAlert, IconCheck, IconKey, IconTrash, IconUser } from "@/components/pos/icons";
+import { useActionToast } from "@/components/pos/toaster";
 import { SelectField } from "@/components/pos/select-field";
 import type { Counter } from "@/lib/pos/counter";
 import type { StaffMember } from "@/lib/pos/staff";
@@ -40,6 +41,10 @@ export function StaffForm({
 }) {
   const [state, action, pending] = useActionState(saveStaff, IDLE);
   const [active, setActive] = useState(staff.isActive);
+
+  // Staff is a long card on a phone, and the owner who changes a role is
+  // usually already scrolling to the counter select under it.
+  useActionToast(state, { saved: `${staff.name} saved`, failed: "That did not save" });
 
   const [seed, setSeed] = useState(staff);
   if (seed !== staff) {
@@ -200,6 +205,13 @@ export function StaffForm({
  */
 function PasswordCard({ staff }: { staff: StaffMember }) {
   const [state, action, pending] = useActionState(resetStaffPassword, IDLE);
+
+  // The new password replaces this whole card when it works, which is louder
+  // than any toast — so this only ever says that it did not.
+  useActionToast(state, {
+    saved: "New password ready",
+    failed: "Could not make a new password",
+  });
 
   if (state.credentials) return <CredentialsCard {...state.credentials} />;
 

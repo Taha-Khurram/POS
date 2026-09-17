@@ -1,6 +1,7 @@
 "use client";
 
 import { IconAlert, IconCheck } from "@/components/pos/icons";
+import { useActionToast } from "@/components/pos/toaster";
 import type { SettingsState } from "./actions";
 
 /** The state a Settings form starts in, before anything has been submitted. */
@@ -17,16 +18,26 @@ export const IDLE: SettingsState = { error: null, savedAt: null };
  * `readOnly` is the manager case. The button is disabled and says why, rather
  * than being hidden: a manager who cannot find the discount ceiling assumes it
  * moved, and one who can see it greyed out asks the owner.
+ *
+ * The same result also goes up as a toast, because Settings is long enough to
+ * scroll: an owner who saves the permissions card and is already reading the
+ * ceilings below it never sees the footer they just pressed.
  */
 export function SaveBar({
   state,
   pending,
   readOnly,
+  saved = "Settings saved",
 }: {
   state: SettingsState;
   pending: boolean;
   readOnly: boolean;
+  /** What the toast says. The footer only ever says "Saved." — it is directly
+   *  under the card it belongs to and needs no naming. */
+  saved?: string;
 }) {
+  useActionToast(state, { saved, failed: "That did not save" });
+
   return (
     <>
       <p

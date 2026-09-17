@@ -36,7 +36,14 @@ export function ShopDetailsForm({
       <ChartCard
         title="Shop details"
         caption="What prints at the top of every receipt."
-        footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
+        footer={
+          <SaveBar
+            state={state}
+            pending={pending}
+            readOnly={readOnly}
+            saved="Shop details saved"
+          />
+        }
       >
         <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">
           <label className="block">

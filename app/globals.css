@@ -1701,6 +1701,88 @@
     color: #fff;
     background: var(--color-signal-bad);
   }
+
+  /* ---------------- Toasts ----------------
+
+     Bottom of the screen, and on a narrow one the full width of it. The top
+     corners of a counter tablet are the bill total and the payment button, and
+     a message that covers either is a message that costs a sale.
+
+     The stack is `column-reverse` so the newest sits lowest — nearest the
+     thumb, and where the eye already is after pressing something. */
+
+  .pos-toaster {
+    position: fixed;
+    z-index: 90;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+    pointer-events: none;
+  }
+
+  @media (min-width: 640px) {
+    .pos-toaster {
+      left: auto;
+      right: 1.25rem;
+      bottom: 1.25rem;
+      width: 22rem;
+    }
+  }
+
+  .pos-toast {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.625rem 0.625rem 0.625rem 0.75rem;
+    border-radius: 14px;
+    border: 1px solid var(--pale-lilac);
+    background: var(--color-paper-50);
+    box-shadow: 0 26px 52px -26px rgb(59 40 204 / 0.5);
+    /* The region itself passes clicks through to the till underneath; each
+       toast takes them back, so the dismiss button still works. */
+    pointer-events: auto;
+    animation: sheet-up 0.24s var(--ease-out-back) both;
+  }
+
+  .pos-toast-mark {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    color: var(--color-signal-good);
+    background: color-mix(in oklab, var(--color-signal-good) 12%, var(--tint-base));
+  }
+
+  /* Colour is never the only carrier — every toast says what happened in
+     words — but the left edge is what makes a bad one findable in the corner
+     of an eye that is on a customer. */
+  .pos-toast[data-tone="warn"] {
+    border-left: 3px solid var(--color-signal-warn);
+  }
+
+  .pos-toast[data-tone="warn"] .pos-toast-mark {
+    color: var(--color-signal-warn);
+    background: color-mix(in oklab, var(--color-signal-warn) 12%, var(--tint-base));
+  }
+
+  .pos-toast[data-tone="bad"] {
+    border-left: 3px solid var(--color-signal-bad);
+  }
+
+  .pos-toast[data-tone="bad"] .pos-toast-mark {
+    color: var(--color-signal-bad);
+    background: color-mix(in oklab, var(--color-signal-bad) 12%, var(--tint-base));
+  }
+
+  .pos-toast[data-tone="info"] .pos-toast-mark {
+    color: var(--indigo-deep);
+    background: var(--lilac-wash);
+  }
 }
 
 /* ==========================================================================
@@ -1898,7 +1980,7 @@
 
   /* The lifted surfaces drop violet glows and take black ones — a lit shadow
      on a violet-black ground is a halo, not a shadow. */
-  .pos-root[data-theme="dark"] :is(.pos-menu, .pos-tip, .pos-sheet) {
+  .pos-root[data-theme="dark"] :is(.pos-menu, .pos-tip, .pos-sheet, .pos-toast) {
     box-shadow: 0 30px 60px -28px rgb(0 0 0 / 0.85);
   }
 }

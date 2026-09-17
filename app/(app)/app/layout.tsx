@@ -1,16 +1,23 @@
 import type { Viewport } from "next";
 import { cookies } from "next/headers";
 
-import type { Notice } from "@/components/pos/console-header";
 import {
+  NOTICES_COOKIE,
   RAIL_COOKIE,
   THEME_COOKIE,
   type ConsoleTheme,
 } from "@/components/pos/console-prefs";
 import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getModuleAccess } from "@/lib/pos/access";
-import { getShopName } from "@/lib/pos/shop";
+import { SAMPLE_ITEMS, stockState } from "@/lib/pos/catalog";
+import {
+  buildNotices,
+  noticeSignature,
+  visibleNotices,
+} from "@/lib/pos/notices";
+import { getShopName, listCounters } from "@/lib/pos/shop";
 
 export const viewport: Viewport = {
   // orchid-800. The one colour that cannot come from a token — the browser
@@ -35,16 +42,25 @@ export const viewport: Viewport = {
 export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   const session = await requireSession();
 
-  // The shop the console is dressed as. One column, read through the shop's own
-  // JWT, and it falls back to a fixed label rather than failing — an account
-  // with no tenant still lands on the dashboard, which is the whole reason the
-  // lookup that used to live here was taken out.
-  // Which rail rows this person gets. Permissions decide the working modules
-  // and the role decides the two administration screens — `lib/pos/modules.ts`
-  // is the whole of that reasoning, and every page re-checks it for itself.
-  const [shopName, access] = await Promise.all([
+  // Everything the chrome is dressed with, in one round of reads:
+  //
+  //   - The shop name for the rail's account block. One column, read through
+  //     the shop's own JWT, falling back to a label rather than failing — an
+  //     account with no tenant still lands on the dashboard.
+  //   - Which rail rows this person gets. Permissions decide the working
+  //     modules and the role decides the two administration screens;
+  //     `lib/pos/modules.ts` is the whole of that reasoning, and every page
+  //     re-checks it for itself.
+  //   - The bell's raw material. It is gathered here because the topbar is in
+  //     the layout and there is nowhere later to ask. Both extra reads are
+  //     small and neither is allowed to fail the console: a shop whose
+  //     subscription cannot be resolved still gets a till, it just gets a
+  //     quieter bell.
+  const [shopName, access, entitlements, counters] = await Promise.all([
     getShopName(session.tenantId),
     getModuleAccess(session),
+    session.tenantId ? getEntitlements(session.tenantId) : null,
+    session.tenantId ? listCounters(session.tenantId) : [],
   ]);
 
   // Both display preferences, read before the first byte so the shell renders
@@ -56,25 +72,36 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   const theme: ConsoleTheme =
     jar.get(THEME_COOKIE)?.value === "dark" ? "dark" : "light";
 
-  // Standing in for the alerts the modules will raise once they exist: low
-  // stock from `items`, udhaar past its terms from the khata, renewal dates
-  // from `subscriptions`. Shaped now so the topbar is not rebuilt later.
-  const notices: Notice[] = [
-    {
-      id: "renewal",
-      title: "Plan renews in 12 days",
-      detail: "We will send the invoice on WhatsApp",
-      at: "Today",
-      tone: "info",
-    },
-    {
-      id: "sync",
-      title: "All registers synced",
-      detail: "Last device checked in a moment ago",
-      at: "Today",
-      tone: "info",
-    },
-  ];
+  // What the shop actually has to worry about, then what this person is allowed
+  // to be told about it. The stock counts come off `SAMPLE_ITEMS` because that
+  // is still what Products & stock draws — the bell and that screen have to
+  // agree about what is on the shelf, and they will go on agreeing when the
+  // list becomes a query.
+  const notices = visibleNotices(
+    buildNotices({
+      subscription: entitlements
+        ? {
+            status: entitlements.status,
+            planName: entitlements.planName,
+            daysUntilExpiry: entitlements.daysUntilExpiry,
+            maxRegisters: entitlements.maxRegisters,
+          }
+        : null,
+      counters,
+      stock: {
+        out: SAMPLE_ITEMS.filter((item) => stockState(item) === "out").length,
+        low: SAMPLE_ITEMS.filter((item) => stockState(item) === "low").length,
+      },
+    }),
+    access,
+    session.tenantRole,
+  );
+
+  // The badge is lit when the shop's worries are not the set this device last
+  // opened the bell on — so it clears on a look and comes back on a change,
+  // without a read receipt per user anywhere.
+  const signature = noticeSignature(notices);
+  const unseen = jar.get(NOTICES_COOKIE)?.value !== signature;
 
   return (
     <div className="pos-root" data-theme={theme}>
@@ -82,6 +109,8 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
         shopName={shopName}
         email={session.email}
         notices={notices}
+        signature={signature}
+        unseen={unseen}
         access={access}
         initialTight={initialTight}
         theme={theme}

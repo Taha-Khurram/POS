@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 
 import type { ModuleAccess } from "@/lib/pos/modules";
+import type { Notice } from "@/lib/pos/notices";
 
-import { ConsoleHeader, type Notice } from "./console-header";
+import { ConsoleHeader } from "./console-header";
 import { RAIL_COOKIE, rememberPref, type ConsoleTheme } from "./console-prefs";
 import { ConsoleSidebar } from "./console-sidebar";
+import { NoticeToasts, ToastProvider } from "./toaster";
 
 /**
  * The console's chrome, and the only client component in the layout.
@@ -34,6 +36,8 @@ export function ConsoleShell({
   shopName,
   email,
   notices,
+  signature,
+  unseen,
   access,
   initialTight,
   theme,
@@ -42,7 +46,12 @@ export function ConsoleShell({
   /** The rail's account block. The topbar carries no identity of its own. */
   shopName: string;
   email: string | null;
+  /** Already filtered to what this person may be told. */
   notices: Notice[];
+  /** What that set hashes to, and whether it has changed since this device
+   *  last opened the bell. Both worked out by the layout, from a cookie. */
+  signature: string;
+  unseen: boolean;
   /** Which rail rows this session may see. Resolved by the layout. */
   access: ModuleAccess;
   initialTight: boolean;
@@ -72,45 +81,53 @@ export function ConsoleShell({
   };
 
   return (
-    <div
-      className="pos-shell"
-      style={
-        {
-          "--rail": tight ? "var(--pos-rail-tight)" : "var(--pos-rail)",
-        } as React.CSSProperties
-      }
-    >
-      {/* The bar comes first in the DOM as well as on the screen: it spans
-          both columns, so the rail begins under it and the wordmark lives in
-          the bar rather than at the top of the navigation. */}
-      <ConsoleHeader
-        notices={notices}
-        tight={tight}
-        theme={theme}
-        onToggleRail={toggleRail}
-        onOpenDrawer={() => setDrawer(true)}
-      />
-
-      <ConsoleSidebar
-        open={drawer}
-        tight={tight}
-        shopName={shopName}
-        email={email}
-        access={access}
-        onNavigate={() => setDrawer(false)}
-        onClose={() => setDrawer(false)}
-      />
-
-      {/* Fixed, so it is out of flow and never takes a grid cell of its own. */}
-      {drawer ? (
-        <div
-          className="pos-scrim lg:hidden"
-          onClick={() => setDrawer(false)}
-          aria-hidden
+    <ToastProvider>
+      <div
+        className="pos-shell"
+        style={
+          {
+            "--rail": tight ? "var(--pos-rail-tight)" : "var(--pos-rail)",
+          } as React.CSSProperties
+        }
+      >
+        {/* The bar comes first in the DOM as well as on the screen: it spans
+            both columns, so the rail begins under it and the wordmark lives in
+            the bar rather than at the top of the navigation. */}
+        <ConsoleHeader
+          notices={notices}
+          signature={signature}
+          unseen={unseen}
+          tight={tight}
+          theme={theme}
+          onToggleRail={toggleRail}
+          onOpenDrawer={() => setDrawer(true)}
         />
-      ) : null}
 
-      <main className="pos-canvas px-3 py-4 sm:px-5 sm:py-6">{children}</main>
-    </div>
+        <ConsoleSidebar
+          open={drawer}
+          tight={tight}
+          shopName={shopName}
+          email={email}
+          access={access}
+          onNavigate={() => setDrawer(false)}
+          onClose={() => setDrawer(false)}
+        />
+
+        {/* Fixed, so it is out of flow and never takes a grid cell of its own. */}
+        {drawer ? (
+          <div
+            className="pos-scrim lg:hidden"
+            onClick={() => setDrawer(false)}
+            aria-hidden
+          />
+        ) : null}
+
+        <main className="pos-canvas px-3 py-4 sm:px-5 sm:py-6">{children}</main>
+      </div>
+
+      {/* Inside the provider and not in the layout, because it raises toasts.
+          It draws nothing of its own. */}
+      <NoticeToasts notices={notices} signature={signature} />
+    </ToastProvider>
   );
 }

@@ -73,7 +73,14 @@ export function CounterForm({
         <ChartCard
           title={counter.name}
           caption="Open it, and this counter's register can ring up a sale."
-          footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
+          footer={
+            <SaveBar
+              state={state}
+              pending={pending}
+              readOnly={readOnly}
+              saved="Counter saved"
+            />
+          }
         >
           <fieldset disabled={locked} className="space-y-5">
             {/* The switch, given the whole width and its own surface — it is the

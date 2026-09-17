@@ -7,6 +7,7 @@ import { ChartCard } from "@/components/pos/chart-card";
 import type { Counter } from "@/lib/pos/counter";
 import { SelectField } from "@/components/pos/select-field";
 import { IconAlert, IconPlus } from "@/components/pos/icons";
+import { useActionToast } from "@/components/pos/toaster";
 import {
   STAFF_NAME_MAX,
   STAFF_ROLES,
@@ -41,6 +42,11 @@ export function NewStaffForm({
 }) {
   const [state, action, pending] = useActionState(addStaff, IDLE);
   const [name, setName] = useState("");
+
+  useActionToast(state, {
+    saved: "Added to the shop",
+    failed: "Could not add them",
+  });
 
   // Which result the owner has finished with. `useActionState` has no reset, and
   // navigating to the URL this form already sits at would not remount it — so

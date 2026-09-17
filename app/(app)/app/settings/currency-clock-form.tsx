@@ -38,7 +38,14 @@ export function CurrencyClockForm({
       <ChartCard
         title="Currency and clock"
         caption="How money is written, and where the day is cut."
-        footer={<SaveBar state={state} pending={pending} readOnly={readOnly} />}
+        footer={
+          <SaveBar
+            state={state}
+            pending={pending}
+            readOnly={readOnly}
+            saved="Currency and clock saved"
+          />
+        }
       >
         <fieldset disabled={locked} className="grid gap-4 sm:grid-cols-2">
           <SelectField

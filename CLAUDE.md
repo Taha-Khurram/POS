@@ -61,7 +61,9 @@ and fonts only — chrome belongs to the group.
   `entitlements.ts` (the single authority on what a plan allows), `audit.ts`,
   `format.ts`, `pos/` (the dashboard's window and data contract). The one
   exception is `lib/pos/timeframe-options.ts` — the period list is shared with
-  the client filter, so it carries no `server-only` and no imports.
+  the client filter, so it carries no `server-only` and no imports. The same
+  goes for `lib/pos/modules.ts` and `lib/pos/notices.ts`: both are pure
+  functions the server calls and the chrome types against.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -214,6 +216,28 @@ its `revalidatePath` triggers are one request — so a memoised read hands that
 re-render the row as it was before the write and the form redraws itself with
 the values the owner just changed away from. `getShopName` is the exception and
 is only read by the layout.
+
+## Notifications
+
+The bell and the toaster are two halves of one vocabulary and share their tones.
+
+`lib/pos/notices.ts` derives the bell's list at render time from rows the
+console already holds — the subscription, the shop's counters, the catalog's
+stock counts. There is no notifications table and nothing is written, so a
+notice disappears when its cause is dealt with. Every notice names the
+`ModuleKey` it belongs to, and `visibleNotices` drops the ones this session's
+`ModuleAccess` does not cover; `ownerOnly` carries the ones the `settings`
+module is too wide for, which is anything about money. That filter is the
+control, not a courtesy — a notice is its own payload and there is nothing
+further in to re-check it. The badge is lit by comparing `noticeSignature` with
+the `flo_seen` cookie, so looking clears it and a change brings it back.
+
+`components/pos/toaster.tsx` is mounted once by `ConsoleShell`, which is what
+puts it on the register too — the till is the one screen where nobody is
+watching the form they submitted. `useActionToast(state, …)` keys off the
+`savedAt` an action stamps, never the state object, or the `revalidatePath`
+re-render announces the same save twice. Standing warnings from the bell are
+also said once per tab by `NoticeToasts`, guarded in `sessionStorage`.
 
 ## The register
 

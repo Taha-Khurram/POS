@@ -16,6 +16,7 @@ import {
   IconSearch,
   IconTrash,
 } from "@/components/pos/icons";
+import { useToast } from "@/components/pos/toaster";
 import {
   billOf,
   lineTotal,
@@ -248,6 +249,8 @@ export function Till({
   // another number. Re-minted for every new bill, never reused.
   const saleId = useRef<string>("");
 
+  const toast = useToast();
+
   const tendered = async (
     tender: TenderId,
     given: number | null,
@@ -294,6 +297,20 @@ export function Till({
     setLines([]);
     setPaying(false);
     saleId.current = "";
+
+    // The receipt fills the screen behind this, so the toast is not how the
+    // cashier finds out a sale went through — it is what is still on screen
+    // after they close it, and the one place a bill that was printed but never
+    // recorded says so once the roll is off the printer.
+    if (result?.ok) {
+      toast({ title: `Recorded ${result.receiptNo}`, tone: "good" });
+    } else {
+      toast({
+        title: "Printed but not recorded",
+        detail: "This bill is not in the day's takings. Ring it up again once Flo is back.",
+        tone: "warn",
+      });
+    }
 
     return null;
   };
