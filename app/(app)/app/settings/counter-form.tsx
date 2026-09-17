@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import { IconCheck, IconRegister, IconTrash } from "@/components/pos/icons";
+import { useSubmissionKey } from "@/components/pos/use-submission-key";
 import { RECEIPT_FOOTER_MAX, TENDERS, type Counter } from "@/lib/pos/counter";
 import { deleteCounter, saveCounter } from "./actions";
 import { IDLE, SaveBar } from "./save-bar";
@@ -26,6 +27,13 @@ import { IDLE, SaveBar } from "./save-bar";
  * three from the server's own row keeps the whole card telling one story, and
  * it is also what makes this editor safe to reuse — it is one component the URL
  * points at a different counter.
+ *
+ * Re-seeding alone is not enough, though, because React's reset reaches the
+ * boxes themselves: it puts each one back to the value it was mounted with, and
+ * a controlled input whose state already matches the row that came back is
+ * never re-rendered, so nothing writes the DOM again. `useSubmissionKey`
+ * remounts the three on every completed submission, which is why closing a
+ * counter no longer saves and then draws itself open again.
  *
  * The tender pair is also worth guarding on the client. The action refuses an
  * open counter that takes neither — but a cashier finding that out is a cashier
@@ -61,6 +69,8 @@ export function CounterForm({
     setCard(counter.acceptsCard);
   }
 
+  const submission = useSubmissionKey(state);
+
   const noTender = open && !cash && !card;
 
   return (
@@ -87,6 +97,7 @@ export function CounterForm({
                 one control here that decides whether the till can sell. */}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3.5">
               <input
+                key={submission}
                 type="checkbox"
                 name="is_active"
                 checked={open}
@@ -180,6 +191,7 @@ export function CounterForm({
                       className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-orchid-100 p-3"
                     >
                       <input
+                        key={submission}
                         type="checkbox"
                         name={`accepts_${tender.id}`}
                         checked={on}

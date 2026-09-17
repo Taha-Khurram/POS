@@ -6,6 +6,7 @@ import { ChartCard } from "@/components/pos/chart-card";
 import { IconAlert, IconCheck, IconKey, IconTrash, IconUser } from "@/components/pos/icons";
 import { useActionToast } from "@/components/pos/toaster";
 import { SelectField } from "@/components/pos/select-field";
+import { useSubmissionKey } from "@/components/pos/use-submission-key";
 import type { Counter } from "@/lib/pos/counter";
 import type { StaffMember } from "@/lib/pos/staff";
 import { STAFF_NAME_MAX, STAFF_ROLES } from "@/lib/pos/staff-options";
@@ -30,7 +31,10 @@ import { CredentialsCard } from "./credentials-card";
  * catches up after a save is a sentence nobody trusts. The re-seed below is
  * what keeps it honest when a save is refused — React puts the text fields back
  * to the stored row and cannot put `useState` back, so the card would claim
- * they were suspended when they are not.
+ * they were suspended when they are not. `useSubmissionKey` is the other half
+ * of that: React's reset puts the box itself back to the value it was mounted
+ * with, and nothing re-renders it, so the tick has to be remounted or it
+ * returns the moment a suspension saves.
  */
 export function StaffForm({
   staff,
@@ -51,6 +55,8 @@ export function StaffForm({
     setSeed(staff);
     setActive(staff.isActive);
   }
+
+  const submission = useSubmissionKey(state);
 
   return (
     <div className="space-y-4">
@@ -94,6 +100,7 @@ export function StaffForm({
           <fieldset disabled={pending} className="space-y-5">
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3.5">
               <input
+                key={submission}
                 type="checkbox"
                 name="is_active"
                 checked={active}
