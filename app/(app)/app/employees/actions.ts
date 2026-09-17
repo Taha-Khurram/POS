@@ -494,7 +494,15 @@ export async function deleteStaff(
   const supabase = createAdminClient();
   const { error } = await supabase.auth.admin.deleteUser(staff.id);
 
-  if (error) return fail("We could not remove that account. Please try again.");
+  if (error) {
+    // The sentence the owner gets cannot be the one Postgres wrote, so the real
+    // one has to go somewhere. This exact failure — "Database error deleting
+    // user" for every account in the shop — was the append-only trigger on
+    // `audit_log` refusing the `on delete set null` that the FK made Postgres
+    // run, and it took 0014 to find because nothing anywhere said so.
+    console.error("[staff] deleteUser failed for %s", staff.id, error);
+    return fail("We could not remove that account. Please try again.");
+  }
 
   await recordAudit(session, {
     action: "staff.deleted",

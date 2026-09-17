@@ -613,6 +613,34 @@ select throws_ok(
   'audit_log rejects deletes even from the migration role'
 );
 
+-- =============================================================================
+-- Append-only must not mean nobody can ever be removed
+--
+-- 0014's regression. `audit_log.actor_id` used to reference `auth.users`
+-- `on delete set null`, so deleting an account made Postgres run an update
+-- against the log — and the append-only trigger is statement-level, so it
+-- refused that update whether or not the account had ever appeared in it. Every
+-- staff removal in the console failed on it.
+--
+-- Both halves are asserted here: the account goes, and the entry it left behind
+-- still says who did it.
+-- =============================================================================
+insert into public.audit_log (actor_id, actor_kind, action, tenant_id)
+values ('66666666-0000-4000-8000-000000000001', 'tenant_user',
+        'staff.created', 'bbbbbbbb-0000-4000-8000-000000000001');
+
+select lives_ok(
+  $$ delete from auth.users where id = '66666666-0000-4000-8000-000000000001' $$,
+  'a staff account that appears in audit_log can still be deleted'
+);
+
+select isnt_empty(
+  $$ select 1 from public.audit_log
+      where actor_id = '66666666-0000-4000-8000-000000000001'
+        and action = 'staff.created' $$,
+  'the audit entry keeps its actor after the account is gone'
+);
+
 select * from finish();
 
 rollback;
