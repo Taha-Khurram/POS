@@ -175,6 +175,15 @@ export const IconUser = (props: IconProps) => (
   </Glyph>
 );
 
+/** A key on its side, so the bit reads at 16 px rather than closing into a blob. */
+export const IconKey = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="7.5" cy="12" r="3.8" />
+    <path d="M11.3 12H21" />
+    <path d="M18 12v3.2M15 12v2.2" />
+  </Glyph>
+);
+
 export const IconCalendar = (props: IconProps) => (
   <Glyph {...props}>
     <rect x="3" y="5" width="18" height="16" rx="2.5" />

@@ -33,7 +33,16 @@ values
   ('00000000-0000-0000-0000-000000000000', '33333333-0000-4000-8000-000000000001',
    'authenticated', 'authenticated', 'orphan@example.com', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '99999999-0000-4000-8000-000000000001',
-   'authenticated', 'authenticated', 'you@flo.pk', now(), now());
+   'authenticated', 'authenticated', 'you@flo.pk', now(), now()),
+  -- Staff, added in 0012. Work emails rather than real ones, because that is
+  -- what `app/(app)/app/employees/actions.ts` mints and what the sign-in gate
+  -- recognises by its domain.
+  ('00000000-0000-0000-0000-000000000000', '44444444-0000-4000-8000-000000000001',
+   'authenticated', 'authenticated', 'bilal@almadina.flopos.pk', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '55555555-0000-4000-8000-000000000001',
+   'authenticated', 'authenticated', 'sana@almadina.flopos.pk', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '66666666-0000-4000-8000-000000000001',
+   'authenticated', 'authenticated', 'imran@bundukhan.flopos.pk', now(), now());
 
 insert into public.tenants (id, shop_name, owner_name, phone, city, shop_type)
 values
@@ -55,6 +64,19 @@ values
    'owner', 'Owner B'),
   -- Signed up, never activated. Should be able to see nothing whatsoever.
   ('33333333-0000-4000-8000-000000000001', null, null, 'Orphan');
+
+-- Tenant A hires two, tenant B one. The point of these rows is that a cashier
+-- is an auth user now (0012) rather than a PIN, so every leak test above has to
+-- hold for a JWT that is inside the shop and below the owner — which is the
+-- account an actual attacker is most likely to be holding.
+insert into public.profiles (id, tenant_id, tenant_role, full_name, email, is_active)
+values
+  ('44444444-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001',
+   'cashier', 'Bilal Ahmed', 'bilal@almadina.flopos.pk', true),
+  ('55555555-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001',
+   'manager', 'Sana Tariq', 'sana@almadina.flopos.pk', true),
+  ('66666666-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001',
+   'cashier', 'Imran Shah', 'imran@bundukhan.flopos.pk', true);
 
 insert into public.platform_admins (user_id, platform_role, full_name)
 values ('99999999-0000-4000-8000-000000000001', 'super_admin', 'You');
@@ -182,6 +204,41 @@ select is_empty(
   $$ select 1 from public.profiles
      where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
   'tenant A cannot read tenant B profiles'
+);
+
+-- Staff, added in 0012. An owner reads their own roster — that is the screen —
+-- and cannot hire, promote or sack anybody with their own JWT, because every
+-- one of those goes through a Server Action on the service role.
+select is(
+  (select count(*) from public.profiles), 3::bigint,
+  'tenant A sees its owner and its two staff, and nobody else'
+);
+
+select is_empty(
+  $$ select 1 from public.profiles where email like '%bundukhan%' $$,
+  'tenant A cannot read tenant B staff work emails'
+);
+
+select throws_ok(
+  $$ insert into public.profiles (id, tenant_id, tenant_role, full_name)
+     values ('33333333-0000-4000-8000-000000000001',
+             'aaaaaaaa-0000-4000-8000-000000000001', 'cashier', 'Forged hire') $$,
+  '42501', null,
+  'tenant owner cannot hire staff directly'
+);
+
+select throws_ok(
+  $$ update public.profiles set tenant_role = 'owner'
+      where id = '55555555-0000-4000-8000-000000000001' $$,
+  '42501', null,
+  'tenant owner cannot change a role directly'
+);
+
+select throws_ok(
+  $$ delete from public.profiles
+      where id = '44444444-0000-4000-8000-000000000001' $$,
+  '42501', null,
+  'tenant owner cannot delete a staff row directly'
 );
 
 -- The platform's own tables. Entitlements are resolved server-side, so a shop
@@ -371,6 +428,53 @@ select throws_ok(
 );
 
 -- =============================================================================
+-- A cashier at tenant A — the account the shop hands out most, and therefore
+-- the one whose JWT is most likely to end up somewhere it should not. Nothing
+-- below is gated on being the owner: the role checks that stop a cashier
+-- editing staff or raising a ceiling live in the Server Actions, and this
+-- asserts the database refuses them anyway.
+-- =============================================================================
+set local request.jwt.claims = '{"sub":"44444444-0000-4000-8000-000000000001","role":"authenticated","tenant_id":"aaaaaaaa-0000-4000-8000-000000000001","tenant_role":"cashier","platform_role":null}';
+
+select is(
+  (select count(*) from public.tenants), 1::bigint,
+  'a cashier sees the shop they work at'
+);
+
+select is_empty(
+  $$ select 1 from public.profiles
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'a cashier cannot read another shop''s staff'
+);
+
+select throws_ok(
+  $$ update public.profiles set tenant_role = 'owner'
+      where id = '44444444-0000-4000-8000-000000000001' $$,
+  '42501', null,
+  'a cashier cannot promote themselves to owner'
+);
+
+select throws_ok(
+  $$ update public.profiles set is_active = false
+      where id = '55555555-0000-4000-8000-000000000001' $$,
+  '42501', null,
+  'a cashier cannot suspend their manager'
+);
+
+select throws_ok(
+  $$ update public.role_permissions set discount_ceiling_pct = 100
+      where access_level = 'cashier' $$,
+  '42501', null,
+  'a cashier cannot raise their own discount ceiling'
+);
+
+select throws_ok(
+  $$ update public.sales set total = 1 $$,
+  '42501', null,
+  'a cashier cannot rewrite what a sale was worth'
+);
+
+-- =============================================================================
 -- A signed-up-but-never-activated user. §3.3 layer 5: inert, not dangerous.
 -- =============================================================================
 set local request.jwt.claims = '{"sub":"33333333-0000-4000-8000-000000000001","role":"authenticated","tenant_id":null,"tenant_role":null,"platform_role":null}';
@@ -470,6 +574,25 @@ select throws_ok($$ select 1 from public.sales $$, '42501', null,
 -- audit_log is append-only for everyone, including the role that writes it
 -- =============================================================================
 reset role;
+
+-- =============================================================================
+-- Work emails are one per person, enforced by the index rather than by the
+-- action that goes looking for a free one. Two staff sharing a login is two
+-- staff one password away from each other's shift.
+-- =============================================================================
+select throws_ok(
+  $$ update public.profiles set email = 'bilal@almadina.flopos.pk'
+      where id = '55555555-0000-4000-8000-000000000001' $$,
+  '23505', null,
+  'two staff cannot share a work email'
+);
+
+select throws_ok(
+  $$ update public.profiles set tenant_role = 'accountant'
+      where id = '44444444-0000-4000-8000-000000000001' $$,
+  '23514', null,
+  'a role that is not owner, manager or cashier is refused'
+);
 
 select lives_ok(
   $$ insert into public.audit_log (actor_kind, action) values ('system', 'test.append') $$,

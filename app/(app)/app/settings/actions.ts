@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireSession, type SessionContext } from "@/lib/auth";
+import { requireOwner as requireShopOwner } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
 import { getEntitlements } from "@/lib/entitlements";
 import {
@@ -58,26 +58,22 @@ const text = (value: FormDataEntryValue | null) =>
 /** An optional column: an emptied box means null, not the empty string. */
 const nullable = (value: FormDataEntryValue | null) => text(value) || null;
 
-type OwnerCheck =
-  | { ok: true; session: SessionContext & { tenantId: string } }
-  | { ok: false; error: string };
-
 /**
- * Owner-only, and attached to a shop. Carries the session out on success so the
- * caller has the actor to audit with, and a narrowed `tenantId` with it.
+ * Owner-only, and attached to a shop — `lib/auth.ts` holds the check itself,
+ * since Staff needs the same one. This wraps it in the words Settings uses.
  */
-async function requireOwner(): Promise<OwnerCheck> {
-  const session = await requireSession();
+async function requireOwner() {
+  const owner = await requireShopOwner();
 
-  if (!session.tenantId) {
-    return { ok: false, error: "This login is not linked to a shop yet." };
-  }
+  if (owner.ok) return owner;
 
-  if (session.tenantRole !== "owner") {
-    return { ok: false, error: "Only the shop owner can change settings." };
-  }
-
-  return { ok: true, session: { ...session, tenantId: session.tenantId } };
+  return {
+    ok: false as const,
+    error:
+      owner.reason === "detached"
+        ? "This login is not linked to a shop yet."
+        : "Only the shop owner can change settings.",
+  };
 }
 
 // -----------------------------------------------------------------------------

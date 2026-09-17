@@ -3,17 +3,23 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { isWorkEmail } from "@/lib/pos/staff-options";
 import { createClient } from "@/utils/supabase/server";
 
 export type LoginState = { error: string | null };
 
 /**
- * The only account that may sign in while the product is in private preview.
+ * The human accounts that may sign in while the product is in private preview.
  *
  * This is a gate in front of Supabase, not a replacement for it: the password
  * is still verified against `auth.users` on every attempt, so the list decides
  * *who* may try, never whether they got it right. Lift the restriction by
  * deleting this constant and the check below — nothing else depends on it.
+ *
+ * Staff are not on it and never will be. Every account the owner hires on
+ * `/app/employees` gets a minted work address, which `isWorkEmail` recognises
+ * by its domain — a list that had to grow a line per cashier would be a list
+ * somebody forgets to grow at 9 am on a Saturday.
  */
 const ALLOWED_EMAILS = ["tahakhurramofficial@gmail.com"];
 
@@ -44,7 +50,7 @@ export async function signIn(
     error: "That email and password do not match an account.",
   };
 
-  if (!ALLOWED_EMAILS.includes(email)) return rejected;
+  if (!ALLOWED_EMAILS.includes(email) && !isWorkEmail(email)) return rejected;
 
   const supabase = createClient(await cookies());
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -52,6 +58,10 @@ export async function signIn(
     password,
   });
 
+  // A suspended staff member is banned on the auth user itself, so GoTrue
+  // refuses them here and this never has to ask `profiles` whether they are
+  // still employed. That matters: a check made after the session cookie is set
+  // is a check that already handed out a session.
   if (error || !data.session) return rejected;
 
   redirect(AFTER_SIGN_IN);
