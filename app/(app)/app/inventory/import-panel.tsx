@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useId, useMemo, useRef, useState, useTransition } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import {
@@ -10,6 +10,7 @@ import {
   IconClose,
   IconUpload,
 } from "@/components/pos/icons";
+import { Select } from "@/components/pos/select-field";
 import { useToast } from "@/components/pos/toaster";
 import { importProducts } from "./actions";
 import type { ImportResult, ImportRow } from "./state";
@@ -154,6 +155,11 @@ export function ImportPanel({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+
+  // One stem for the twelve column pickers. Each one is named by the heading
+  // above it rather than wrapped in a `<label>` — a listbox is not a form
+  // control, so a label around it would name nothing.
+  const mapId = useId();
 
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -443,39 +449,40 @@ export function ImportPanel({
                 const sample = at === undefined ? "" : (body[0]?.[at] ?? "").trim();
 
                 return (
-                  <label key={field.id} className="block">
-                    <span className="pos-label">
+                  <div key={field.id} className="block">
+                    <span className="pos-label" id={`${mapId}-${field.id}`}>
                       {field.label}
                       {field.required ? (
                         <span className="text-signal-bad"> *</span>
                       ) : null}
                     </span>
 
-                    <select
-                      className="pos-field"
-                      value={at ?? ""}
-                      onChange={(event) =>
+                    <Select
+                      value={at === undefined ? "" : String(at)}
+                      onChange={(next) =>
                         setMapping((current) => ({
                           ...current,
-                          [field.id]:
-                            event.target.value === ""
-                              ? undefined
-                              : Number(event.target.value),
+                          [field.id]: next === "" ? undefined : Number(next),
                         }))
                       }
-                    >
-                      <option value="">— not in my sheet —</option>
-                      {headers.map((header, index) => (
-                        <option key={`${header}-${index}`} value={index}>
-                          {header.trim() || `Column ${index + 1}`}
-                        </option>
-                      ))}
-                    </select>
+                      labelledBy={`${mapId}-${field.id}`}
+                      options={[
+                        { id: "", label: "— not in my sheet —" },
+                        // Each column carries its own first value as a second
+                        // line: a sheet whose headings are all "Column 3" is
+                        // matched by what is under them, not by their names.
+                        ...headers.map((header, index) => ({
+                          id: String(index),
+                          label: header.trim() || `Column ${index + 1}`,
+                          description: (body[0]?.[index] ?? "").trim() || undefined,
+                        })),
+                      ]}
+                    />
 
                     <p className="pos-hint truncate">
                       {sample ? `First row: ${sample}` : " "}
                     </p>
-                  </label>
+                  </div>
                 );
               })}
             </div>

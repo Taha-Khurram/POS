@@ -90,7 +90,7 @@ export default async function SettingsPage({
             aria-current={item.id === tab ? "page" : undefined}
             scroll={false}
           >
-            <item.icon className="h-4 w-4" />
+            <item.icon className="pos-tab-icon h-4 w-4" />
             {item.label}
           </Link>
         ))}

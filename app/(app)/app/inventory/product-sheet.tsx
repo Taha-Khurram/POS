@@ -14,6 +14,7 @@ import {
   IconTag,
   IconTrash,
 } from "@/components/pos/icons";
+import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
 import {
   categoriesIn,
@@ -343,6 +344,12 @@ export function ProductSheet({
           <input type="hidden" name="department" value={department} />
           <input type="hidden" name="category" value={category} />
           <input type="hidden" name="subcategory" value={sub} />
+          {/* The tax rate and the unit joined these when their dropdowns
+              stopped being `<select name=…>`. They sit above the fieldset
+              rather than inside it on purpose: a disabled fieldset posts
+              nothing, and these two are never the field being switched off. */}
+          <input type="hidden" name="tax_rate" value={taxRate} />
+          <input type="hidden" name="unit" value={unit} />
           <input
             type="hidden"
             name="variant_count"
@@ -533,59 +540,57 @@ export function ProductSheet({
                   </p>
                 </label>
 
-                <label className="block">
-                  <span className="pos-label">Department</span>
-                  <select
-                    className="pos-field"
-                    value={department}
-                    onChange={(event) => {
-                      setDepartment(event.target.value);
-                      setCategory(categoriesIn(event.target.value)[0]?.name ?? "");
-                      setSub("");
-                    }}
-                  >
-                    {DEPARTMENTS.map((entry) => (
-                      <option key={entry.id} value={entry.name}>
-                        {entry.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {/* The tree, three controls deep. Choosing a department
+                    rewrites the two under it rather than leaving a category
+                    that no longer belongs to it — the item would save with a
+                    pair the register's grid could never page to. */}
+                <SelectRow
+                  label="Department"
+                  value={department}
+                  onChange={(next) => {
+                    setDepartment(next);
+                    setCategory(categoriesIn(next)[0]?.name ?? "");
+                    setSub("");
+                  }}
+                  options={DEPARTMENTS.map((entry) => ({
+                    id: entry.name,
+                    label: entry.name,
+                    description: `${entry.categories.length} categories`,
+                  }))}
+                />
 
-                <label className="block">
-                  <span className="pos-label">Category</span>
-                  <select
-                    className="pos-field"
-                    value={category}
-                    onChange={(event) => {
-                      setCategory(event.target.value);
-                      setSub("");
-                    }}
-                  >
-                    {categories.map((entry) => (
-                      <option key={entry.id} value={entry.name}>
-                        {entry.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectRow
+                  label="Category"
+                  value={category}
+                  onChange={(next) => {
+                    setCategory(next);
+                    setSub("");
+                  }}
+                  options={categories.map((entry) => ({
+                    id: entry.name,
+                    label: entry.name,
+                    description:
+                      entry.sub.length > 0 ? entry.sub.join(" · ") : undefined,
+                  }))}
+                />
 
-                <label className="block">
-                  <span className="pos-label">Subcategory — optional</span>
-                  <select
-                    className="pos-field"
-                    value={sub}
-                    onChange={(event) => setSub(event.target.value)}
-                    disabled={subs.length === 0}
-                  >
-                    <option value="">None</option>
-                    {subs.map((entry) => (
-                      <option key={entry} value={entry}>
-                        {entry}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectRow
+                  label="Subcategory — optional"
+                  value={sub}
+                  onChange={setSub}
+                  disabled={subs.length === 0}
+                  placeholder={
+                    subs.length === 0 ? "This category has none" : "None"
+                  }
+                  options={
+                    subs.length === 0
+                      ? []
+                      : [
+                          { id: "", label: "None" },
+                          ...subs.map((entry) => ({ id: entry, label: entry })),
+                        ]
+                  }
+                />
 
                 <label className="block">
                   <span className="pos-label">Supplier — optional</span>
@@ -664,21 +669,16 @@ export function ProductSheet({
                   <p className="pos-hint">Tax included — as Settings has it.</p>
                 </label>
 
-                <label className="block">
-                  <span className="pos-label">Tax rate</span>
-                  <select
-                    name="tax_rate"
-                    className="pos-field"
-                    value={taxRate}
-                    onChange={(event) => setTaxRate(event.target.value)}
-                  >
-                    {TAX_RATES.map((rate) => (
-                      <option key={rate.id} value={rate.id}>
-                        {rate.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectRow
+                  label="Tax rate"
+                  value={taxRate}
+                  onChange={setTaxRate}
+                  options={TAX_RATES.map((rate) => ({
+                    id: String(rate.id),
+                    label: rate.short,
+                    description: rate.levy,
+                  }))}
+                />
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -774,23 +774,14 @@ export function ProductSheet({
               </fieldset>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                <label className="block">
-                  <span className="pos-label">Sold in</span>
-                  <select
-                    name="unit"
-                    className="pos-field"
-                    value={unit}
-                    onChange={(event) => setUnit(event.target.value as UnitId)}
-                  >
-                    {UNITS.filter((entry) =>
-                      tracking === "weight" ? entry.fractional : true,
-                    ).map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <SelectRow
+                  label="Sold in"
+                  value={unit}
+                  onChange={(next) => setUnit(next as UnitId)}
+                  options={UNITS.filter((entry) =>
+                    tracking === "weight" ? entry.fractional : true,
+                  ).map((entry) => ({ id: entry.id, label: entry.label }))}
+                />
 
                 <label className="block">
                   <span className="pos-label">

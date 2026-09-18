@@ -210,10 +210,18 @@ export const SUPPLIER_MAX = 80;
 export const PRICE_MAX = 9_999_999;
 export const STOCK_MAX = 999_999;
 
+/* The rate and who levies it, in two pieces. The dropdown that shows these is
+   a listbox and can carry a second line; anything reading them as one string
+   still has `label`, which is why the rate is in both. */
 export const TAX_RATES = [
-  { id: 18, label: "18% — standard (FBR)" },
-  { id: 16, label: "16% — Punjab services (PRA)" },
-  { id: 0, label: "0% — exempt or zero-rated" },
+  { id: 18, label: "18% — standard (FBR)", short: "18%", levy: "Standard rate — FBR" },
+  {
+    id: 16,
+    label: "16% — Punjab services (PRA)",
+    short: "16%",
+    levy: "Punjab services — PRA",
+  },
+  { id: 0, label: "0% — exempt or zero-rated", short: "0%", levy: "Exempt or zero-rated" },
 ];
 
 export const isUnitId = (value: unknown): value is UnitId =>

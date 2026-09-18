@@ -67,19 +67,32 @@ export default async function InventoryPage({
         </p>
       </header>
 
+      {/* The count rides in the tab so the switcher answers "is there anything
+          in there" without a visit. Bulk import carries none — it is an action,
+          not a list, and a nought beside it would read as an empty one. */}
       <nav className="pos-tabs" aria-label="Catalog sections">
-        {TABS.map((item) => (
-          <Link
-            key={item.id}
-            href={`/app/inventory?tab=${item.id}`}
-            className="pos-tab"
-            aria-current={item.id === tab ? "page" : undefined}
-            scroll={false}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        ))}
+        {TABS.map((item) => {
+          const current = item.id === tab;
+          const count = item.id === "items" ? items.length : undefined;
+
+          return (
+            <Link
+              key={item.id}
+              href={`/app/inventory?tab=${item.id}`}
+              className="pos-tab"
+              aria-current={current ? "page" : undefined}
+              scroll={false}
+            >
+              <item.icon className="pos-tab-icon h-4 w-4" />
+              {item.label}
+              {count === undefined ? null : (
+                <span className="pos-tab-count">
+                  {count.toLocaleString("en-PK")}
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </nav>
 
       {tab === "items" ? (

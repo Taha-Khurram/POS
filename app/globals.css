@@ -1030,6 +1030,17 @@
     top: calc(100% + 6px);
   }
 
+  /* The count at the right edge of a row. Mixed out of the row's own colour
+     for the reason `.pos-option-note` is: the selected row changes ground in
+     both themes and a fixed grey would go unreadable on one of them. */
+  .pos-option-meta {
+    flex: none;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in oklab, currentColor 58%, transparent);
+  }
+
   /* The active row is where the arrow keys are, which is not the same thing as
      the chosen row — so it is drawn with the hover wash and the tick stays on
      whatever is actually selected. */
@@ -1136,14 +1147,37 @@
 
   /* Section switcher. Links rather than buttons: the tab lives in the URL, so
      the page behind it stays a server component and a half-filled settings
-     screen can be sent to whoever actually knows the NTN. */
+     screen can be sent to whoever actually knows the NTN.
+
+     A segmented control rather than an underline. The counter is a white
+     surface with white cards on it, and a 2px rule under one word was the one
+     piece of navigation on this screen with no shape of its own — at arm's
+     length on a tablet, in daylight, it read as an underlined link. A filled
+     pill on a washed track is the same idiom as the rail's active row, which
+     is the only other place in the console where something is *selected*
+     rather than pressed.
+
+     The track is as wide as its tabs and not as wide as the page: a three-item
+     strip stretched across 1400px is a toolbar, not a switcher. The scrollbar
+     is hidden because the track has rounded ends and a scrollbar squares them
+     off on Windows. */
   .pos-tabs {
+    /* `max-content` rather than `inline-flex`: both shrink the track to its
+       tabs, but an inline-level box sits on a text baseline and leaves a
+       descender's worth of gap under it. */
     display: flex;
-    gap: 0.25rem;
+    width: max-content;
+    max-width: 100%;
+    gap: 0.1875rem;
     overflow-x: auto;
-    padding-bottom: 2px;
-    border-bottom: 1px solid var(--pale-lilac);
+    padding: 0.25rem;
+    border-radius: 13px;
+    border: 1px solid var(--pale-lilac);
+    background: var(--lilac-wash);
+    scrollbar-width: none;
   }
+
+  .pos-tabs::-webkit-scrollbar { display: none; }
 
   .pos-tab {
     position: relative;
@@ -1151,28 +1185,57 @@
     flex: none;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 0.75rem 0.625rem;
+    border-radius: 10px;
+    padding: 0.4375rem 0.8125rem;
     font-family: var(--font-display);
     font-size: 0.8125rem;
     font-weight: 600;
     color: var(--color-graphite-500);
     white-space: nowrap;
-    transition: color 0.2s var(--ease-out-soft);
+    transition:
+      background-color 0.22s var(--ease-out-soft),
+      color 0.22s var(--ease-out-soft),
+      box-shadow 0.28s var(--ease-out-soft);
   }
 
-  .pos-tab:hover { color: var(--imperial); }
+  /* Hover is for the tabs you could go to. The one you are on already has the
+     strongest paint available and lighting it further only makes the pointer
+     look like it is doing something. */
+  .pos-tab:hover:not([aria-current="page"]) {
+    color: var(--indigo-deep);
+    background: color-mix(in oklab, var(--color-paper-50) 72%, transparent);
+  }
 
-  .pos-tab[aria-current="page"] { color: var(--indigo-deep); }
+  .pos-tab[aria-current="page"] {
+    color: var(--indigo-deep);
+    background: var(--color-paper-50);
+    box-shadow:
+      0 1px 1px rgb(59 40 204 / 0.12),
+      0 6px 14px -10px rgb(59 40 204 / 0.55);
+  }
 
-  /* The underline sits on the container's own border, not beside it. */
-  .pos-tab[aria-current="page"]::after {
-    content: "";
-    position: absolute;
-    inset-inline: 0.375rem;
-    bottom: -2px;
-    height: 2px;
+  .pos-tab-icon { flex: none; color: var(--imperial); }
+
+  /* A tally rides in the tab so the switcher answers "is there anything in
+     there" without a visit — the import tab has no count and carries none,
+     rather than a nought that would read as an empty list. */
+  .pos-tab-count {
+    flex: none;
     border-radius: 999px;
+    background: var(--wisteria);
+    padding-inline: 0.375rem;
+    min-width: 1.25rem;
+    text-align: center;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.15rem;
+    color: var(--indigo-deep);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pos-tab[aria-current="page"] .pos-tab-count {
     background: var(--imperial);
+    color: #fff;
   }
 
   /* ---------------- Surfaces ---------------- */
@@ -1216,6 +1279,108 @@
 
   .pos-menu-item:hover {
     background: var(--lilac-wash);
+    color: var(--indigo-deep);
+  }
+
+  /* ---- The filter menu --------------------------------------------------
+     One button instead of a row of them. The item list had a department
+     dropdown and five state buttons sitting permanently across the top of the
+     table — six controls for a screen whose job is the table, and on a
+     10-inch tablet they wrapped onto a second line and pushed the first row of
+     items under the fold. They live behind the funnel now, and what is
+     actually *on* comes back as chips under the bar, which is the only part
+     anybody needs to see at rest. */
+
+  /* Wider than `.pos-menu`, and padded, because this one holds labelled
+     controls rather than a list of rows. */
+  .pos-menu-panel {
+    width: min(19rem, calc(100vw - 2rem));
+    padding: 0.875rem;
+  }
+
+  .pos-menu-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .pos-menu-title {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--color-graphite-900);
+  }
+
+  .pos-menu-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.875rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--pale-lilac);
+  }
+
+  /* How many filters are on, on the closed button. A number and not a dot:
+     "why is my list short" is answered by the number, and a dot only says
+     that something is. */
+  .pos-btn-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 999px;
+    padding-inline: 0.25rem;
+    background: var(--imperial);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pos-btn-primary .pos-btn-count {
+    background: rgb(255 255 255 / 0.22);
+  }
+
+  /* An active filter, named and removable. The × is the whole point: taking a
+     filter off should not mean opening the menu that put it on. */
+  .pos-filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 999px;
+    border: 1px solid var(--pale-lilac);
+    background: var(--lilac-wash);
+    padding: 0.1875rem 0.25rem 0.1875rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--indigo-deep);
+    white-space: nowrap;
+  }
+
+  .pos-filter-tag-key {
+    font-weight: 500;
+    color: color-mix(in oklab, currentColor 62%, transparent);
+  }
+
+  .pos-filter-tag-x {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 999px;
+    color: var(--imperial);
+    cursor: pointer;
+    transition:
+      background-color 0.2s var(--ease-out-soft),
+      color 0.2s var(--ease-out-soft);
+  }
+
+  .pos-filter-tag-x:hover {
+    background: var(--wisteria);
     color: var(--indigo-deep);
   }
 

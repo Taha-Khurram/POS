@@ -108,6 +108,14 @@ export const IconSearch = (props: IconProps) => (
   </Glyph>
 );
 
+/* A funnel, not three sliders: the sliders glyph reads as "settings" to
+   anybody who has used a phone, and this button narrows a list. */
+export const IconFilter = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 5h17l-6.6 7.6v5.7l-3.8 2.2v-7.9Z" />
+  </Glyph>
+);
+
 export const IconBell = (props: IconProps) => (
   <Glyph {...props}>
     <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9Z" />
