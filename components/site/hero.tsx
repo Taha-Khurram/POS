@@ -70,8 +70,8 @@ export function Hero() {
             style={entrance(260)}
           >
             The point of sale built for Pakistani counters — FBR digital
-            invoicing, udhaar khata, cash, card, Raast and wallet payments, all
-            in one screen your staff learns in a day.
+            invoicing, stock that adds up, cash, card, Raast and wallet
+            payments, all in one screen your staff learns in a day.
           </p>
 
           <div

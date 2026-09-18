@@ -220,7 +220,7 @@ export function CounterForm({
                   </span>
                 ) : (
                   <>
-                    Raast, Easypaisa, JazzCash and udhaar are not here yet. A
+                    Raast, Easypaisa and JazzCash are not here yet. A
                     button that cannot settle is worse than no button.
                   </>
                 )}

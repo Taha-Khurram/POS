@@ -26,8 +26,8 @@ export type Counter = {
   receiptPrefix: string;
   acceptsCash: boolean;
   acceptsCard: boolean;
-  /** A line at the foot of the roll — a return policy, or the udhaar number.
-   *  Null for the shop that prints neither. */
+  /** A line at the foot of the roll — a return policy, or the WhatsApp number
+   *  to ring. Null for the shop that prints neither. */
   receiptFooter: string | null;
   autoPrint: boolean;
   /** The order they are listed and picked in. A shop names its tills by where
@@ -69,10 +69,12 @@ export const newCounterDefaults = (position: number) => ({
 /* ---------------- Tenders ---------------- */
 
 /**
- * The two the counter can take today. `sale_tenders` in 0008 already allows
- * raast, easypaisa, jazzcash and udhaar; those need a wallet integration and a
- * customer's khata respectively, so offering them here would be a button that
- * cannot settle.
+ * The two the counter can take today. `sale_tenders` also allows raast,
+ * easypaisa and jazzcash, and those need a wallet integration — so offering
+ * them here would be a button that cannot settle. `udhaar` was a fourth and is
+ * gone: 0018 took it off the column with the rest of the khata, because a
+ * tender meaning "not paid" with no ledger under it is a sale the shop cannot
+ * account for.
  */
 export const TENDERS = [
   {

@@ -20,7 +20,10 @@ import type { ShopSettings } from "@/lib/pos/settings-options";
  *
  * Two questions and no more: which way, and — for cash — how much was handed
  * over. Everything else a payment screen usually asks (split tenders, a
- * customer, a discount) is a queue behind a cashier holding a 5,000 note.
+ * discount) is a queue behind a cashier holding a 5,000 note. The customer is
+ * attached on the bill itself, before this opens, for the same reason: it is
+ * the one thing that has to be decided while the shopping is still going on the
+ * counter, not while the money is in somebody's hand.
  *
  * The cash path is the one that earns its keep. A cashier doing the change in
  * their head is the single most common way a drawer ends the day short, so the

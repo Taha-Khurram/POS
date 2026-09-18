@@ -68,7 +68,10 @@ and fonts only — chrome belongs to the group.
   the margin/stock/barcode arithmetic that the add-product sheet, the till and
   the Server Actions all have to agree about. The catalog's *rows* are read by
   `lib/pos/items.ts` and its tree by `lib/pos/tree.ts`, both `server-only` like
-  the rest.
+  the rest. `lib/pos/customer.ts` is the same split again — the shape, the field
+  limits, the phone normalisation and the matcher, shared by the Customers
+  screen and the till — with `lib/pos/customers.ts` as its `server-only`
+  reader.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -146,8 +149,11 @@ first place.
 
 ## Copy
 
-The voice is specific and local: rupee prices, FBR digital invoicing, udhaar
-khata, load-shedding, named cities and shop types, occasional Urdu ("Shukriya").
+The voice is specific and local: rupee prices, FBR digital invoicing, the
+register book, load-shedding, named cities and shop types, occasional Urdu
+("Shukriya"). **There is no udhaar khata and no credit anywhere in Flo** —
+`0018` removed the last of it from the schema and the site, so no new copy may
+promise a balance, a limit or a reminder about money owed.
 Keep new copy concrete and in that register — no generic SaaS filler.
 
 ## Next.js 16 notes
@@ -307,6 +313,41 @@ re-render the row as it was before the write and the form redraws itself with
 the values the owner just changed away from. `getShopName` is the exception and
 is only read by the layout.
 
+## Customers
+
+`public.customers` (`0018`) is the shop's regulars: a name, an optional phone,
+an address, a note and `is_active`. **The phone is the identity, not the name** —
+two brothers are both called Bilal, and one number is one person. It is stored
+normalised by `normalisePhone` in `lib/pos/customer.ts`, so `+92 300 1234567`
+and `0300-1234567` collide on `customers_tenant_phone_idx` instead of becoming
+the same customer twice.
+
+`lib/pos/customers.ts` reads the rows through the shop's own JWT and — like
+`items.ts` and the readers in `shop.ts` — **none of them may be wrapped in React
+`cache()`**, or the re-render a `revalidatePath` triggers redraws the list as it
+stood before the save. Writes are `app/(app)/app/customers/actions.ts` on the
+service role, gated by `can_manage_customers`.
+
+`/app/customers` is the list; `?customer=<id>` is one person's record and their
+last hundred bills. The cap is stated on the screen rather than papered over,
+because the totals above the table are the totals *of those bills*.
+
+`sales.customer_id` is `on delete set null` beside a not-null `receipt_number`,
+so deleting somebody leaves every receipt printing and still counted — what is
+lost is the ability to total what they spent, which is why the sheet offers
+switching them off first. The till attaches a customer from the bill panel
+before the payment sheet opens, and it is always optional: a walk-in is most
+bills in most shops, and a register that insists on a name has a queue behind
+it.
+
+**The khata is not coming.** The plan specified `customers` plus an
+`udhaar_ledger` of debits and credits, a per-customer limit at the register and
+ageing buckets. It is not being built, and `0018` removed everything that
+pointed at it rather than leaving it standing: `role_permissions.can_sell_on_khata`
+and `khata_ceiling` (replaced by `can_manage_customers`, carrying the old
+value), the `udhaar` tender on `sale_tenders`, and the `udhaar_khata` flag on
+both plans. Don't add a balance to `Customer`.
+
 ## Notifications
 
 The bell and the toaster are two halves of one vocabulary and share their tones.
@@ -345,9 +386,12 @@ and carries no `server-only`, because the till is a client component and the
 Server Actions have to validate against the same lists.
 
 **The browser never decides what anything costs.** It sends item ids and
-quantities; `app/(app)/app/register/actions.ts` re-prices every line from the
-catalog and recomputes the total with the same `billOf` the screen used. The
-write is `public.record_sale` — one security-definer function, one transaction —
+quantities — and, when one is attached, a customer id and nothing else about
+them; `app/(app)/app/register/actions.ts` re-prices every line from the catalog,
+re-reads the customer, and recomputes the total with the same `billOf` the
+screen used. The write is `public.record_sale` — one security-definer function,
+one transaction, which since `0018` also checks the customer belongs to the shop
+before it claims a number —
 which claims the counter's next receipt number and inserts the sale, its lines
 and its tender together. A number claimed against a sale that then failed to
 insert is a hole in the shop's series. `saleId` is minted in the browser so a

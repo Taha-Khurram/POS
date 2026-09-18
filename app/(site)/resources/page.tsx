@@ -8,7 +8,7 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Resources",
   description:
-    "Guides, benchmarks, and templates for running a Pakistani counter — FBR POS integration, udhaar recovery, stock counts, and Ramadan planning.",
+    "Guides, benchmarks, and templates for running a Pakistani counter — FBR POS integration, keeping your regulars, stock counts, and Ramadan planning.",
 };
 
 const FEATURED = {
@@ -27,14 +27,14 @@ const ARTICLES = [
   },
   {
     kind: "Guide",
-    title: "Udhaar without losing money",
-    copy: "Limits per customer, ageing you can actually read, and the WhatsApp reminder that gets paid instead of ignored.",
+    title: "Keeping the regulars who keep you open",
+    copy: "Getting a phone number at the counter without slowing the queue, and what to do with it once a hundred shops have the same one.",
     meta: "10 min read",
   },
   {
     kind: "Benchmark",
     title: "What good looks like: 2026 Pakistan retail benchmarks",
-    copy: "Billing times, return rates, stock variance, and udhaar recovery across 900 counters, split by format and city.",
+    copy: "Billing times, return rates, stock variance, and repeat-customer share across 900 counters, split by format and city.",
     meta: "12 min read",
   },
   {
@@ -46,7 +46,7 @@ const ARTICLES = [
   {
     kind: "Template",
     title: "Day-end closing sheet for branch managers",
-    copy: "One page per branch: cash, card, wallet, udhaar, and the four figures to reconcile before the shutter comes down.",
+    copy: "One page per branch: cash, card, wallet, and the four figures to reconcile before the shutter comes down.",
     meta: "Download",
   },
   {

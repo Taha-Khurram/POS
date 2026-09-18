@@ -35,7 +35,7 @@ type Item = {
  * cashier lives in the first group and never scrolls past it.
  *
  * Unbuilt modules are listed rather than hidden, and marked. A shopkeeper who
- * was sold "stock and khata" should be able to see where they will be; a rail
+ * was sold "stock and reports" should be able to see where they will be; a rail
  * that grows new items every fortnight teaches people to re-read it every time.
  */
 const GROUPS: { label: string; items: Item[] }[] = [
@@ -51,7 +51,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
     label: "Shop",
     items: [
       { id: "inventory", href: "/app/inventory", label: "Products & stock", icon: IconInventory },
-      { id: "customers", href: "/app/customers", label: "Customers & khata", icon: IconCustomers, soon: true },
+      { id: "customers", href: "/app/customers", label: "Customers", icon: IconCustomers },
       { id: "staff", href: "/app/employees", label: "Staff", icon: IconEmployees },
     ],
   },

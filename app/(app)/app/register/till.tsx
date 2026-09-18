@@ -15,7 +15,9 @@ import {
   IconPrinter,
   IconSearch,
   IconTrash,
+  IconUser,
 } from "@/components/pos/icons";
+import { useDismiss } from "@/components/pos/use-dismiss";
 import { useToast } from "@/components/pos/toaster";
 import {
   billOf,
@@ -36,6 +38,11 @@ import {
   unitShort,
   type Product,
 } from "@/lib/pos/catalog";
+import {
+  matchesCustomer,
+  writePhone,
+  type Customer,
+} from "@/lib/pos/customer";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
 import { recordSale } from "./actions";
@@ -66,16 +73,23 @@ import { Receipt, type Sale } from "./receipt";
  */
 export function Till({
   items,
+  customers,
   counter,
   shop,
   settings,
 }: {
   items: Product[];
+  /** Everyone the till may put a bill against — the shop's own, minus the ones
+   *  switched off. Attaching one is optional and stays that way: most bills in
+   *  most shops are a walk-in, and a register that insists on a name before it
+   *  will charge is a register with a queue behind it. */
+  customers: Customer[];
   counter: Counter;
   shop: ShopProfile;
   settings: ShopSettings;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   const [scanning, setScanning] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -227,6 +241,7 @@ export function Till({
   const clear = () => {
     if (!confirmClear) return setConfirmClear(true);
     setLines([]);
+    setCustomer(null);
     setConfirmClear(false);
     focusSearch();
   };
@@ -258,6 +273,9 @@ export function Till({
           counterId: counter.id,
           tender,
           lines: frozen.map((line) => ({ id: line.id, quantity: line.quantity })),
+          // The id only. The server re-reads the row, the same way it re-prices
+          // every line — the browser says who, never what is true about them.
+          customerId: customer?.id ?? null,
         }).catch(() => ({
           ok: false as const,
           error:
@@ -278,12 +296,20 @@ export function Till({
       // Frozen above. The cart is emptied on the next line, and a receipt that
       // re-read it would print the next customer's shopping.
       lines: frozen,
+      // The name as it was when the bill was rung up, for the same reason
+      // `sale_lines.name_snapshot` exists: the roll is a record of what
+      // happened, not a view onto rows that can change afterwards.
+      customer: customer ? customer.name : null,
       bill,
       tender,
       tendered: given,
       change,
     });
 
+    // The next person at the counter is the next person at the counter. A
+    // customer left attached is how somebody else's shopping lands on a
+    // regular's record.
+    setCustomer(null);
     setLines([]);
     setPaying(false);
     saleId.current = "";
@@ -483,6 +509,15 @@ export function Till({
             ) : null}
           </header>
 
+          <CustomerBar
+            customers={customers}
+            chosen={customer}
+            onChoose={(next) => {
+              setCustomer(next);
+              focusSearch();
+            }}
+          />
+
           <div className="min-h-0 flex-1 overflow-y-auto">
             {lines.length === 0 ? (
               <p className="px-4 py-10 text-center text-[0.875rem] leading-relaxed text-graphite-500">
@@ -619,6 +654,158 @@ export function Till({
         />
       ) : null}
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Who the bill is for.
+ *
+ * One line at the top of the bill, and a walk-in by default — because a walk-in
+ * is most bills in most shops, and a register that asks for a name before it
+ * will charge is a register with a queue behind it. Attaching somebody is a tap
+ * and a search; the till never insists.
+ *
+ * The search is `matchesCustomer`, shared with the Customers screen, so
+ * somebody the owner can find is somebody the cashier can find. Phone digits
+ * match without their spaces: a cashier reading the number off the customer's
+ * own screen types the spaces that are printed on it.
+ *
+ * It closes on a choice, unlike the catalog's filter menu — picking a customer
+ * is one decision and the cashier's hands are needed back on the scanner.
+ */
+function CustomerBar({
+  customers,
+  chosen,
+  onChoose,
+}: {
+  customers: Customer[];
+  chosen: Customer | null;
+  onChoose: (next: Customer | null) => void;
+}) {
+  const { ref, open, setOpen } = useDismiss<HTMLDivElement>();
+  const [query, setQuery] = useState("");
+
+  const results = useMemo(() => {
+    const raw = query.trim();
+    if (!raw) return customers.slice(0, 8);
+    return customers.filter((entry) => matchesCustomer(entry, raw)).slice(0, 12);
+  }, [customers, query]);
+
+  // Nobody on the list yet is not an error and does not get a control. A shop
+  // that has never added a customer sees nothing here at all rather than a
+  // button that opens an empty box.
+  if (customers.length === 0 && !chosen) return null;
+
+  const pick = (next: Customer | null) => {
+    onChoose(next);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative border-b border-orchid-100 px-4 py-2" ref={ref}>
+      <div className="flex items-center gap-2">
+        <IconUser className="h-3.5 w-3.5 flex-none text-graphite-500" aria-hidden />
+
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="min-w-0 flex-1 truncate text-left text-[0.8125rem] text-graphite-700 underline-offset-2 hover:underline"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          {chosen ? (
+            <>
+              <span className="font-medium text-graphite-900">{chosen.name}</span>
+              {chosen.phone ? (
+                <span className="ml-1.5 font-mono text-[0.75rem] text-graphite-500">
+                  {writePhone(chosen.phone)}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            "Walk-in customer — tap to attach one"
+          )}
+        </button>
+
+        {chosen ? (
+          <button
+            type="button"
+            onClick={() => pick(null)}
+            className="pos-filter-tag-x flex-none"
+            aria-label={`Take ${chosen.name} off this bill`}
+          >
+            <IconClose className="h-3 w-3" />
+          </button>
+        ) : null}
+      </div>
+
+      {open ? (
+        <div className="pos-menu pos-menu-panel" role="dialog" aria-label="Attach a customer">
+          <div className="pos-menu-head">
+            <span className="pos-menu-title">Who is this bill for?</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="pos-filter-tag-x"
+              aria-label="Close"
+            >
+              <IconClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <input
+            className="pos-field"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Name or phone"
+            aria-label="Search customers"
+            autoComplete="off"
+            autoFocus
+          />
+
+          <ul className="mt-2 max-h-56 overflow-y-auto">
+            {results.length === 0 ? (
+              <li className="px-1 py-3 text-[0.8125rem] text-graphite-500">
+                Nobody matches that. Add them on Customers — it takes a name and
+                a number.
+              </li>
+            ) : (
+              results.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    onClick={() => pick(entry)}
+                    className="pos-menu-item w-full text-left"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                    {entry.phone ? (
+                      <span className="ml-2 flex-none font-mono text-[0.75rem] text-graphite-500">
+                        {writePhone(entry.phone)}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+
+          {chosen ? (
+            <div className="pos-menu-foot">
+              <button
+                type="button"
+                onClick={() => pick(null)}
+                className="pos-btn pos-btn-quiet pos-btn-sm"
+              >
+                Make it a walk-in
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

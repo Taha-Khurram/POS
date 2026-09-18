@@ -23,7 +23,7 @@ const PLANS = [
       "Cash, card, Raast, Easypaisa and JazzCash",
       "FBR digital invoicing with QR receipts",
       "Item catalog with rates, deals, and sizes",
-      "Udhaar khata with customer balances",
+      "Customer list, searchable by name or phone",
       "Stock in and out, low-stock alerts",
       "Daily sales and cash-count report",
       "WhatsApp support in Urdu and English",
@@ -93,7 +93,7 @@ const FAQS = [
   },
   {
     q: "Which payment methods can I accept?",
-    a: "Cash, cards through any 1LINK-connected acquirer, Raast QR, Easypaisa, JazzCash, and bank transfer against an invoice. Udhaar is tracked as a balance rather than a payment, so your khata and your cash always reconcile.",
+    a: "Cash, cards through any 1LINK-connected acquirer, Raast QR, Easypaisa, JazzCash, and bank transfer against an invoice. Every one of them is recorded as its own tender, so the drawer, the card settlement and the day-end report reconcile against each other.",
   },
   {
     q: "Is there a contract, and can I add branches later?",
@@ -116,7 +116,7 @@ export default function PricingPage() {
             <span className="text-gradient">in rupees</span>
           </>
         }
-        lede="Rs 5,000 or Rs 10,000 per branch per month. FBR invoicing, udhaar khata, and support in Urdu are in both — no free tier, and no fees invented at the end of the quarter."
+        lede="Rs 5,000 or Rs 10,000 per branch per month. FBR invoicing, the customer list, and support in Urdu are in both — no free tier, and no fees invented at the end of the quarter."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo

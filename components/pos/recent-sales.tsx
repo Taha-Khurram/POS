@@ -15,7 +15,6 @@ const METHOD_LABEL: Record<TenderMethod, string> = {
   raast: "Raast",
   easypaisa: "Easypaisa",
   jazzcash: "JazzCash",
-  udhaar: "Udhaar",
 };
 
 /**
@@ -51,13 +50,7 @@ const COLUMNS: Column<RecentSale>[] = [
     header: "Payment",
     hideBelow: "md",
     cell: (sale) => (
-      // Udhaar is money that has not arrived, so it is marked rather than
-      // sitting in the list looking like every other completed sale.
-      <span
-        className={`pos-badge ${
-          sale.method === "udhaar" ? "pos-badge-warn" : "pos-badge-info"
-        }`}
-      >
+      <span className="pos-badge pos-badge-info">
         {METHOD_LABEL[sale.method]}
       </span>
     ),

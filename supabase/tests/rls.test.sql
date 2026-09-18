@@ -182,14 +182,45 @@ select throws_ok(
   'a category cannot be filed under another tenant''s department'
 );
 
+-- The customer list, added in 0018. Tenant A knows two people, tenant B one —
+-- and B's is the row that must never appear in A's list. A shop's customer list
+-- is names and mobile numbers, which is the one table here a competitor would
+-- pay for outright.
+insert into public.customers (id, tenant_id, name, phone, is_active)
+values
+  ('fffffff1-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Bilal Ahmed', '03001234567', true),
+  ('fffffff2-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Ayesha Khan', null, false),
+  ('fffffff3-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'Imran Sheikh', '03211234567', true);
+
+-- One number is one customer, per shop. The partial unique index is what stops
+-- the same regular being entered three times over, which is the one way a
+-- customer list rots.
+select throws_ok(
+  $$ insert into public.customers (tenant_id, name, phone)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'Bilal again', '03001234567') $$,
+  '23505', null,
+  'two customers in one shop cannot share a phone number'
+);
+
+-- ...and two shops can. Tenant B's customer carries a number tenant A already
+-- has, because two kiryanas on one street share a customer and always will.
+select lives_ok(
+  $$ insert into public.customers (tenant_id, name, phone)
+     values ('bbbbbbbb-0000-4000-8000-000000000001', 'Bilal Ahmed', '03001234567') $$,
+  'two shops may each hold the same customer phone number'
+);
+
 -- One recorded sale each, so the read tests have something to leak.
-insert into public.sales (id, tenant_id, branch_id, counter_id, receipt_number, business_day, subtotal, total)
+insert into public.sales (id, tenant_id, branch_id, counter_id, customer_id, receipt_number, business_day, subtotal, total)
 select
-  v.id, v.tenant_id, b.id, v.counter_id, v.receipt_number, current_date, v.total, v.total
+  v.id, v.tenant_id, b.id, v.counter_id, v.customer_id, v.receipt_number, current_date, v.total, v.total
 from (values
-  ('dddddddd-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid, 'ccccccc1-0000-4000-8000-000000000001'::uuid, 'ALM-260916-0001', 450.00),
-  ('dddddddd-0000-4000-8000-000000000002'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid, 'ccccccc3-0000-4000-8000-000000000001'::uuid, 'BKK-260916-0001', 1200.00)
-) as v (id, tenant_id, counter_id, receipt_number, total)
+  ('dddddddd-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid, 'ccccccc1-0000-4000-8000-000000000001'::uuid, 'fffffff1-0000-4000-8000-000000000001'::uuid, 'ALM-260916-0001', 450.00),
+  ('dddddddd-0000-4000-8000-000000000002'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid, 'ccccccc3-0000-4000-8000-000000000001'::uuid, null::uuid, 'BKK-260916-0001', 1200.00)
+) as v (id, tenant_id, counter_id, customer_id, receipt_number, total)
 join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
 
 insert into public.sale_tenders (tenant_id, sale_id, method, amount)
@@ -421,6 +452,49 @@ select throws_ok(
   'tenant user cannot delete its own categories directly'
 );
 
+-- The customer list, added in 0018. One shop reading another's customers is
+-- reading their names and their mobile numbers — the most directly saleable
+-- thing in this schema, and the leak a shopkeeper would never forgive.
+select is(
+  (select count(*) from public.customers), 2::bigint,
+  'tenant A sees its own two customers and neither of tenant B''s'
+);
+
+select is_empty(
+  $$ select 1 from public.customers
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B customers'
+);
+
+-- A switched-off customer is still tenant A's own row: `is_active` is what the
+-- till filters on, never a policy, so the editor can still reach them.
+select is(
+  (select count(*) from public.customers where not is_active), 1::bigint,
+  'a switched-off customer is still readable by their own shop'
+);
+
+-- Rule 3: written by a Server Action on the service role and nowhere else. A
+-- tenant that could insert its own customers could also edit somebody else's
+-- phone number the moment a policy was widened by accident.
+select throws_ok(
+  $$ insert into public.customers (tenant_id, name)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'Forged') $$,
+  '42501', null,
+  'tenant user cannot add a customer directly'
+);
+
+select throws_ok(
+  $$ update public.customers set phone = '03009999999' $$,
+  '42501', null,
+  'tenant user cannot edit a customer directly'
+);
+
+select throws_ok(
+  $$ delete from public.customers $$,
+  '42501', null,
+  'tenant user cannot delete its own customers directly'
+);
+
 -- Takings, added in 0011. The commercially expensive leak: one shop reading
 -- another's day, or writing itself a sale that never happened.
 select is(
@@ -460,7 +534,7 @@ select throws_ok(
   $$ select public.record_sale(
        'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
        'ccccccc1-0000-4000-8000-000000000001'::uuid,
-       gen_random_uuid(), current_date, null, 0, 0, 'cash', '[]'::jsonb) $$,
+       gen_random_uuid(), current_date, null, 0, 0, 'cash', '[]'::jsonb, null) $$,
   '42501', null,
   'tenant user cannot call record_sale'
 );

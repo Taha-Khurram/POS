@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 const INDUSTRIES = [
   {
     name: "Kiryana & general store",
-    lede: "Half the shop is on udhaar and the other half is in a hurry.",
-    copy: "Barcode or name search, sale by kilo, loose and carton rates, and a khata that remembers who owes what — so the notebook can retire.",
-    wins: ["Sale by weight", "Udhaar khata", "Loose and carton rates"],
+    lede: "Two hundred regulars, four hundred lines, and everybody is in a hurry.",
+    copy: "Barcode or name search, sale by kilo, loose and carton rates, and a customer list that knows your regulars by phone number — so the notebook can retire.",
+    wins: ["Sale by weight", "Regulars by phone", "Loose and carton rates"],
     accent: true,
   },
   {
@@ -74,7 +74,7 @@ const STEPS = [
 const METRICS = [
   { value: 38, suffix: "%", label: "Faster billing at peak hour" },
   { value: 3.5, decimals: 1, suffix: "h", label: "Saved on weekly stock counts" },
-  { value: 96, suffix: "%", label: "Udhaar recovered within 30 days" },
+  { value: 96, suffix: "%", label: "Repeat customers matched to a bill" },
   { value: 900, suffix: "+", label: "Counters running Flo in Pakistan" },
 ];
 

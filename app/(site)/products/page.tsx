@@ -10,7 +10,7 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Products",
   description:
-    "Billing, payments, stock, udhaar, staff, FBR compliance, and reporting — the modules that run a Pakistani counter and everything behind it.",
+    "Billing, payments, stock, customers, staff, FBR compliance, and reporting — the modules that run a Pakistani counter and everything behind it.",
 };
 
 const MODULES = [
@@ -45,13 +45,13 @@ const MODULES = [
     ],
   },
   {
-    name: "Udhaar khata",
+    name: "Customers",
     tag: "For regulars",
-    copy: "The credit book, kept properly. Every balance is tied to a phone number, and reminders go out on WhatsApp instead of a phone call you keep putting off.",
+    copy: "The register book, kept properly. A name, a number, and every bill they have been on — so the new rate list goes to the people who actually buy from you.",
     points: [
-      "Per-customer limits and ageing",
-      "WhatsApp reminders and statements",
-      "Part payments against old bills",
+      "Found by name or phone at the till",
+      "Every bill attached to the customer",
+      "The note you would have written in the margin",
     ],
   },
   {
@@ -97,7 +97,7 @@ export default function ProductsPage() {
             <span className="text-gradient">nothing it doesn&rsquo;t</span>
           </>
         }
-        lede="Seven modules sharing one catalog, one khata, and one set of numbers — so the register, the store, the tax file, and the owner&rsquo;s phone never disagree."
+        lede="Seven modules sharing one catalog, one customer list, and one set of numbers — so the register, the store, the tax file, and the owner&rsquo;s phone never disagree."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo

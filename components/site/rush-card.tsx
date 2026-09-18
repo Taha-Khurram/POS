@@ -10,7 +10,7 @@ const TAGS = [
   { text: "Iftar rush handled", left: 32, drop: 92, duration: 6.2, delay: 0.6, accent: true },
   { text: "Raast QR cleared", left: 76, drop: 140, duration: 6.6, delay: 0.3, accent: false },
   { text: "FBR invoice filed", left: 12, drop: 186, duration: 5.4, delay: 0, accent: false },
-  { text: "Udhaar written up", left: 52, drop: 232, duration: 5.1, delay: 0.9, accent: false },
+  { text: "Regular looked up", left: 52, drop: 232, duration: 5.1, delay: 0.9, accent: false },
   { text: "Cash drawer tallied", left: 24, drop: 276, duration: 5.8, delay: 1.1, accent: false },
 ];
 

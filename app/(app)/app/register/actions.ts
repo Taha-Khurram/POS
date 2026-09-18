@@ -43,6 +43,8 @@ export type SaleInput = {
   counterId: string;
   tender: TenderId;
   lines: { id: string; quantity: number }[];
+  /** Who the bill is for. Null is a walk-in, which is most bills. */
+  customerId: string | null;
 };
 
 export type SaleResult =
@@ -129,6 +131,40 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     });
   }
 
+  // The customer, re-read on the same terms as the counter below: this shop's,
+  // and still on the list. `is_active` is on the read for the reason it is on
+  // the catalog's — a tab left open since somebody was switched off must not be
+  // able to bill against them.
+  //
+  // `record_sale` checks the tenant again inside the transaction. This one is
+  // here so the refusal is a sentence a cashier can act on rather than a
+  // failed write.
+  let customerId: string | null = null;
+
+  if (input.customerId) {
+    if (!UUID.test(input.customerId)) {
+      return { ok: false, error: "That sale is malformed. Start it again." };
+    }
+
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("id", input.customerId)
+      .eq("tenant_id", session.tenantId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (!customer) {
+      return {
+        ok: false,
+        error:
+          "That customer is not on your list any more. Take them off the bill, or add them again on Customers.",
+      };
+    }
+
+    customerId = customer.id;
+  }
+
   // The counter, re-read rather than taken on trust: it has to be this shop's,
   // open, and willing to take the tender the sheet chose.
   const { data: counter } = await supabase
@@ -176,6 +212,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
       unit_price: line.price,
       line_total: Math.round(line.price * line.quantity * 100) / 100,
     })),
+    p_customer: customerId,
   });
 
   const receiptNo =
@@ -207,6 +244,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
       subjectId: input.saleId,
       after: {
         counter_id: counter.id,
+        customer_id: customerId,
         receipt_number: receiptNo,
         tender: input.tender,
         total: bill.total,

@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
 import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { listActiveCustomers } from "@/lib/pos/customers";
 import { listSellableProducts } from "@/lib/pos/items";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
 import { getAssignedCounterId } from "@/lib/pos/staff";
@@ -13,7 +14,7 @@ import { Till } from "./till";
 
 export const metadata: Metadata = {
   title: "Register",
-  description: "Billing, stock, and khata for your counter.",
+  description: "Billing and stock for your counter.",
 };
 
 /**
@@ -46,6 +47,11 @@ export const metadata: Metadata = {
  * disagree about what is on the shelf. The action that records the sale re-reads
  * them with the same filter, so a tab left open on an item since withdrawn
  * cannot sell it.
+ *
+ * The customer list comes across on the same terms and for the same reason: the
+ * till attaches one to a bill without a round trip, and `recordSale` re-reads
+ * the row it was handed. Attaching one is always optional — a walk-in is most
+ * bills in most shops.
  */
 export default async function RegisterPage({
   searchParams,
@@ -54,14 +60,16 @@ export default async function RegisterPage({
 
   if (!session.tenantId) return <NotAttached />;
 
-  const [counters, shop, settings, assigned, items, jar] = await Promise.all([
-    listCounters(session.tenantId),
-    getShopProfile(session.tenantId),
-    getShopSettings(session.tenantId),
-    getAssignedCounterId(session.userId),
-    listSellableProducts(session.tenantId),
-    cookies(),
-  ]);
+  const [counters, shop, settings, assigned, items, customers, jar] =
+    await Promise.all([
+      listCounters(session.tenantId),
+      getShopProfile(session.tenantId),
+      getShopSettings(session.tenantId),
+      getAssignedCounterId(session.userId),
+      listSellableProducts(session.tenantId),
+      listActiveCustomers(session.tenantId),
+      cookies(),
+    ]);
 
   // No shop row means the claim says there is one and RLS returned nothing —
   // in practice the access-token hook switched off. A receipt with no shop name
@@ -122,6 +130,7 @@ export default async function RegisterPage({
 
       <Till
         items={items}
+        customers={customers}
         counter={counter}
         shop={shop}
         settings={settings}

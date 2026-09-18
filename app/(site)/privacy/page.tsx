@@ -19,7 +19,7 @@ const SECTIONS = [
     body: [
       "Account data you give us: the names, email addresses, and mobile numbers of the people who administer your Flo account, plus your business name, NTN or STRN, branch addresses, and billing details.",
       "Transaction data produced by your registers: line items, totals, sales tax, discounts, returns, timestamps, the fiscal invoice number issued for each bill, and the register and staff PIN that recorded it. Card numbers never touch our servers — the terminal tokenises them and we store only the token, the last four digits, and the card scheme.",
-      "Customer data you choose to hold in Flo: names, mobile numbers, udhaar balances, loyalty points, and order history, entered either by your staff or by a customer at the counter.",
+      "Customer data you choose to hold in Flo: names, mobile numbers, addresses, loyalty points, and order history, entered either by your staff or by a customer at the counter.",
       "Product and site data: pages viewed on this website, device and browser type, and in-app events such as which reports are opened. We use this to work out which parts of the product need attention.",
     ],
   },

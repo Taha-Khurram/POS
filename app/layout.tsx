@@ -22,11 +22,11 @@ export const metadata: Metadata = {
     template: "%s — Flo",
   },
   description:
-    "Flo is a complete point of sale for Pakistani retail and hospitality — FBR digital invoicing, udhaar khata, cash, card, Raast and wallet payments, and billing that keeps working when the power goes.",
+    "Flo is a complete point of sale for Pakistani retail and hospitality — FBR digital invoicing, stock that adds up, cash, card, Raast and wallet payments, and billing that keeps working when the power goes.",
   openGraph: {
     title: "Flo — POS software for Pakistani shops and restaurants",
     description:
-      "FBR-ready invoicing, udhaar khata, and billing that keeps working through load-shedding. Built for counters in Karachi, Lahore, and everywhere between.",
+      "FBR-ready invoicing, stock that adds up, and billing that keeps working through load-shedding. Built for counters in Karachi, Lahore, and everywhere between.",
     type: "website",
   },
 };

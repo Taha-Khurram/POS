@@ -40,6 +40,10 @@ export type Sale = {
   /** Frozen at tender. The cart is cleared the moment this exists, so a
    *  reprint shows what was sold and not what is on the screen now. */
   lines: CartLine[];
+  /** Who it was rung up for, as their name stood at that moment. Null is a
+   *  walk-in, which is most bills — and prints nothing at all rather than the
+   *  words "walk-in", which would be a line of paper saying nothing. */
+  customer: string | null;
   bill: Bill;
   tender: TenderId;
   /** What the customer handed over. Null on a card sale — there is nothing to
@@ -108,6 +112,7 @@ export function Receipt({
         <Row label="Bill" value={sale.receiptNo} mono />
         <Row label="Date" value={receiptStamp(sale.at, settings.timezone)} />
         <Row label="Counter" value={counter.name} />
+        {sale.customer ? <Row label="Customer" value={sale.customer} /> : null}
       </dl>
 
       <Rule />

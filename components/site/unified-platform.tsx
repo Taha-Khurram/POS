@@ -5,7 +5,7 @@ import { Reveal } from "@/components/motion/reveal";
 const PILLARS = [
   { title: "Billing", copy: "Cash, card, Raast, or wallet" },
   { title: "Stock", copy: "Every carton and kilo accounted for" },
-  { title: "Udhaar", copy: "The khata, without the notebook" },
+  { title: "Customers", copy: "The regulars, and what they buy" },
   { title: "FBR", copy: "Invoices filed as they are printed" },
 ];
 
@@ -40,8 +40,8 @@ export function UnifiedPlatform() {
           </Reveal>
           <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
             From the first bill of the morning to the cash count at closing —
-            one screen for sales, stock, khata, and everything the tax people
-            ask for.
+            one screen for sales, stock, customers, and everything the tax
+            people ask for.
           </Reveal>
         </div>
 

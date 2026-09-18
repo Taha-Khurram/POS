@@ -32,8 +32,7 @@ export type TenderMethod =
   | "card"
   | "raast"
   | "easypaisa"
-  | "jazzcash"
-  | "udhaar";
+  | "jazzcash";
 
 export type SaleStatus = "completed" | "held" | "returned";
 
@@ -142,7 +141,6 @@ const METHODS: TenderMethod[] = [
   "jazzcash",
   "raast",
   "card",
-  "udhaar",
 ];
 
 const HOUR = new Intl.DateTimeFormat("en-PK", {

@@ -76,7 +76,7 @@ export function ShopDetailsForm({
               required
             />
             <p className="pos-hint">
-              The number khata reminders go out from on WhatsApp.
+              The number customers reach the shop on, and the one Flo writes to.
             </p>
           </label>
 

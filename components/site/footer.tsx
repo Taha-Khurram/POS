@@ -36,7 +36,8 @@ export function Footer() {
             </Link>
             <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
               Point of sale for Pakistani shops and restaurants — FBR-ready
-              billing, udhaar khata, and stock that adds up. Lahore and Karachi.
+              billing, your regulars on file, and stock that adds up. Lahore and
+              Karachi.
             </p>
           </div>
 

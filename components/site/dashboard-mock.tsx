@@ -5,7 +5,7 @@ import { Tilt } from "@/components/motion/tilt";
 import { FloMark } from "./flo-mark";
 import { SalesChart } from "./sales-chart";
 
-const TABS = ["Overview", "Bills", "Stock", "Khata", "Staff"];
+const TABS = ["Overview", "Bills", "Stock", "Customers", "Staff"];
 
 const METERS = [
   // Each meter carries its label in white on the fill, so every tint has to
@@ -14,19 +14,19 @@ const METERS = [
   { label: "Cash", value: 38, tint: "var(--color-iris-700)" },
   { label: "Card", value: 24, tint: "var(--color-iris-600)" },
   { label: "Raast & wallets", value: 26, tint: "var(--color-iris-500)" },
-  { label: "Udhaar", value: 12, tint: "var(--color-mist-500)" },
+  { label: "Bank transfer", value: 12, tint: "var(--color-mist-500)" },
 ];
 
 const STATS = [
   { value: 1284, label: "Bills today", delta: "+12%", up: true },
-  { value: 26, label: "Udhaar accounts", delta: "-4%", up: false },
+  { value: 26, label: "New customers", delta: "-4%", up: false },
   { value: 103, label: "Items low", delta: "+8%", up: true },
 ];
 
 const FLOW = [
   { label: "Paid", count: 1234, tint: "var(--color-iris-600)" },
   { label: "Returns", count: 3, tint: "var(--color-mist-500)" },
-  { label: "On udhaar", count: 24, tint: "var(--color-iris-400)" },
+  { label: "Held", count: 24, tint: "var(--color-iris-400)" },
 ];
 
 export function DashboardMock() {

@@ -248,20 +248,10 @@ export async function saveRolePermissions(
       return fail(`${level.label}'s discount ceiling must be between 0 and 100 per cent.`);
     }
 
-    const khataCeiling = parseAmount(
-      String(formData.get(`${id}.khata_ceiling`) ?? ""),
-      // numeric(12, 2) — ten digits before the point.
-      9_999_999_999,
-    );
-    if (khataCeiling === null) {
-      return fail(`${level.label}'s khata ceiling is not a rupee amount.`);
-    }
-
     const row: Record<string, unknown> = {
       tenant_id: session.tenantId,
       access_level: id,
       discount_ceiling_pct: discountCeiling,
-      khata_ceiling: khataCeiling,
     };
 
     for (const toggle of PERMISSION_TOGGLES) {

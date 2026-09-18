@@ -52,6 +52,7 @@ const TABLES = [
   "counters",
   "departments",
   "categories",
+  "customers",
 ];
 
 const CLAIMS = ["tenant_id", "tenant_role", "branch_id", "platform_role"];

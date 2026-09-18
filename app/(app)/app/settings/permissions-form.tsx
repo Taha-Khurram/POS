@@ -122,20 +122,6 @@ export function PermissionsForm({
                     Per cent off one line, and off the bill.
                   </p>
                 </label>
-
-                <label className="mt-3 block">
-                  <span className="pos-label">Khata ceiling</span>
-                  <input
-                    name={`${level.id}.khata_ceiling`}
-                    className="pos-field"
-                    defaultValue={permissions[level.id].khataCeiling}
-                    inputMode="decimal"
-                  />
-                  <p className="pos-hint">
-                    Rupees this level may put on a customer&apos;s book unasked.
-                    Zero means the customer&apos;s own limit is the only one.
-                  </p>
-                </label>
               </div>
             ))}
           </div>

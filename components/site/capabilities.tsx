@@ -32,7 +32,7 @@ export function Capabilities() {
                   from anywhere.
                 </h3>
                 <p className="mt-4 max-w-[16rem] text-[0.8125rem] leading-relaxed text-white/80">
-                  Sales, cash, stock, and udhaar across all your outlets —
+                  Sales, cash, stock, and customers across all your outlets —
                   live on your phone, whether you are at the shop or not.
                 </p>
               </div>
@@ -95,7 +95,7 @@ export function Capabilities() {
                     where customers read.
                   </h3>
                   <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
-                    Order ready, parcel on the way, udhaar reminder — sent from
+                    Order ready, parcel on the way, new rate list — sent from
                     the counter, in Urdu or English.
                   </p>
                 </div>
@@ -255,7 +255,7 @@ function MiniDashboard() {
           </span>
           <span>Bills</span>
           <span>Stock</span>
-          <span>Khata</span>
+          <span>Customers</span>
         </div>
         <span className="h-3 w-3 rounded-full bg-gradient-to-br from-flare-400 to-sun-400" />
       </div>
@@ -283,7 +283,7 @@ function MiniDashboard() {
 
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
           <div className="rounded-lg border border-ink-700 bg-ink-900 p-2">
-            {["Paid", "Returns", "Udhaar"].map((row) => (
+            {["Paid", "Returns", "Held"].map((row) => (
               <div
                 key={row}
                 className="mt-1 flex items-center justify-between rounded bg-ink-800/70 px-1.5 py-1 first:mt-0"

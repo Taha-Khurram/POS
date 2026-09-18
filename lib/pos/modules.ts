@@ -12,8 +12,8 @@ import type { RolePermission } from "@/lib/pos/settings-options";
  *
  * Two different things govern, and it is worth being honest that they are two:
  *
- *   - **Permissions** govern the working modules. Stock, khata and reports are
- *     switches an owner sets per access level on Settings → Roles &
+ *   - **Permissions** govern the working modules. Stock, customers and reports
+ *     are switches an owner sets per access level on Settings → Roles &
  *     permissions, so the rail reads the same row the register does. A cashier
  *     who may not edit items has no reason to be shown the screen for it.
  *   - **Role** governs the two administration screens. Staff and Settings have
@@ -80,7 +80,7 @@ export function moduleAccess(
     // The profit and margin behind it live under Reports.
     sales: true,
     inventory: permission?.canEditItems ?? false,
-    customers: permission?.canSellOnKhata ?? false,
+    customers: permission?.canManageCustomers ?? false,
     reports: permission?.canViewReports ?? false,
     // Read-only for a manager on both screens, and the actions refuse them
     // regardless. A manager who cannot see Settings assumes the discount

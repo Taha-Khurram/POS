@@ -131,9 +131,9 @@ export const PERMISSION_TOGGLES = [
     hint: "Up to the ceiling set below.",
   },
   {
-    column: "can_sell_on_khata",
-    label: "Put a sale on khata (udhaar)",
-    hint: "Up to the ceiling set below.",
+    column: "can_manage_customers",
+    label: "See and edit the customer list",
+    hint: "Names, numbers, and what each one has bought.",
   },
   {
     column: "can_refund",
@@ -173,8 +173,7 @@ export type RolePermission = {
   accessLevel: AccessLevel;
   canDiscount: boolean;
   discountCeilingPct: number;
-  canSellOnKhata: boolean;
-  khataCeiling: number;
+  canManageCustomers: boolean;
   canRefund: boolean;
   canOpenDrawer: boolean;
   canCloseShift: boolean;
@@ -188,8 +187,9 @@ export const DEFAULT_PERMISSIONS: Record<AccessLevel, RolePermission> = {
     accessLevel: "cashier",
     canDiscount: true,
     discountCeilingPct: 5,
-    canSellOnKhata: true,
-    khataCeiling: 2000,
+    // On: a cashier who cannot look a regular up by phone asks the owner for
+    // the number, which is the notebook this screen replaces.
+    canManageCustomers: true,
     canRefund: false,
     canOpenDrawer: false,
     canCloseShift: false,
@@ -201,10 +201,7 @@ export const DEFAULT_PERMISSIONS: Record<AccessLevel, RolePermission> = {
     accessLevel: "manager",
     canDiscount: true,
     discountCeilingPct: 15,
-    canSellOnKhata: true,
-    // Zero means no ceiling of its own — a manager's khata limit is the
-    // customer's, which is the only place it is actually set.
-    khataCeiling: 0,
+    canManageCustomers: true,
     canRefund: true,
     canOpenDrawer: true,
     canCloseShift: true,
@@ -217,7 +214,7 @@ export const DEFAULT_PERMISSIONS: Record<AccessLevel, RolePermission> = {
 /** The camelCase field a `PermissionColumn` maps to on `RolePermission`. */
 export const TOGGLE_FIELD = {
   can_discount: "canDiscount",
-  can_sell_on_khata: "canSellOnKhata",
+  can_manage_customers: "canManageCustomers",
   can_refund: "canRefund",
   can_open_drawer: "canOpenDrawer",
   can_close_shift: "canCloseShift",

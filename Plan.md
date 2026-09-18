@@ -26,7 +26,7 @@ Three things, in this order of importance:
    agreed. Nobody can create an account any other way. §3 specifies this.
 2. **The register** — offline-first billing that survives load-shedding, on a
    Rs 25,000 Android tablet.
-3. **Stock, udhaar khata, staff, and reports** — the modules that make Flo worth
+3. **Stock, customers, staff, and reports** — the modules that make Flo worth
    Rs 5,000 a month rather than a calculator.
 
 ### What v1 is not, and why
@@ -52,7 +52,7 @@ commercially and the one cheap hedge that keeps it from becoming a rewrite later
 |---|---|
 | **No paid tools** | Supabase free tier, free hosting, zero paid SaaS. See §2. |
 | **You activate every client** | No self-signup, ever. Account creation happens only through your console or a payment you verified. See §3. |
-| **Pakistani counter reality** | Power cuts, dead internet, 2 GB RAM tablets, thermal printers, Urdu item names, udhaar. Offline-first is not a feature, it is the architecture. See §4. |
+| **Pakistani counter reality** | Power cuts, dead internet, 2 GB RAM tablets, thermal printers, Urdu item names, regulars known by phone. Offline-first is not a feature, it is the architecture. See §4. |
 | **28 days, small team** | Every part has a Definition of Done. If a part slips it takes budget from §10 — never from Parts 1–3 or Part 7. |
 
 ---
@@ -92,8 +92,8 @@ is how most Pakistani B2B SaaS onboards its first hundred customers. Swap in a
 gateway at ~50 paying shops, when the manual step starts costing you evenings.
 
 **WhatsApp.** The Cloud API's free tier only covers *user-initiated*
-conversations; business-initiated template messages — udhaar reminders, renewal
-nudges — are billed. So v1 ships **`wa.me` deep links**: Flo composes the Urdu
+conversations; business-initiated template messages — renewal nudges, a new rate
+list — are billed. So v1 ships **`wa.me` deep links**: Flo composes the Urdu
 message, you or the shop's staff tap once, and it sends from a real number the
 recipient recognises. Slightly manual, completely free, and it converts better.
 
@@ -422,7 +422,8 @@ crafting the request; and a tenant user gets 404 on every `/admin` route.
   discount within the cashier's PIN limit, hold-and-recall, returns against a
   bill number.
 - Tender: cash with change calculation, card, Raast QR, Easypaisa, JazzCash,
-  **split tender**, and *udhaar* (posts to the khata rather than counting as paid).
+  and **split tender**. Every one of them settles — there is no "not paid"
+  tender, and `0018` took the last one off `sale_tenders`.
 - **Receipt printing:** ESC/POS encoder over WebUSB and Web Bluetooth, 58 mm and
   80 mm, Urdu shop name, itemised lines, the shop's NTN/STRN, a **reserved block
   where the FBR QR will go** (see §7), and a browser `@media print` fallback.
@@ -434,7 +435,8 @@ crafting the request; and a tenant user gets 404 on every `/admin` route.
 - Device registration counted against the plan's `max_registers`.
 
 **DoD — test it exactly this way:** turn off Wi-Fi. Bill 40 mixed sales across
-two cashier PINs, including a split tender and an udhaar sale. Force-kill the
+two cashier PINs, including a split tender and a bill against a named
+customer. Force-kill the
 browser twice. Print six receipts. Close the shift. Turn Wi-Fi back on. Every
 sale appears in Postgres exactly once, the drawer reconciles, there are no
 duplicate rows — and the client's health panel in your console shows the correct
@@ -442,7 +444,7 @@ last-sale time.
 
 ---
 
-### Part 3 · Stock, khata, staff (Days 13–18)
+### Part 3 · Stock, customers, staff (Days 13–18)
 
 **Goal:** the three modules that make Flo worth Rs 5,000 rather than a calculator.
 
@@ -456,13 +458,16 @@ last-sale time.
   mapper → preview → commit. Onboarding lives or dies on this one screen, and it
   is also *your* onboarding tool — you will run it for clients over a call.
 
-**Udhaar khata**
+**Customers** — *built, migration `0018`. The khata this section used to
+specify is cancelled: no ledger, no per-customer limit, no ageing, and nothing
+in the product may promise a balance.*
 
-- `customers` keyed on phone number; `udhaar_ledger` as debits and credits.
-- Per-customer limit enforced at the register; ageing buckets (0–30 / 30–60 / 60+).
-- Part payments applied against the oldest bill first.
-- **Urdu statement and reminder composed into a `wa.me` link** — one tap to send.
-- Printed khata statement.
+- `customers` keyed on phone number, normalised so one number is one person.
+- `sales.customer_id`, set from the till's bill panel before payment and always
+  optional — a walk-in is most bills in most shops.
+- `/app/customers` lists them; `?customer=<id>` is one person and their last
+  hundred bills.
+- Gated by `can_manage_customers`, which replaced `can_sell_on_khata`.
 
 **Staff**
 
@@ -472,9 +477,9 @@ last-sale time.
 - Attendance in/out; shift-wise cash accountability per cashier.
 
 **DoD:** import a 600-item rate list from a spreadsheet in under three minutes;
-sell 20 items and watch on-hand fall correctly; put Rs 3,000 on a khata, take
-Rs 1,000 back, send the reminder; and prove a cashier PIN cannot exceed its
-discount limit or close a shift.
+sell 20 items and watch on-hand fall correctly; add a regular by phone, ring a
+bill up against them and find it on their record; and prove a cashier PIN cannot
+exceed its discount limit or close a shift.
 
 ---
 
@@ -485,7 +490,7 @@ discount limit or close a shift.
 - Day-close report: sales, tender mix, discounts, returns, drawer over/short.
 - Sales by hour (heatmap), by item, by category, by cashier, by branch.
 - Stock valuation, dead stock, top and bottom movers.
-- Khata ageing summary.
+- Repeat customers: who has been in this month, and who has not since Eid.
 - **Mobile-first owner dashboard** — this is what the shop owner opens in the car.
   Hand-rolled SVG, no library.
 - CSV export on every report (and it keeps working while suspended, per §3.6).
@@ -610,7 +615,7 @@ receipts and their words become your entire sales collateral.
 | 1–2 | 0 · Foundations | Schema, RLS, plans, auth + admin gates, deploy, CI |
 | 3–6 | 1 · **Your console** | Activate clients, plans, entitlements, invites, orders, impersonation |
 | 7–12 | 2 · Register | Offline billing, printing, shifts, sync |
-| 13–18 | 3 · Stock · Khata · Staff | The three value modules + bulk import |
+| 13–18 | 3 · Stock · Customers · Staff | The three value modules + bulk import |
 | 19–21 | 4 · Reports | Day-close, owner dashboard, daily summary |
 | 22–23 | 5 · Multi-branch · Restaurant | Premium tier, KOT, tables |
 | 24 | 6 · Billing lifecycle | Renewals, expiry transitions, MRR |
@@ -690,8 +695,8 @@ Ranked by how often each will close a deal. Every one is a v1 commitment.
 2. **Roman-Urdu item search.** Typing `chawal` finds چاول. Nobody does this well.
 3. **The drawer reconciles at 11 pm** — shift close with counted cash and
    over/short, per cashier.
-4. **Udhaar khata with a one-tap Urdu WhatsApp reminder.** Replaces the notebook
-   *and* the awkward phone call.
+4. **The regulars on file, found by phone at the till.** Replaces the register
+   book, and every bill stays attached to the person who bought it.
 5. **Onboarding from the rate list they already have** — spreadsheet or old
    software export in, 600 items live in three minutes.
 6. **You can activate them while still on the WhatsApp call.** Money confirmed,

@@ -29,9 +29,9 @@ const INSIDE: { title: string; detail: string }[] = [
       "Every completed receipt carries its invoice number. No separate portal at the end of the month.",
   },
   {
-    title: "Udhaar khata that adds up",
+    title: "Your regulars, on the till",
     detail:
-      "Who owes what, since when. The register writes it; nobody keeps a second copy in a notebook.",
+      "A name, a number, and every bill they have been on. Found while the shopping is still on the counter.",
   },
   {
     title: "Keeps billing through load-shedding",
