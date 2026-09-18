@@ -11,6 +11,7 @@ import { requireModule } from "@/lib/pos/access";
 import { rupees } from "@/lib/format";
 import { stockState, type Product } from "@/lib/pos/catalog";
 import { listProducts } from "@/lib/pos/items";
+import { listTree } from "@/lib/pos/tree";
 import { CatalogPanel } from "./catalog-panel";
 import { CategoriesPanel } from "./categories-panel";
 import { ImportPanel } from "./import-panel";
@@ -55,6 +56,9 @@ export default async function InventoryPage({
   if (!session.tenantId) return <NotAttached />;
 
   const items = await listProducts(session.tenantId);
+  // The tree is counted off the list that was just read rather than by a second
+  // round trip — every tab on this screen needs both anyway.
+  const tree = await listTree(session.tenantId, items);
 
   return (
     <div className="space-y-4">
@@ -73,7 +77,12 @@ export default async function InventoryPage({
       <nav className="pos-tabs" aria-label="Catalog sections">
         {TABS.map((item) => {
           const current = item.id === tab;
-          const count = item.id === "items" ? items.length : undefined;
+          const count =
+            item.id === "items"
+              ? items.length
+              : item.id === "tree"
+                ? tree.length
+                : undefined;
 
           return (
             <Link
@@ -98,10 +107,10 @@ export default async function InventoryPage({
       {tab === "items" ? (
         <>
           <CatalogStats items={items} />
-          <CatalogPanel items={items} nextSerial={nextSerial(items)} />
+          <CatalogPanel items={items} tree={tree} nextSerial={nextSerial(items)} />
         </>
       ) : tab === "tree" ? (
-        <CategoriesPanel items={items} />
+        <CategoriesPanel tree={tree} />
       ) : (
         <ImportPanel
           // The codes the shop already carries, so the preview can say row 214

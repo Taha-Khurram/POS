@@ -18,7 +18,6 @@ import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
 import {
   categoriesIn,
-  DEPARTMENTS,
   GLOBAL_SAMPLE,
   internalBarcode,
   isFractional,
@@ -28,6 +27,7 @@ import {
   TAX_RATES,
   TRACKING,
   UNITS,
+  type Department,
   type Product,
   type TrackingMode,
   type UnitId,
@@ -100,11 +100,15 @@ function matrixOf(options: Option[]) {
 
 export function ProductSheet({
   item,
+  tree,
   nextSerial,
   onClose,
 }: {
   /** The row being corrected, or null for a new product. */
   item: Product | null;
+  /** The shop's own departments and categories. Never a constant — a hardware
+   *  store's tree is not a kiryana's. */
+  tree: Department[];
   nextSerial: number;
   onClose: () => void;
 }) {
@@ -136,12 +140,11 @@ export function ProductSheet({
   const [name, setName] = useState(item?.name ?? "");
   const [urdu, setUrdu] = useState(item?.urdu ?? "");
   const [department, setDepartment] = useState(
-    item?.department || DEPARTMENTS[0].name,
+    item?.department || tree[0]?.name || "",
   );
   const [category, setCategory] = useState(
-    item?.category || DEPARTMENTS[0].categories[0].name,
+    item?.category || "",
   );
-  const [sub, setSub] = useState(item?.sub ?? "");
   const [supplier, setSupplier] = useState(item?.supplier ?? "");
 
   const [cost, setCost] = useState(item ? String(item.cost) : "");
@@ -225,8 +228,7 @@ export function ProductSheet({
     onClose();
   }, [removal.savedAt, onClose]);
 
-  const categories = categoriesIn(department);
-  const subs = categories.find((entry) => entry.name === category)?.sub ?? [];
+  const categories = categoriesIn(tree, department);
 
   const suggested = suggestSku(department, name, serial);
   const effectiveSku = skuTouched ? sku : suggested;
@@ -297,9 +299,15 @@ export function ProductSheet({
       if (!hit) return setLookup("miss");
 
       setName(hit.name);
-      setDepartment(hit.department);
-      setCategory(hit.category);
-      setSub("");
+      // Only if the shop actually files that way. A lookup that invented a
+      // department would put the item behind a tile the register cannot draw.
+      const match = tree.find((entry) => entry.name === hit.department);
+      if (match) {
+        setDepartment(match.name);
+        setCategory(
+          match.categories.find((entry) => entry.name === hit.category)?.name ?? "",
+        );
+      }
       setLookup("hit");
     }, 420);
   };
@@ -343,7 +351,6 @@ export function ProductSheet({
           <input type="hidden" name="tracking" value={tracking} />
           <input type="hidden" name="department" value={department} />
           <input type="hidden" name="category" value={category} />
-          <input type="hidden" name="subcategory" value={sub} />
           {/* The tax rate and the unit joined these when their dropdowns
               stopped being `<select name=…>`. They sit above the fieldset
               rather than inside it on purpose: a disabled fieldset posts
@@ -540,54 +547,54 @@ export function ProductSheet({
                   </p>
                 </label>
 
-                {/* The tree, three controls deep. Choosing a department
-                    rewrites the two under it rather than leaving a category
-                    that no longer belongs to it — the item would save with a
-                    pair the register's grid could never page to. */}
+                {/* Two controls, and only the first is required. Choosing a
+                    department clears the category under it rather than leaving
+                    one that belongs to a different department — the item would
+                    save with a pair the register's grid could never page to.
+
+                    Category is optional on purpose: plenty of shops file to the
+                    department and no further, and a required second dropdown on
+                    every one of four hundred items is the whole afternoon. */}
                 <SelectRow
                   label="Department"
                   value={department}
                   onChange={(next) => {
                     setDepartment(next);
-                    setCategory(categoriesIn(next)[0]?.name ?? "");
-                    setSub("");
+                    setCategory("");
                   }}
-                  options={DEPARTMENTS.map((entry) => ({
+                  placeholder="No departments yet"
+                  options={tree.map((entry) => ({
                     id: entry.name,
                     label: entry.name,
-                    description: `${entry.categories.length} categories`,
+                    meta: entry.items || undefined,
                   }))}
+                  hint={
+                    tree.length === 0
+                      ? "Add one on the Categories tab — an item has to sit somewhere."
+                      : undefined
+                  }
                 />
 
                 <SelectRow
-                  label="Category"
+                  label="Category — optional"
                   value={category}
-                  onChange={(next) => {
-                    setCategory(next);
-                    setSub("");
-                  }}
-                  options={categories.map((entry) => ({
-                    id: entry.name,
-                    label: entry.name,
-                    description:
-                      entry.sub.length > 0 ? entry.sub.join(" · ") : undefined,
-                  }))}
-                />
-
-                <SelectRow
-                  label="Subcategory — optional"
-                  value={sub}
-                  onChange={setSub}
-                  disabled={subs.length === 0}
+                  onChange={setCategory}
+                  disabled={categories.length === 0}
                   placeholder={
-                    subs.length === 0 ? "This category has none" : "None"
+                    categories.length === 0
+                      ? "This department has none yet"
+                      : "None"
                   }
                   options={
-                    subs.length === 0
+                    categories.length === 0
                       ? []
                       : [
                           { id: "", label: "None" },
-                          ...subs.map((entry) => ({ id: entry, label: entry })),
+                          ...categories.map((entry) => ({
+                            id: entry.name,
+                            label: entry.name,
+                            meta: entry.items || undefined,
+                          })),
                         ]
                   }
                 />

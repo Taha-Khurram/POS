@@ -19,11 +19,11 @@ import {
 import { Select, type SelectOption } from "@/components/pos/select-field";
 import { useDismiss } from "@/components/pos/use-dismiss";
 import {
-  DEPARTMENTS,
   marginOf,
   matchesProduct,
   stockState,
   unitShort,
+  type Department,
   type Product,
 } from "@/lib/pos/catalog";
 import { rupees } from "@/lib/format";
@@ -239,9 +239,12 @@ const columnsFor = (onEdit: (item: Product) => void): Column<Product>[] => [
 
 export function CatalogPanel({
   items,
+  tree,
   nextSerial,
 }: {
   items: Product[];
+  /** The shop's own departments — the filter's list and the sheet's. */
+  tree: Department[];
   /** What the next in-store barcode and suggested SKU are cut from. */
   nextSerial: number;
 }) {
@@ -289,25 +292,21 @@ export function CatalogPanel({
 
   const columns = useMemo(() => columnsFor(setEditing), []);
 
-  const departmentOptions: SelectOption[] = useMemo(() => {
-    const tally = items.reduce<Record<string, number>>((counts, item) => {
-      counts[item.department] = (counts[item.department] ?? 0) + 1;
-      return counts;
-    }, {});
-
-    return [
+  const departmentOptions: SelectOption[] = useMemo(
+    () => [
       {
         id: "all",
         label: "All departments",
         meta: items.length.toLocaleString("en-PK"),
       },
-      ...DEPARTMENTS.map((entry) => ({
+      ...tree.map((entry) => ({
         id: entry.name,
         label: entry.name,
-        meta: (tally[entry.name] ?? 0).toLocaleString("en-PK"),
+        meta: entry.items.toLocaleString("en-PK"),
       })),
-    ];
-  }, [items]);
+    ],
+    [items.length, tree],
+  );
 
   const stockOptions: SelectOption[] = useMemo(
     () =>
@@ -455,6 +454,7 @@ export function CatalogPanel({
       {editing ? (
         <ProductSheet
           item={open}
+          tree={tree}
           nextSerial={nextSerial}
           onClose={() => setEditing(null)}
         />

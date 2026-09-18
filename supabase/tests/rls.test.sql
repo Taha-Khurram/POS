@@ -344,6 +344,47 @@ select throws_ok(
   'tenant user cannot open its own counter directly'
 );
 
+-- The catalog tree, added in 0016. Nothing inserts these above: the trigger on
+-- `tenants` seeds them, so the counts below are also the test that a shop
+-- created next year starts with a tree it can add products to.
+select is(
+  (select count(*) from public.departments), 6::bigint,
+  'tenant A sees its own six seeded departments and nothing else'
+);
+
+select is(
+  (select count(*) from public.categories), 18::bigint,
+  'tenant A sees its own categories and none of tenant B''s'
+);
+
+select is_empty(
+  $$ select 1 from public.departments
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B departments'
+);
+
+select is_empty(
+  $$ select 1 from public.categories
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B categories'
+);
+
+-- Rule 3: the tree is written by a Server Action on the service role, never
+-- from a browser. A tenant that could insert its own department could file an
+-- item behind a tile nobody agreed to.
+select throws_ok(
+  $$ insert into public.departments (tenant_id, name)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'Forged') $$,
+  '42501', null,
+  'tenant user cannot add a department directly'
+);
+
+select throws_ok(
+  $$ delete from public.categories $$,
+  '42501', null,
+  'tenant user cannot delete its own categories directly'
+);
+
 -- Takings, added in 0011. The commercially expensive leak: one shop reading
 -- another's day, or writing itself a sale that never happened.
 select is(
@@ -493,6 +534,10 @@ select is_empty($$ select 1 from public.counters $$,
   'a user with no tenant sees no counter');
 select is_empty($$ select 1 from public.sales $$,
   'a user with no tenant sees no sales');
+select is_empty($$ select 1 from public.departments $$,
+  'a user with no tenant sees no departments');
+select is_empty($$ select 1 from public.categories $$,
+  'a user with no tenant sees no categories');
 select is(
   (select count(*) from public.profiles), 1::bigint,
   'a user with no tenant still sees its own profile row, and only that'
@@ -569,6 +614,10 @@ select throws_ok($$ select 1 from public.counters $$, '42501', null,
   'anon cannot read the counters or their receipt series');
 select throws_ok($$ select 1 from public.sales $$, '42501', null,
   'anon cannot read a shop''s takings');
+select throws_ok($$ select 1 from public.departments $$, '42501', null,
+  'anon cannot read a shop''s departments');
+select throws_ok($$ select 1 from public.categories $$, '42501', null,
+  'anon cannot read a shop''s categories');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it

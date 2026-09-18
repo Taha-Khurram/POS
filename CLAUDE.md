@@ -67,7 +67,8 @@ and fonts only — chrome belongs to the group.
   `lib/pos/catalog.ts`, which holds the item vocabulary, the field limits and
   the margin/stock/barcode arithmetic that the add-product sheet, the till and
   the Server Actions all have to agree about. The catalog's *rows* are read by
-  `lib/pos/items.ts`, which is `server-only` like the rest.
+  `lib/pos/items.ts` and its tree by `lib/pos/tree.ts`, both `server-only` like
+  the rest.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -208,7 +209,8 @@ the readers in `shop.ts`, **none of them may be wrapped in React `cache()`**, or
 the re-render a `revalidatePath` triggers redraws the list as it stood before
 the save.
 
-Writes are `app/(app)/app/inventory/actions.ts` on the service role, gated by
+Writes are `app/(app)/app/inventory/actions.ts` (the items) and
+`tree-actions.ts` (the departments and categories) on the service role, gated by
 `can_edit_items` rather than by the owner role — the permission is named for
 this screen, so a manager an owner trusted with stock can add it. Settings and
 Staff stay owner-only.
@@ -224,6 +226,24 @@ Two unique indexes carry the weight: `(tenant_id, barcode)` and
 `(tenant_id, sku)`, both partial on not-null. `conflict()` turns a 23505 from
 either into the sentence the owner needs — a duplicate barcode almost always
 means the shop already stocks the thing being added.
+
+The **tree is the shop's own** (`0016`): `departments` and `categories`, two
+levels and no third. `lib/pos/catalog.ts` used to hold six hard-coded
+departments every shop was stuck inside — a hardware store filed its whole list
+under "Grocery". A trigger on `tenants` seeds those same six into a new shop, so
+an empty tree is never an onboarding wall, and `private.seed_catalog_tree` is
+the one place that list lives.
+
+`items.department` and `items.category` stay **text**, not foreign keys: they
+are the names as they stood when the item was filed, and the till, the import
+and the tree counts all read them as words. That only holds because the only
+writes are adding a node and removing an empty one — `tree-actions.ts` refuses
+to delete a branch with items under it, and there is no rename, because a rename
+has to carry every matching item row with it in the same transaction. Category
+is **optional** on an item; department is not.
+
+`items.subcategory` was the third level and is dropped by `0016`. Nobody browsed
+by it and it was one more dropdown between a shopkeeper and a saved item.
 
 Deleting an item is a real delete. `sale_lines.item_id` is `on delete set null`
 beside a not-null `name_snapshot`, so every past receipt still prints exactly as

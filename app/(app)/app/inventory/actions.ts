@@ -18,8 +18,8 @@ import {
   isTrackingMode,
   isUnitId,
   placeInTree,
-  placeSub,
   searchTerms,
+  type Department,
 } from "@/lib/pos/catalog";
 import { getModuleAccess } from "@/lib/pos/access";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -100,8 +100,8 @@ type ItemRow = {
   sku: string | null;
   barcode: string | null;
   department: string;
-  category: string;
-  subcategory: string | null;
+  /** Optional: a shop that does not file that deep leaves it empty. */
+  category: string | null;
   unit: string;
   tracking: string;
   cost_price: number;
@@ -115,8 +115,16 @@ type ItemRow = {
   search_terms: string[];
 };
 
-/** The row, or the sentence to put under the form. */
-function readProduct(formData: FormData): ItemRow | string {
+/**
+ * The row, or the sentence to put under the form.
+ *
+ * The tree is handed in rather than read here, because the import calls this
+ * once per row and a query per row would be four hundred round trips to answer
+ * one question. It is the shop's own, read on the service role by
+ * `shopTree` below — never the browser's, which is what stops a crafted
+ * department from filing an item under a tile the register cannot draw.
+ */
+function readProduct(formData: FormData, tree: Department[]): ItemRow | string {
   const name = text(formData.get("name"));
 
   if (name.length < NAME_MIN || name.length > NAME_MAX) {
@@ -177,13 +185,17 @@ function readProduct(formData: FormData): ItemRow | string {
     return "That unit is sold whole, so the count has to be a whole number.";
   }
 
-  // The tree is `lib/pos/catalog.ts`'s and not the form's: a department that is
-  // not one of the six is a crafted request, and it would file the item under a
-  // register page that does not exist.
-  const tree = placeInTree(
+  // The shop's own tree and not the form's: a department that is not one of
+  // this shop's would file the item under a register page that does not exist.
+  const placed = placeInTree(
+    tree,
     text(formData.get("department")),
     text(formData.get("category")),
   );
+
+  if (!placed) {
+    return "Add a department on the Categories tab first — an item has to sit somewhere.";
+  }
 
   const variantCount = Number(text(formData.get("variant_count")));
 
@@ -192,13 +204,8 @@ function readProduct(formData: FormData): ItemRow | string {
     name_urdu: urdu || null,
     sku: sku || null,
     barcode: barcode || null,
-    department: tree.department,
-    category: tree.category,
-    subcategory: placeSub(
-      tree.department,
-      tree.category,
-      text(formData.get("subcategory")),
-    ),
+    department: placed.department,
+    category: placed.category || null,
     unit,
     tracking,
     cost_price: cost,
@@ -216,6 +223,47 @@ function readProduct(formData: FormData): ItemRow | string {
     is_active: text(formData.get("is_active")) === "on",
     search_terms: searchTerms({ name, urdu, sku, barcode }),
   };
+}
+
+/**
+ * The shop's tree, on the service role, for the validator above.
+ *
+ * Not `lib/pos/tree.ts`: that reads through the caller's JWT, and an action
+ * that validated against a list RLS had quietly emptied would refuse every
+ * save with "add a department first". The tenant here came off the verified
+ * token, so the service role is the honest way to ask.
+ *
+ * Names only — the ids are the Categories tab's business, and nothing in
+ * `readProduct` looks at an item count.
+ */
+async function shopTree(tenantId: string): Promise<Department[]> {
+  const supabase = createAdminClient();
+
+  const [departments, categories] = await Promise.all([
+    supabase
+      .from("departments")
+      .select("id, name")
+      .eq("tenant_id", tenantId)
+      .order("sort_order")
+      .order("name"),
+    supabase
+      .from("categories")
+      .select("id, name, department_id")
+      .eq("tenant_id", tenantId)
+      .order("sort_order")
+      .order("name"),
+  ]);
+
+  const rows = categories.data ?? [];
+
+  return (departments.data ?? []).map((department) => ({
+    id: department.id,
+    name: department.name,
+    items: 0,
+    categories: rows
+      .filter((row) => row.department_id === department.id)
+      .map((row) => ({ id: row.id, name: row.name, items: 0 })),
+  }));
 }
 
 /**
@@ -248,7 +296,7 @@ async function ownItem(tenantId: string, itemId: unknown) {
   const { data } = await supabase
     .from("items")
     .select(
-      "id, name, name_urdu, sku, barcode, department, category, subcategory, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active",
+      "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active",
     )
     .eq("tenant_id", tenantId)
     .eq("id", itemId)
@@ -283,7 +331,7 @@ export async function saveProduct(
   if (!gate.ok) return fail(gate.error);
   const { session } = gate;
 
-  const row = readProduct(formData);
+  const row = readProduct(formData, await shopTree(session.tenantId));
   if (typeof row === "string") return fail(row);
 
   const itemId = formData.get("item_id");
@@ -475,6 +523,9 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     (existing ?? []).map((row) => row.sku).filter(Boolean) as string[],
   );
 
+  // Read once for the whole file, not once per row.
+  const tree = await shopTree(session.tenantId);
+
   const skipped: { row: number; reason: string }[] = [];
   // Each accepted row keeps the line it came from. `ready` is shorter than the
   // file the moment anything is skipped, so its own index would report row 98
@@ -519,7 +570,7 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       form.set("unit", "piece");
     }
 
-    const parsed = readProduct(form);
+    const parsed = readProduct(form, tree);
 
     if (typeof parsed === "string") {
       skipped.push({ row: index + 1, reason: parsed });

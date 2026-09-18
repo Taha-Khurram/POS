@@ -49,3 +49,29 @@ export type ImportResult =
       skipped: { row: number; reason: string }[];
     }
   | { ok: false; error: string };
+
+/**
+ * What the Categories tab gets back.
+ *
+ * Its own type rather than `ProductState`, because the tab has four small forms
+ * on screen at once and each has to know whether *it* was the one that failed —
+ * `scope` is the id of the department the message belongs under, or `"root"`
+ * for the add-a-department box at the top.
+ */
+export type TreeState = {
+  error: string | null;
+  /** Which form the error belongs to. Null when there is no error. */
+  scope: string | null;
+  savedAt: number | null;
+  saved: {
+    name: string;
+    action: "department-added" | "category-added" | "removed";
+  } | null;
+};
+
+export const TREE_IDLE: TreeState = {
+  error: null,
+  scope: null,
+  savedAt: null,
+  saved: null,
+};

@@ -28,7 +28,7 @@ import { createClient } from "@/utils/supabase/server";
  */
 
 const COLUMNS =
-  "id, name, name_urdu, sku, barcode, department, category, subcategory, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active";
+  "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active";
 
 type Row = {
   id: string;
@@ -38,7 +38,6 @@ type Row = {
   barcode: string | null;
   department: string | null;
   category: string | null;
-  subcategory: string | null;
   unit: string;
   tracking: string;
   cost_price: number | string;
@@ -65,7 +64,6 @@ function toProduct(row: Row): Product {
     barcode: row.barcode,
     department: row.department ?? "",
     category: row.category ?? "",
-    sub: row.subcategory,
     // 'kilo' is the spelling 0008's constraint shipped with, kept valid by 0011
     // so nothing written under it became an invalid row. The app has one name
     // for a kilogram, and this is where the old one is folded into it.

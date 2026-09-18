@@ -35,10 +35,9 @@ export type Product = {
   sku: string;
   /** `null` for a loose or handmade item that never had a manufacturer code. */
   barcode: string | null;
+  /** The tree's two levels, as their names stood when the item was filed. */
   department: string;
   category: string;
-  /** The third level, when the shop files that deep. */
-  sub: string | null;
   unit: UnitId;
   tracking: TrackingMode;
   /** How many size/colour rows sit under this item. Only for `"variant"`. */
@@ -97,101 +96,40 @@ export const TRACKING: { id: TrackingMode; label: string; blurb: string }[] = [
 ];
 
 /* ---------------- The tree ----------------
-   Departments over categories over subcategories, because that is what the
-   register's touchscreen pages through: a cashier taps twice and sees the
-   item, rather than scrolling a list of 5,000. Three levels is the ceiling — a
-   fourth costs a tap and saves nobody anything. */
+   Two levels, because that is what the register's touchscreen pages through: a
+   department tile, a category tile inside it, then items. A third was tried as
+   `items.subcategory` and dropped in migration 0016 — nobody browsed by it, and
+   it was one more dropdown between a shopkeeper and a saved item.
+
+   The rows are the shop's own, read by `lib/pos/tree.ts` and written by
+   `app/(app)/app/inventory/tree-actions.ts`. Nothing here is a constant any
+   more: a hardware store's departments are not a kiryana's, and the six that
+   used to live in this file were a list every shop was stuck inside. What is
+   left is the shape both sides agree about and the arithmetic done on it. */
+
+export type Category = {
+  id: string;
+  name: string;
+  /** Items filed under it. Counted by the reader, not stored. */
+  items: number;
+};
 
 export type Department = {
   id: string;
   name: string;
-  categories: { id: string; name: string; sub: string[] }[];
+  categories: Category[];
+  items: number;
 };
 
-export const DEPARTMENTS: Department[] = [
-  {
-    id: "beverages",
-    name: "Beverages",
-    categories: [
-      {
-        id: "soft-drinks",
-        name: "Soft drinks",
-        sub: ["Cola", "Lemon & lime", "Energy drinks"],
-      },
-      { id: "juices", name: "Juices & nectars", sub: ["Tetra packs", "Chilled bottles"] },
-      {
-        id: "tea-coffee",
-        name: "Tea & coffee",
-        sub: ["Black tea", "Green tea", "Instant coffee"],
-      },
-      { id: "water", name: "Water", sub: ["Bottled", "19-litre cans"] },
-    ],
-  },
-  {
-    id: "grocery",
-    name: "Grocery",
-    categories: [
-      {
-        id: "staples",
-        name: "Atta, rice & pulses",
-        sub: ["Atta", "Rice", "Daal & beans"],
-      },
-      {
-        id: "oil-ghee",
-        name: "Cooking oil & ghee",
-        sub: ["Banaspati", "Cooking oil", "Desi ghee"],
-      },
-      { id: "sugar-salt", name: "Sugar & salt", sub: ["Sugar", "Salt"] },
-      {
-        id: "masala",
-        name: "Masala & spices",
-        sub: ["Recipe mixes", "Whole spices", "Ground spices"],
-      },
-    ],
-  },
-  {
-    id: "dairy-bakery",
-    name: "Dairy & bakery",
-    categories: [
-      { id: "milk", name: "Milk & cream", sub: ["UHT milk", "Fresh milk", "Cream"] },
-      { id: "yogurt", name: "Yogurt & butter", sub: ["Dahi", "Butter & margarine"] },
-      { id: "bread", name: "Bread & rusk", sub: ["Bread", "Rusk & cake"] },
-    ],
-  },
-  {
-    id: "snacks",
-    name: "Snacks & confectionery",
-    categories: [
-      { id: "chips", name: "Chips & namkeen", sub: ["Chips", "Namkeen"] },
-      { id: "biscuits", name: "Biscuits", sub: ["Family packs", "Ticky packs"] },
-      { id: "chocolate", name: "Chocolates & toffees", sub: ["Chocolate", "Toffee jars"] },
-    ],
-  },
-  {
-    id: "household",
-    name: "Household",
-    categories: [
-      {
-        id: "detergent",
-        name: "Detergents & soap",
-        sub: ["Washing powder", "Bar soap", "Dishwash"],
-      },
-      { id: "cleaning", name: "Paper & cleaning", sub: ["Tissues", "Cleaners"] },
-    ],
-  },
-  {
-    id: "personal-care",
-    name: "Personal care",
-    categories: [
-      { id: "hair-skin", name: "Hair & skin", sub: ["Shampoo", "Soap & body wash"] },
-      { id: "oral", name: "Oral care", sub: ["Toothpaste", "Brushes"] },
-    ],
-  },
-];
-
 /** The categories under a department, by its display name. */
-export const categoriesIn = (department: string) =>
-  DEPARTMENTS.find((item) => item.name === department)?.categories ?? [];
+export const categoriesIn = (tree: Department[], department: string) =>
+  tree.find((item) => item.name === department)?.categories ?? [];
+
+/* A department or category name. Short, because it is a tile on a 10-inch
+   register grid — a name that wraps to three lines is a tile a cashier cannot
+   read at a glance. The database check constraint says the same 40. */
+export const TREE_NAME_MIN = 2;
+export const TREE_NAME_MAX = 40;
 
 /* ---------------- Fields ----------------
    The lengths and the lists the add-product sheet enforces and the Server
@@ -234,41 +172,43 @@ export const isFractional = (unit: UnitId) =>
   UNITS.find((item) => item.id === unit)?.fractional ?? false;
 
 /**
- * The department and category as the tree knows them, or the nearest thing.
+ * The department and category as the shop's own tree knows them, or the nearest
+ * thing to them.
  *
  * A CSV column saying "Bevrages" should not stop an import — the row is worth
  * more than its spelling. So an unrecognised department falls to the first one
  * and an unrecognised category to that department's first, which is a row the
  * owner can re-file in two taps rather than a row they have to retype.
+ *
+ * `null` when the shop has no departments at all. That is not a spelling
+ * problem and must not be papered over: there is nowhere to file the item, and
+ * the caller has to say so.
  */
 export function placeInTree(
+  tree: Department[],
   department: string,
   category: string,
-): { department: string; category: string } {
+): { department: string; category: string } | null {
+  if (tree.length === 0) return null;
+
   const dept =
-    DEPARTMENTS.find(
+    tree.find(
       (item) => item.name.toLowerCase() === department.trim().toLowerCase(),
-    ) ?? DEPARTMENTS[0];
+    ) ?? tree[0];
 
-  const cat =
-    dept.categories.find(
-      (item) => item.name.toLowerCase() === category.trim().toLowerCase(),
-    ) ?? dept.categories[0];
+  const cat = dept.categories.find(
+    (item) => item.name.toLowerCase() === category.trim().toLowerCase(),
+  );
 
-  return { department: dept.name, category: cat.name };
+  // The category is optional and stays optional: a department with none yet,
+  // or a shopkeeper who does not file that deep, gets an empty string and the
+  // item sits directly under the department. Only an unrecognised *category*
+  // under a real department falls to that department's first.
+  return {
+    department: dept.name,
+    category: cat?.name ?? (category.trim() ? (dept.categories[0]?.name ?? "") : ""),
+  };
 }
-
-/** The subcategory only if it is one this category actually has. */
-export const placeSub = (
-  department: string,
-  category: string,
-  sub: string,
-): string | null => {
-  const list =
-    categoriesIn(department).find((item) => item.name === category)?.sub ?? [];
-
-  return list.find((item) => item.toLowerCase() === sub.trim().toLowerCase()) ?? null;
-};
 
 /**
  * What goes into `items.search_terms`, which carries a GIN index.
