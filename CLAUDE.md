@@ -222,6 +222,23 @@ inserts in chunks and retries a refused chunk one row at a time, so a single
 duplicate barcode never costs the other ninety-nine rows, and every skip is
 reported by its line in the file.
 
+**The import grows the tree.** `growTree` in the same file adds the departments
+and categories the file names and the shop does not have yet, which is what
+makes a first import possible at all now that `0017` leaves a new shop with no
+tree: the sheet a shop already keeps is the truest description of how that shop
+files its stock. Only additive, bounded (40 new departments, 400 categories, or
+the whole file is refused with the column to look at), and shown by name on the
+review step before anything is written. The department each row lands in is
+resolved *before* `readProduct` sees it and handed over by its exact stored
+name, because `placeInTree` falls an unrecognised department to the shop's
+first one — right for a dropdown that only offers real ones, and quietly wrong
+for four hundred rows nobody re-reads.
+
+`treeName()` and `IMPORT_MAX` live in `lib/pos/catalog.ts` for the usual
+reason: the browser draws the preview's verdict and the action draws the real
+one, and a name one side would take and the other would not is a row that
+disappears between the two screens.
+
 Two unique indexes carry the weight: `(tenant_id, barcode)` and
 `(tenant_id, sku)`, both partial on not-null. `conflict()` turns a 23505 from
 either into the sentence the owner needs — a duplicate barcode almost always
@@ -230,9 +247,12 @@ means the shop already stocks the thing being added.
 The **tree is the shop's own** (`0016`): `departments` and `categories`, two
 levels and no third. `lib/pos/catalog.ts` used to hold six hard-coded
 departments every shop was stuck inside — a hardware store filed its whole list
-under "Grocery". A trigger on `tenants` seeds those same six into a new shop, so
-an empty tree is never an onboarding wall, and `private.seed_catalog_tree` is
-the one place that list lives.
+under "Grocery". **A shop's tree now starts empty** (`0017` dropped the seed
+`0016` shipped with): a supermarket's aisle list is not a head start for a cloth
+house, it is six rows to delete before you can type "Lawn". So an empty tree is
+the first-run state, not an error — the Categories tab draws it as an
+invitation, and the add-product sheet's save buttons are dead until there is a
+department to file into.
 
 `items.department` and `items.category` stay **text**, not foreign keys: they
 are the names as they stood when the item was filed, and the till, the import

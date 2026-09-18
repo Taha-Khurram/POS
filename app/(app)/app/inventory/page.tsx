@@ -113,6 +113,9 @@ export default async function InventoryPage({
         <CategoriesPanel tree={tree} />
       ) : (
         <ImportPanel
+          // The tree as it stands, so the mapping step can offer the shop's own
+          // departments and name the ones the file is about to add to them.
+          tree={tree}
           // The codes the shop already carries, so the preview can say row 214
           // is a bottle you already stock before anything is sent. The action
           // checks again on its own side — this list is stale the moment
@@ -123,12 +126,6 @@ export default async function InventoryPage({
           knownSkus={items.map((item) => item.sku).filter(Boolean)}
         />
       )}
-
-      <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
-        Goods receipt, wastage, branch transfers and the stock-count session are
-        still to come — stock moves when a sale is rung up and when you correct
-        it here, and nowhere else yet.
-      </p>
     </div>
   );
 }

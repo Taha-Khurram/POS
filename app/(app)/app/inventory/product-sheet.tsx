@@ -240,6 +240,12 @@ export function ProductSheet({
   const fractional = isFractional(unit);
   const locked = pending || removing;
 
+  // A shop's tree starts empty — 0017 stopped seeding one — so this is the
+  // normal state on a brand-new account, not an edge case. The save buttons go
+  // dead rather than letting somebody fill in forty seconds of item and be
+  // refused by the action at the end of it.
+  const nowhereToFile = tree.length === 0;
+
   /* ---------------- Barcode capture ----------------
      A USB scanner is a keyboard that types a whole code in under a tenth of a
      second and presses Enter. Nothing needs to be installed for that to work —
@@ -943,6 +949,11 @@ export function ProductSheet({
               <p className="mr-auto min-w-[8rem] flex-1 text-[0.75rem] leading-snug text-signal-bad">
                 {state.error}
               </p>
+            ) : nowhereToFile ? (
+              <p className="mr-auto min-w-[8rem] flex-1 text-[0.75rem] leading-snug text-graphite-700">
+                Add a department on the Categories tab first — an item has to
+                sit somewhere before the register can page to it.
+              </p>
             ) : null}
 
             <button
@@ -957,7 +968,7 @@ export function ProductSheet({
             {item ? null : (
               <button
                 type="submit"
-                disabled={locked}
+                disabled={locked || nowhereToFile}
                 onClick={() => {
                   closeAfter.current = false;
                 }}
@@ -969,7 +980,7 @@ export function ProductSheet({
 
             <button
               type="submit"
-              disabled={locked}
+              disabled={locked || nowhereToFile}
               onClick={() => {
                 closeAfter.current = true;
               }}

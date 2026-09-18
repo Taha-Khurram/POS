@@ -47,6 +47,11 @@ export type ImportResult =
       /** Rows the server refused, with the reason and the row's place in the
        *  file — so "row 214" means the same thing on screen as in the sheet. */
       skipped: { row: number; reason: string }[];
+      /** Branches the file named that the shop did not have yet, and which the
+       *  import added to the tree. Named rather than counted: an owner who
+       *  imported a sheet with a typo'd department wants to see "Bevrages" on
+       *  this screen, not the number 1. */
+      added: { departments: string[]; categories: string[] };
     }
   | { ok: false; error: string };
 

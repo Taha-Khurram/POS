@@ -6,6 +6,7 @@ import { recordAudit } from "@/lib/audit";
 import { requireSession, type SessionContext } from "@/lib/auth";
 import {
   BARCODE_MAX,
+  IMPORT_MAX,
   NAME_MAX,
   NAME_MIN,
   PRICE_MAX,
@@ -19,6 +20,7 @@ import {
   isUnitId,
   placeInTree,
   searchTerms,
+  treeName,
   type Department,
 } from "@/lib/pos/catalog";
 import { getModuleAccess } from "@/lib/pos/access";
@@ -483,8 +485,189 @@ export async function deleteProduct(
  * ninety-nine still land — the alternative is a shop pressing Import four times
  * and deleting the duplicates by hand.
  */
-const IMPORT_MAX = 5_000;
 const CHUNK = 100;
+
+/**
+ * How much tree one file may plant.
+ *
+ * A department column that was mapped to the item name would otherwise put four
+ * hundred tiles on the register's home grid, and every one of them would have
+ * to be deleted by hand. Past these the import refuses outright and says which
+ * column to look at — a refusal before anything is written costs the owner one
+ * screen; four hundred departments cost them an afternoon.
+ */
+const NEW_DEPARTMENTS_MAX = 40;
+const NEW_CATEGORIES_MAX = 400;
+
+const lower = (value: string) => value.toLowerCase();
+
+/**
+ * The shop's tree, grown to hold what the file names.
+ *
+ * This is the whole reason a fresh shop can import at all. Since `0017` a
+ * tenant starts with no departments, and an item has to sit somewhere — so
+ * without this every row of the owner's very first file would be refused with
+ * "add a department first", which is a wall across the one screen onboarding
+ * depends on. The sheet a shop already keeps is the truest description of how
+ * that shop files its stock; the import reads it as the vocabulary it is.
+ *
+ * Only ever additive. Nothing here renames or removes a branch — those are
+ * `tree-actions.ts`' business, and one of them does not exist on purpose.
+ *
+ * Matching is case-insensitive because the unique indexes are: a file carrying
+ * both "Beverages" and "beverages" must not try to plant two tiles the shop
+ * cannot tell apart.
+ */
+async function growTree(
+  tenantId: string,
+  tree: Department[],
+  /** Every department and category the mapped rows ask for, already through
+   *  `treeName` — so anything in here is a name a tile can carry. */
+  wanted: { department: string; category: string }[],
+): Promise<
+  | {
+      ok: true;
+      tree: Department[];
+      added: { departments: string[]; categories: string[] };
+    }
+  | { ok: false; error: string }
+> {
+  const supabase = createAdminClient();
+
+  const held = new Map(tree.map((item) => [lower(item.name), item]));
+
+  // De-duplicated by the same key the database uses, and kept in the order the
+  // file reads — so the tiles land on the register's grid in the order the
+  // owner's own sheet had them rather than alphabetically.
+  const fresh = new Map<string, string>();
+
+  for (const { department } of wanted) {
+    const key = lower(department);
+    if (!department || held.has(key) || fresh.has(key)) continue;
+    fresh.set(key, department);
+  }
+
+  if (fresh.size > NEW_DEPARTMENTS_MAX) {
+    return {
+      ok: false,
+      error: `That file names ${fresh.size} new departments. Check the Department column on the previous step — a column of item names matched there would put a tile on the register for every row.`,
+    };
+  }
+
+  const added: { departments: string[]; categories: string[] } = {
+    departments: [],
+    categories: [],
+  };
+
+  if (fresh.size > 0) {
+    const { data: last } = await supabase
+      .from("departments")
+      .select("sort_order")
+      .eq("tenant_id", tenantId)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let at = last?.sort_order ?? 0;
+
+    const rows = [...fresh.values()].map((name) => {
+      at += 1;
+      return { tenant_id: tenantId, name, sort_order: Math.min(at, 32_000) };
+    });
+
+    const { error } = await supabase.from("departments").insert(rows);
+
+    // One refused name — a race with the Categories tab open in another window,
+    // or a spelling the case-insensitive index reads as one the shop already
+    // has — must not cost the other thirty-nine. Retried singly, and anything
+    // that still will not go in is simply absent from the tree read below,
+    // which is where the rows that wanted it get their sentence.
+    if (error) {
+      for (const row of rows) {
+        await supabase.from("departments").insert(row);
+      }
+    }
+
+    added.departments = rows.map((row) => row.name);
+  }
+
+  // Re-read rather than patch the tree in memory: the ids of what was just
+  // written are what the categories hang off, and a department that quietly did
+  // not go in has to be missing here, so the rows asking for it are skipped by
+  // name instead of silently filed under the first tile.
+  let grown = fresh.size > 0 ? await shopTree(tenantId) : tree;
+  let byName = new Map(grown.map((item) => [lower(item.name), item]));
+
+  added.departments = added.departments.filter((name) => byName.has(lower(name)));
+
+  const branches = new Map<string, { department: Department; name: string }>();
+
+  for (const { department, category } of wanted) {
+    if (!category) continue;
+
+    const parent = byName.get(lower(department));
+    if (!parent) continue;
+
+    const key = `${lower(department)}/${lower(category)}`;
+
+    if (
+      branches.has(key) ||
+      parent.categories.some((item) => lower(item.name) === lower(category))
+    ) {
+      continue;
+    }
+
+    branches.set(key, { department: parent, name: category });
+  }
+
+  if (branches.size > NEW_CATEGORIES_MAX) {
+    return {
+      ok: false,
+      error: `That file names ${branches.size} new categories. Check the Category column on the previous step — that is more shelves than one shop has.`,
+    };
+  }
+
+  if (branches.size > 0) {
+    // Where each department's numbering has reached, so the categories under
+    // one department keep the file's order instead of all claiming first place.
+    const next = new Map(
+      grown.map((item) => [item.id, item.categories.length] as const),
+    );
+
+    const rows = [...branches.values()].map(({ department, name }) => {
+      const at = (next.get(department.id) ?? 0) + 1;
+      next.set(department.id, at);
+
+      return {
+        tenant_id: tenantId,
+        department_id: department.id,
+        name,
+        sort_order: Math.min(at, 32_000),
+      };
+    });
+
+    const { error } = await supabase.from("categories").insert(rows);
+
+    if (error) {
+      for (const row of rows) {
+        await supabase.from("categories").insert(row);
+      }
+    }
+
+    grown = await shopTree(tenantId);
+    byName = new Map(grown.map((item) => [lower(item.name), item]));
+
+    added.categories = rows
+      .filter((row) =>
+        grown
+          .find((item) => item.id === row.department_id)
+          ?.categories.some((item) => lower(item.name) === lower(row.name)),
+      )
+      .map((row) => row.name);
+  }
+
+  return { ok: true, tree: grown, added };
+}
 
 export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   const gate = await requireCatalog();
@@ -523,8 +706,24 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     (existing ?? []).map((row) => row.sku).filter(Boolean) as string[],
   );
 
-  // Read once for the whole file, not once per row.
-  const tree = await shopTree(session.tenantId);
+  // Every branch the file asks for, cleaned to what a tile can carry. A cell
+  // too long for one is dropped here rather than truncated — a tile reading
+  // "Imported dry goods and household clean…" is worse than no tile at all.
+  const wanted = rows.map((row) => ({
+    department: treeName(row.department ?? ""),
+    category: treeName(row.category ?? ""),
+  }));
+
+  const grown = await growTree(
+    session.tenantId,
+    await shopTree(session.tenantId),
+    wanted,
+  );
+
+  if (!grown.ok) return { ok: false, error: grown.error };
+
+  const { tree, added } = grown;
+  const byName = new Map(tree.map((item) => [lower(item.name), item]));
 
   const skipped: { row: number; reason: string }[] = [];
   // Each accepted row keeps the line it came from. `ready` is shorter than the
@@ -533,6 +732,28 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   const ready: { row: number; values: ItemRow & { tenant_id: string } }[] = [];
 
   rows.forEach((row, index) => {
+    // The department is resolved here, against the tree as it now stands, and
+    // handed to the validator by its exact stored name. `placeInTree` falls an
+    // unrecognised department to the shop's first one, which is right for a
+    // dropdown that only ever offers real departments and quietly wrong for a
+    // file — four hundred rows misfiled under "Beverages" is not something
+    // anybody spots before the register is drawing it.
+    const department = byName.get(lower(wanted[index].department));
+
+    if (!department) {
+      skipped.push({
+        row: index + 1,
+        reason: wanted[index].department
+          ? `${wanted[index].department} could not be added to your tree. Add it on the Categories tab and import this row again.`
+          : "No department. Choose where these items go on the previous step.",
+      });
+      return;
+    }
+
+    const category = department.categories.find(
+      (item) => lower(item.name) === lower(wanted[index].category),
+    );
+
     // Re-using the form's validator is what stops the two drifting: a price the
     // sheet refuses is a price the import refuses, in the same words.
     const form = new FormData();
@@ -540,8 +761,12 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     form.set("urdu", row.urdu ?? "");
     form.set("sku", row.sku ?? "");
     form.set("barcode", row.barcode ?? "");
-    form.set("department", row.department ?? "");
-    form.set("category", row.category ?? "");
+    form.set("department", department.name);
+    // Empty rather than the department's first category: a category the file
+    // named but the tree could not take is a missing label, and an item sitting
+    // under the department alone is honest about that. The register grids on
+    // the department either way.
+    form.set("category", category?.name ?? "");
     form.set("supplier", row.supplier ?? "");
     form.set("cost", row.cost ?? "");
     form.set("price", row.price ?? "");
@@ -605,10 +830,17 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   });
 
   if (ready.length === 0) {
+    // The tree may have grown for a file that then imported nothing. Redrawn
+    // and said plainly, because the owner is about to open the Categories tab
+    // and find branches nobody typed.
+    const grew = added.departments.length + added.categories.length > 0;
+    if (grew) revalidateCatalog();
+
     return {
       ok: false,
-      error:
-        "Not one row could be imported. Check the column mapping — a cost column read as the name is the usual cause.",
+      error: grew
+        ? "Not one row could be imported, though the departments the file named were added to your tree. Check the column matching — a cost column read as the name is the usual cause."
+        : "Not one row could be imported. Check the column matching — a cost column read as the name is the usual cause.",
     };
   }
 
@@ -647,8 +879,15 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     subjectType: "item",
     // The rows themselves are not in the entry — four hundred items would make
     // `audit_log` a second copy of the catalog. What happened and how much of
-    // it is the question this answers.
-    after: { rows: rows.length, inserted, skipped: skipped.length },
+    // it is the question this answers. The branches are named, because a tree
+    // that grew on its own is the one thing here nobody pressed a button for.
+    after: {
+      rows: rows.length,
+      inserted,
+      skipped: skipped.length,
+      departments: added.departments,
+      categories: added.categories,
+    },
   });
 
   revalidateCatalog();
@@ -657,5 +896,5 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   // skipped row 12 can be listed under row 300 and look like a different file.
   skipped.sort((a, b) => a.row - b.row);
 
-  return { ok: true, inserted, skipped };
+  return { ok: true, inserted, skipped, added };
 }

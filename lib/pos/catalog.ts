@@ -131,6 +131,32 @@ export const categoriesIn = (tree: Department[], department: string) =>
 export const TREE_NAME_MIN = 2;
 export const TREE_NAME_MAX = 40;
 
+/**
+ * A department or category name as the tree stores it, or `""` when the cell
+ * could never be one.
+ *
+ * Shared, and not a private helper in `tree-actions.ts`, because the bulk
+ * import now *creates* the branches a shop's sheet names — so the browser has
+ * to draw the same verdict in the preview that the Server Action will reach on
+ * the other side. Single-spacing is part of it: "Dairy  &  bakery" and
+ * "Dairy & bakery" are one tile, and the unique index in the database already
+ * treats them as one.
+ */
+export function treeName(raw: string): string {
+  const tidy = raw.trim().replace(/\s+/g, " ");
+  return tidy.length >= TREE_NAME_MIN && tidy.length <= TREE_NAME_MAX ? tidy : "";
+}
+
+/**
+ * The most rows one import may carry.
+ *
+ * Both sides hold it: the browser so a 40,000-line export is named before it is
+ * mapped, and the action so a crafted request cannot ask for more. One request
+ * much larger than this times out halfway and leaves the owner guessing what
+ * landed.
+ */
+export const IMPORT_MAX = 5_000;
+
 /* ---------------- Fields ----------------
    The lengths and the lists the add-product sheet enforces and the Server
    Action enforces again. One module, because a form that allows a 200-character

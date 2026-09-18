@@ -146,6 +146,42 @@ from (values
 ) as v (id, tenant_id, name, is_active, prefix, sort_order)
 join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
 
+-- The catalog tree. Nothing seeds it — 0017 dropped the trigger that used to,
+-- because a shop's departments are the shop's — so the rows are created here
+-- like the counters above them. Tenant A has two departments and three
+-- categories; B has one of each, to be leaked.
+insert into public.departments (id, tenant_id, name, sort_order)
+values
+  ('eeeeeee1-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Grocery', 1),
+  ('eeeeeee2-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Beverages', 2),
+  ('eeeeeee3-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'Karahi', 1);
+
+insert into public.categories (tenant_id, department_id, name, sort_order)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001',
+   'eeeeeee1-0000-4000-8000-000000000001', 'Atta, rice & pulses', 1),
+  ('aaaaaaaa-0000-4000-8000-000000000001',
+   'eeeeeee1-0000-4000-8000-000000000001', 'Masala & spices', 2),
+  ('aaaaaaaa-0000-4000-8000-000000000001',
+   'eeeeeee2-0000-4000-8000-000000000001', 'Soft drinks', 1),
+  ('bbbbbbbb-0000-4000-8000-000000000001',
+   'eeeeeee3-0000-4000-8000-000000000001', 'Mutton', 1);
+
+-- A category cannot hang under another shop's department. The composite foreign
+-- key on (department_id, tenant_id) is the only thing enforcing that, and it is
+-- worth one assertion here because RLS would not catch it: the service role
+-- writes this table and bypasses policies entirely.
+select throws_ok(
+  $$ insert into public.categories (tenant_id, department_id, name)
+     values ('bbbbbbbb-0000-4000-8000-000000000001',
+             'eeeeeee1-0000-4000-8000-000000000001', 'Stolen') $$,
+  '23503', null,
+  'a category cannot be filed under another tenant''s department'
+);
+
 -- One recorded sale each, so the read tests have something to leak.
 insert into public.sales (id, tenant_id, branch_id, counter_id, receipt_number, business_day, subtotal, total)
 select
@@ -344,16 +380,16 @@ select throws_ok(
   'tenant user cannot open its own counter directly'
 );
 
--- The catalog tree, added in 0016. Nothing inserts these above: the trigger on
--- `tenants` seeds them, so the counts below are also the test that a shop
--- created next year starts with a tree it can add products to.
+-- The catalog tree, added in 0016. A shop's departments are the shop's own, so
+-- the leak that matters is one kiryana reading another's aisle list — which is
+-- its shelf layout, and half of what a competitor would want.
 select is(
-  (select count(*) from public.departments), 6::bigint,
-  'tenant A sees its own six seeded departments and nothing else'
+  (select count(*) from public.departments), 2::bigint,
+  'tenant A sees its own two departments and nothing else'
 );
 
 select is(
-  (select count(*) from public.categories), 18::bigint,
+  (select count(*) from public.categories), 3::bigint,
   'tenant A sees its own categories and none of tenant B''s'
 );
 

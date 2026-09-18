@@ -60,14 +60,6 @@ export function CategoriesPanel({ tree }: { tree: Department[] }) {
           ? "Nothing yet — a product has to sit somewhere, so start here."
           : `${tree.length} departments · ${categories} categories · ${items} items`
       }
-      footer={
-        <p className="mr-auto text-[0.75rem] text-graphite-500">
-          Two levels, and that is the ceiling: a department tile on the register,
-          a category tile inside it, then the items. Renaming is not here yet —
-          an item carries these as words, so the day it arrives it has to carry
-          every item with it.
-        </p>
-      }
     >
       {tree.length === 0 ? (
         <p className="rounded-xl border border-dashed border-orchid-200 px-4 py-8 text-center text-[0.875rem] leading-relaxed text-graphite-700">
@@ -94,12 +86,6 @@ export function CategoriesPanel({ tree }: { tree: Department[] }) {
           label="Add a department"
           placeholder="Hardware, Cloth, Medicines…"
         />
-        <p className="pos-hint">
-          One tile on the register&rsquo;s home grid. Keep the whole list to what
-          fits on one screen without scrolling — six to nine on a 10-inch tablet.
-          A cashier who has to scroll the top level during a rush stops using the
-          grid and types the name instead, and then the tree was work for nothing.
-        </p>
       </div>
     </ChartCard>
   );
