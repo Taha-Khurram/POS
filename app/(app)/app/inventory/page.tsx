@@ -9,7 +9,8 @@ import {
 } from "@/components/pos/icons";
 import { requireModule } from "@/lib/pos/access";
 import { rupees } from "@/lib/format";
-import { SAMPLE_ITEMS, stockState } from "@/lib/pos/catalog";
+import { stockState, type Product } from "@/lib/pos/catalog";
+import { listProducts } from "@/lib/pos/items";
 import { CatalogPanel } from "./catalog-panel";
 import { CategoriesPanel } from "./categories-panel";
 import { ImportPanel } from "./import-panel";
@@ -37,18 +38,23 @@ const isTab = (value: unknown): value is TabId =>
  * server component, the item table is HTML on first paint, and the tab someone
  * is looking at survives a reload on a tablet that lost the network mid-tap.
  *
- * The figures are sample rows out of `lib/pos/catalog.ts` until Part 3 builds
- * `items` and `stock_levels`. The arithmetic behind them is not sample —
- * margin, stock value at cost, and the low-stock cut are the same functions the
- * real rows will go through.
+ * The rows are the shop's own `items`, read through its JWT. Which item is open
+ * in the editor is *not* in the URL, unlike Settings' counter and Staff's
+ * person: the sheet is a modal over a list somebody has usually filtered and
+ * searched their way to, and a navigation per row would throw that away between
+ * every correction.
  */
 export default async function InventoryPage({
   searchParams,
 }: PageProps<"/app/inventory">) {
-  await requireModule("inventory");
+  const session = await requireModule("inventory");
 
   const raw = (await searchParams).tab;
   const tab: TabId = isTab(raw) ? raw : "items";
+
+  if (!session.tenantId) return <NotAttached />;
+
+  const items = await listProducts(session.tenantId);
 
   return (
     <div className="space-y-4">
@@ -78,21 +84,55 @@ export default async function InventoryPage({
 
       {tab === "items" ? (
         <>
-          <CatalogStats />
-          <CatalogPanel items={SAMPLE_ITEMS} />
+          <CatalogStats items={items} />
+          <CatalogPanel items={items} nextSerial={nextSerial(items)} />
         </>
       ) : tab === "tree" ? (
-        <CategoriesPanel items={SAMPLE_ITEMS} />
+        <CategoriesPanel items={items} />
       ) : (
-        <ImportPanel />
+        <ImportPanel
+          // The codes the shop already carries, so the preview can say row 214
+          // is a bottle you already stock before anything is sent. The action
+          // checks again on its own side — this list is stale the moment
+          // somebody else adds an item.
+          knownBarcodes={
+            items.map((item) => item.barcode).filter(Boolean) as string[]
+          }
+          knownSkus={items.map((item) => item.sku).filter(Boolean)}
+        />
       )}
 
       <p className="px-1 pb-2 text-[0.75rem] text-graphite-500">
-        Goods receipt, wastage, branch transfers and the stock-count session
-        arrive with the rest of Part 3 — week of 22 September.
+        Goods receipt, wastage, branch transfers and the stock-count session are
+        still to come — stock moves when a sale is rung up and when you correct
+        it here, and nowhere else yet.
       </p>
     </div>
   );
+}
+
+/**
+ * The serial the next in-store barcode is cut from.
+ *
+ * Read off the codes the shop already minted rather than off the number of
+ * items, because deleting one would otherwise hand the next item a code that is
+ * already on a shelf label. A shop that has never minted one starts at 1.
+ *
+ * It is a suggestion either way. The unique index on `(tenant_id, barcode)` is
+ * what actually guarantees the code, and the action turns its refusal into a
+ * sentence.
+ */
+function nextSerial(items: Product[]): number {
+  const highest = items.reduce((top, item) => {
+    const code = item.barcode;
+    if (!code || !/^200\d{10}$/.test(code)) return top;
+
+    // Digits 4–12 of the EAN-13: the 200 prefix and the check digit are not
+    // part of the count.
+    return Math.max(top, Number(code.slice(3, 12)));
+  }, 0);
+
+  return highest + 1;
 }
 
 /**
@@ -101,20 +141,20 @@ export default async function InventoryPage({
  * today. Stock value is at cost, not at retail — retail is what it is worth if
  * every single unit sells, which is not a number anyone should plan against.
  */
-function CatalogStats() {
-  const value = SAMPLE_ITEMS.reduce(
-    (total, item) => total + item.cost * item.stock,
-    0,
-  );
-  const low = SAMPLE_ITEMS.filter((item) => stockState(item) === "low").length;
-  const out = SAMPLE_ITEMS.filter((item) => stockState(item) === "out").length;
-  const uncoded = SAMPLE_ITEMS.filter((item) => !item.barcode).length;
+function CatalogStats({ items }: { items: Product[] }) {
+  const value = items.reduce((total, item) => total + item.cost * item.stock, 0);
+  const low = items.filter((item) => stockState(item) === "low").length;
+  const out = items.filter((item) => stockState(item) === "out").length;
+  const uncoded = items.filter((item) => !item.barcode).length;
 
   const tiles = [
     {
       label: "Items in the list",
-      value: SAMPLE_ITEMS.length.toLocaleString("en-PK"),
-      note: `${uncoded} without a manufacturer barcode`,
+      value: items.length.toLocaleString("en-PK"),
+      note:
+        items.length === 0
+          ? "Nothing in the list yet"
+          : `${uncoded} without a manufacturer barcode`,
       alert: false,
     },
     {
@@ -159,5 +199,21 @@ function CatalogStats() {
         </article>
       ))}
     </section>
+  );
+}
+
+/** Same words as the register's, Settings' and Staff's gate — it is one problem. */
+function NotAttached() {
+  return (
+    <div className="pos-card mx-auto max-w-lg p-6">
+      <h1 className="font-display text-[1.375rem] font-bold">
+        Account not attached yet
+      </h1>
+      <p className="mt-3 text-[0.9375rem] leading-relaxed text-graphite-700">
+        You are signed in, but this login is not linked to a shop, so there is no
+        item list to show. Message us on the same WhatsApp number you arranged
+        Flo on and we will attach it.
+      </p>
+    </div>
   );
 }

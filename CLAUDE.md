@@ -63,7 +63,11 @@ and fonts only — chrome belongs to the group.
   exception is `lib/pos/timeframe-options.ts` — the period list is shared with
   the client filter, so it carries no `server-only` and no imports. The same
   goes for `lib/pos/modules.ts` and `lib/pos/notices.ts`: both are pure
-  functions the server calls and the chrome types against.
+  functions the server calls and the chrome types against, and for
+  `lib/pos/catalog.ts`, which holds the item vocabulary, the field limits and
+  the margin/stock/barcode arithmetic that the add-product sheet, the till and
+  the Server Actions all have to agree about. The catalog's *rows* are read by
+  `lib/pos/items.ts`, which is `server-only` like the rest.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -195,6 +199,40 @@ valid to RLS, which reads its claims. It is skipped for a token with no
 to be told so, and it fails open, because an unreachable database is not
 evidence that anybody was sacked.
 
+## The catalog
+
+`public.items` is real (`0008`, widened into a shop's item list by `0015`):
+barcode, the tree, cost, tax, stock, the per-item low-stock cut, and
+`is_active`. `lib/pos/items.ts` reads it through the shop's own JWT — and, like
+the readers in `shop.ts`, **none of them may be wrapped in React `cache()`**, or
+the re-render a `revalidatePath` triggers redraws the list as it stood before
+the save.
+
+Writes are `app/(app)/app/inventory/actions.ts` on the service role, gated by
+`can_edit_items` rather than by the owner role — the permission is named for
+this screen, so a manager an owner trusted with stock can add it. Settings and
+Staff stay owner-only.
+
+`readProduct` in that file is the one validator, and the CSV import builds a
+`FormData` per row so it goes through exactly that: a price the add-product
+sheet refuses is a price the import refuses, in the same words. The import
+inserts in chunks and retries a refused chunk one row at a time, so a single
+duplicate barcode never costs the other ninety-nine rows, and every skip is
+reported by its line in the file.
+
+Two unique indexes carry the weight: `(tenant_id, barcode)` and
+`(tenant_id, sku)`, both partial on not-null. `conflict()` turns a 23505 from
+either into the sentence the owner needs — a duplicate barcode almost always
+means the shop already stocks the thing being added.
+
+Deleting an item is a real delete. `sale_lines.item_id` is `on delete set null`
+beside a not-null `name_snapshot`, so every past receipt still prints exactly as
+it was rung up and only stops pointing at a row; what is lost is the ability to
+group last month's sales by that item, which is why the sheet offers switching
+it off first. Variants are counted (`variant_count`) but not enumerated —
+`item_variants` does not exist, so the matrix shows the SKUs it would generate
+and says so.
+
 ## Not built yet
 
 `app/(site)/demo/demo-form.tsx` swaps to a thank-you panel locally — nothing is
@@ -291,7 +329,5 @@ marketing site's pages to 80 mm too.
 opened and no report re-derives that window. `/app/sales` reads it: each
 counter's cash, card and total, then all counters together.
 
-Still not real: the items the till rings up are `SAMPLE_ITEMS`, so
-`sale_lines.item_id` is always null and `name_snapshot` carries the line. There
-is no offline outbox, no shift, and no reprint or returns — `sync_outbox` and
-`shifts` exist in the schema and nothing writes them.
+Still not real: there is no offline outbox, no shift, and no reprint or returns
+— `sync_outbox` and `shifts` exist in the schema and nothing writes them.

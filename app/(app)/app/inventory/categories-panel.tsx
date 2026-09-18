@@ -41,8 +41,9 @@ export function CategoriesPanel({ items }: { items: Product[] }) {
         footer={
           <>
             <p className="mr-auto text-[0.75rem] text-graphite-500">
-              Editing the tree lands with the <code>categories</code> table in
-              Part 3.
+              The six departments are Flo&rsquo;s for now. A shop&rsquo;s own
+              tree needs a <code>categories</code> table, and the item&rsquo;s
+              department and category columns are what it will be built from.
             </p>
             <button type="button" className="pos-btn pos-btn-primary" disabled>
               <IconPlus className="h-4 w-4" />

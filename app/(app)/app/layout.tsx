@@ -11,7 +11,7 @@ import { ConsoleShell } from "@/components/pos/console-shell";
 import { requireSession } from "@/lib/auth";
 import { getEntitlements } from "@/lib/entitlements";
 import { getModuleAccess } from "@/lib/pos/access";
-import { SAMPLE_ITEMS, stockState } from "@/lib/pos/catalog";
+import { stockCounts } from "@/lib/pos/items";
 import {
   buildNotices,
   noticeSignature,
@@ -56,11 +56,12 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   //     small and neither is allowed to fail the console: a shop whose
   //     subscription cannot be resolved still gets a till, it just gets a
   //     quieter bell.
-  const [shopName, access, entitlements, counters] = await Promise.all([
+  const [shopName, access, entitlements, counters, stock] = await Promise.all([
     getShopName(session.tenantId),
     getModuleAccess(session),
     session.tenantId ? getEntitlements(session.tenantId) : null,
     session.tenantId ? listCounters(session.tenantId) : [],
+    session.tenantId ? stockCounts(session.tenantId) : { out: 0, low: 0 },
   ]);
 
   // Both display preferences, read before the first byte so the shell renders
@@ -73,10 +74,9 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
     jar.get(THEME_COOKIE)?.value === "dark" ? "dark" : "light";
 
   // What the shop actually has to worry about, then what this person is allowed
-  // to be told about it. The stock counts come off `SAMPLE_ITEMS` because that
-  // is still what Products & stock draws — the bell and that screen have to
-  // agree about what is on the shelf, and they will go on agreeing when the
-  // list becomes a query.
+  // to be told about it. The stock counts are the shop's own items, through the
+  // same `stockState` Products & stock paints its badges with — the bell and
+  // that screen cannot disagree about what is on the shelf.
   const notices = visibleNotices(
     buildNotices({
       subscription: entitlements
@@ -88,10 +88,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
           }
         : null,
       counters,
-      stock: {
-        out: SAMPLE_ITEMS.filter((item) => stockState(item) === "out").length,
-        low: SAMPLE_ITEMS.filter((item) => stockState(item) === "low").length,
-      },
+      stock,
     }),
     access,
     session.tenantRole,

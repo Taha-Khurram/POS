@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireSession } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
-import { SAMPLE_ITEMS, UNITS } from "@/lib/pos/catalog";
+import { UNITS } from "@/lib/pos/catalog";
 import {
   billOf,
   businessDayOf,
@@ -66,43 +66,68 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     return { ok: false, error: "That is not a payment method this counter takes." };
   }
 
+  const wanted = input.lines ?? [];
+
+  if (wanted.length === 0) {
+    return { ok: false, error: "There is nothing on this bill." };
+  }
+
+  if (!wanted.every((line) => UUID.test(line.id))) {
+    return { ok: false, error: "That sale is malformed. Start it again." };
+  }
+
+  const supabase = createAdminClient();
+
   // Re-priced from the catalog, not from the browser. This is the whole of the
   // trust boundary: the client chooses what and how many, the server decides
-  // what it costs.
+  // what it costs. A crafted request can therefore buy things at the wrong
+  // quantity, which is a stocktake problem, and never at the wrong price.
+  //
+  // `is_active` is on the read for the same reason it is on the register's:
+  // a tab left open since an item was withdrawn must not be able to sell it.
+  const { data: catalog } = await supabase
+    .from("items")
+    .select("id, name, name_urdu, unit, selling_price, tax_rate")
+    .eq("tenant_id", session.tenantId)
+    .eq("is_active", true)
+    .in("id", [...new Set(wanted.map((line) => line.id))]);
+
+  const priced = new Map((catalog ?? []).map((row) => [row.id, row]));
   const lines: CartLine[] = [];
 
-  for (const wanted of input.lines ?? []) {
-    const item = SAMPLE_ITEMS.find((candidate) => candidate.id === wanted.id);
-    if (!item) return { ok: false, error: "One of those items is no longer in the list." };
+  for (const line of wanted) {
+    const item = priced.get(line.id);
+    if (!item) {
+      return { ok: false, error: "One of those items is no longer in the list." };
+    }
 
-    const fractional = UNITS.find((unit) => unit.id === item.unit)?.fractional ?? false;
-    const quantity = round3(Number(wanted.quantity));
+    // 'kilo' is 0008's spelling, still valid in the column. One name here.
+    const unit = (item.unit === "kilo" ? "kg" : item.unit) as CartLine["unit"];
+    const fractional = UNITS.find((entry) => entry.id === unit)?.fractional ?? false;
+    const quantity = round3(Number(line.quantity));
 
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 99_999) {
-      return { ok: false, error: `The quantity on ${item.name} is not a number we can sell.` };
+      return {
+        ok: false,
+        error: `The quantity on ${item.name} is not a number we can sell.`,
+      };
     }
 
     if (!fractional && !Number.isInteger(quantity)) {
-      return { ok: false, error: `${item.name} is sold in whole ${item.unit}s.` };
+      return { ok: false, error: `${item.name} is sold in whole ${unit}s.` };
     }
 
     lines.push({
       id: item.id,
       name: item.name,
-      urdu: item.urdu,
-      unit: item.unit,
+      urdu: item.name_urdu ?? "",
+      unit,
       quantity,
-      price: item.price,
-      taxRate: item.taxRate,
+      price: Number(item.selling_price) || 0,
+      taxRate: Number(item.tax_rate) || 0,
       fractional,
     });
   }
-
-  if (lines.length === 0) {
-    return { ok: false, error: "There is nothing on this bill." };
-  }
-
-  const supabase = createAdminClient();
 
   // The counter, re-read rather than taken on trust: it has to be this shop's,
   // open, and willing to take the tender the sheet chose.
@@ -141,9 +166,10 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     p_total: bill.total,
     p_tender: input.tender,
     p_lines: lines.map((line) => ({
-      // Null until the catalog is real rows. `name_snapshot` is what the
-      // receipt was printed from either way.
-      item_id: null,
+      // The catalog row this line came off, so a report can group by item.
+      // `name_snapshot` beside it is what the receipt was printed from, and it
+      // is what survives the item being deleted.
+      item_id: line.id,
       name: line.name,
       unit: line.unit,
       quantity: line.quantity,

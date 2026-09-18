@@ -1,15 +1,18 @@
 /**
- * The catalog's shape, its vocabulary, and a shop's worth of sample rows.
+ * The catalog's shape, its vocabulary, and the arithmetic done on top of it.
  *
  * No `server-only` here, and no imports — the same exception
  * `timeframe-options.ts` carries. The item list is read by the browser (search,
  * the add-product sheet's live margin, the CSV mapper) as well as by the server
- * that renders the first paint, and a module only one side could import would
- * force these constants to exist twice.
+ * that renders the first paint and the Server Actions that validate what comes
+ * back, and a module only one side could import would force these constants to
+ * exist twice.
  *
- * Everything under "Arithmetic" is maths the real tables will keep needing —
- * margin, stock state, the internal barcode — so it is written against the
- * types rather than against the sample.
+ * The rows themselves live in `public.items` and are read by `lib/pos/items.ts`.
+ * What is here is everything both sides have to agree about: the units, the
+ * tree, the field limits, and the maths — margin, stock state, the in-store
+ * barcode — which is written against the types rather than against any
+ * particular shop.
  */
 
 export type TrackingMode = "unit" | "weight" | "variant";
@@ -34,10 +37,15 @@ export type Product = {
   barcode: string | null;
   department: string;
   category: string;
+  /** The third level, when the shop files that deep. */
+  sub: string | null;
   unit: UnitId;
   tracking: TrackingMode;
   /** How many size/colour rows sit under this item. Only for `"variant"`. */
   variants?: number;
+  /** Off hides it from the register without losing its history. A seasonal
+   *  item, or one the shop has stopped carrying but still has sales against. */
+  isActive: boolean;
   cost: number;
   price: number;
   stock: number;
@@ -185,253 +193,133 @@ export const DEPARTMENTS: Department[] = [
 export const categoriesIn = (department: string) =>
   DEPARTMENTS.find((item) => item.name === department)?.categories ?? [];
 
-/* ---------------- Sample rows ----------------
-   Fourteen items a Gulberg kiryana would actually carry, priced the way they
-   are priced. Three are deliberately awkward: loose sugar and loose rice have
-   no manufacturer barcode and sell by the kilo, and the bakery's own rusk is
-   private label — which is the whole reason the internal-barcode path exists. */
+/* ---------------- Fields ----------------
+   The lengths and the lists the add-product sheet enforces and the Server
+   Action enforces again. One module, because a form that allows a 200-character
+   name and an action that refuses one is a form that loses somebody's typing. */
 
-export const SAMPLE_ITEMS: Product[] = [
-  {
-    id: "itm-01",
-    name: "Coca-Cola 1.5 L",
-    urdu: "کوکا کولا",
-    sku: "BEV-COL-1500",
-    barcode: "5449000000996",
-    department: "Beverages",
-    category: "Soft drinks",
-    unit: "piece",
-    tracking: "unit",
-    cost: 148,
-    price: 180,
-    stock: 64,
-    lowAt: 24,
-    supplier: "Coca-Cola Icecek — Lahore",
-    taxRate: 18,
-  },
-  {
-    id: "itm-02",
-    name: "Pepsi 345 ml can",
-    urdu: "پیپسی",
-    sku: "BEV-PEP-0345",
-    barcode: "6281006230125",
-    department: "Beverages",
-    category: "Soft drinks",
-    unit: "piece",
-    tracking: "unit",
-    cost: 62,
-    price: 80,
-    stock: 18,
-    lowAt: 24,
-    supplier: "Riaz Bottlers",
-    taxRate: 18,
-  },
-  {
-    id: "itm-03",
-    name: "Tapal Danedar 475 g",
-    urdu: "ٹپال دانے دار",
-    sku: "BEV-TAP-0475",
-    barcode: "8964000201473",
-    department: "Beverages",
-    category: "Tea & coffee",
-    unit: "packet",
-    tracking: "unit",
-    cost: 985,
-    price: 1150,
-    stock: 22,
-    lowAt: 10,
-    supplier: "Tapal Tea — distributor",
-    taxRate: 18,
-  },
-  {
-    id: "itm-04",
-    name: "Nestlé Milkpak 1 L",
-    urdu: "ملک پیک",
-    sku: "DRY-MPK-1000",
-    barcode: "8964000101018",
-    department: "Dairy & bakery",
-    category: "Milk & cream",
-    unit: "piece",
-    tracking: "unit",
-    cost: 268,
-    price: 300,
-    stock: 41,
-    lowAt: 20,
-    supplier: "Nestlé Pakistan",
-    taxRate: 18,
-  },
-  {
-    id: "itm-05",
-    name: "Sugar — loose",
-    urdu: "چینی",
-    sku: "GRO-SUG-0001",
-    barcode: null,
-    department: "Grocery",
-    category: "Sugar & salt",
-    unit: "kg",
-    tracking: "weight",
-    cost: 142,
-    price: 165,
-    stock: 84.5,
-    lowAt: 25,
-    supplier: "Ravi Trading — Akbari Mandi",
-    taxRate: 0,
-  },
-  {
-    id: "itm-06",
-    name: "Super Kernel basmati — loose",
-    urdu: "سپر کرنل چاول",
-    sku: "GRO-SUP-0002",
-    barcode: null,
-    department: "Grocery",
-    category: "Atta, rice & pulses",
-    unit: "kg",
-    tracking: "weight",
-    cost: 295,
-    price: 360,
-    stock: 6.2,
-    lowAt: 20,
-    supplier: "Ravi Trading — Akbari Mandi",
-    taxRate: 0,
-  },
-  {
-    id: "itm-07",
-    name: "Dalda Banaspati 2.5 kg",
-    urdu: "ڈالڈا",
-    sku: "GRO-DAL-2500",
-    barcode: "8964000384015",
-    department: "Grocery",
-    category: "Cooking oil & ghee",
-    unit: "piece",
-    tracking: "unit",
-    cost: 1420,
-    price: 1590,
-    stock: 9,
-    lowAt: 12,
-    supplier: "Dalda Foods",
-    taxRate: 18,
-  },
-  {
-    id: "itm-08",
-    name: "Shan Biryani Masala 50 g",
-    urdu: "شان بریانی مصالحہ",
-    sku: "GRO-SHA-0050",
-    barcode: "8964000221471",
-    department: "Grocery",
-    category: "Masala & spices",
-    unit: "packet",
-    tracking: "unit",
-    cost: 88,
-    price: 110,
-    stock: 120,
-    lowAt: 36,
-    supplier: "Shan Foods",
-    taxRate: 18,
-  },
-  {
-    id: "itm-09",
-    name: "Lay's Masala 50 g",
-    urdu: "لیز مصالحہ",
-    sku: "SNA-MAS-0050",
-    barcode: "8964000567012",
-    department: "Snacks & confectionery",
-    category: "Chips & namkeen",
-    unit: "packet",
-    tracking: "unit",
-    cost: 42,
-    price: 50,
-    stock: 0,
-    lowAt: 48,
-    supplier: "PepsiCo Snacks",
-    taxRate: 18,
-  },
-  {
-    id: "itm-10",
-    name: "Gala biscuit family pack",
-    urdu: "گالا بسکٹ",
-    sku: "SNA-GAL-0110",
-    barcode: "8964000743119",
-    department: "Snacks & confectionery",
-    category: "Biscuits",
-    unit: "packet",
-    tracking: "unit",
-    cost: 96,
-    price: 120,
-    stock: 54,
-    lowAt: 24,
-    supplier: "Peek Freans — distributor",
-    taxRate: 18,
-  },
-  {
-    id: "itm-11",
-    name: "Rusk — our own bakery",
-    urdu: "رس",
-    sku: "DAI-RUS-0001",
-    barcode: "2000010000012",
-    department: "Dairy & bakery",
-    category: "Bread & rusk",
-    unit: "packet",
-    tracking: "unit",
-    cost: 130,
-    price: 220,
-    stock: 15,
-    lowAt: 8,
-    supplier: "Made in-house",
-    taxRate: 0,
-  },
-  {
-    id: "itm-12",
-    name: "Surf Excel 1 kg",
-    urdu: "سرف ایکسل",
-    sku: "HOU-SUR-1000",
-    barcode: "8964000112458",
-    department: "Household",
-    category: "Detergents & soap",
-    unit: "piece",
-    tracking: "unit",
-    cost: 615,
-    price: 690,
-    stock: 27,
-    lowAt: 12,
-    supplier: "Unilever Pakistan",
-    taxRate: 18,
-  },
-  {
-    id: "itm-13",
-    name: "Sunsilk shampoo 185 ml",
-    urdu: "سن سلک",
-    sku: "PER-SUN-0185",
-    barcode: "8964000339022",
-    department: "Personal care",
-    category: "Hair & skin",
-    unit: "piece",
-    tracking: "unit",
-    cost: 398,
-    price: 450,
-    stock: 31,
-    lowAt: 12,
-    supplier: "Unilever Pakistan",
-    taxRate: 18,
-  },
-  {
-    id: "itm-14",
-    name: "Shop apron — printed",
-    urdu: "ایپرن",
-    sku: "HOU-APR-0002",
-    barcode: "2000010000029",
-    department: "Household",
-    category: "Paper & cleaning",
-    unit: "piece",
-    tracking: "variant",
-    variants: 6,
-    cost: 540,
-    price: 950,
-    stock: 23,
-    lowAt: 6,
-    supplier: "Azam Cloth Market",
-    taxRate: 18,
-  },
+export const NAME_MIN = 2;
+export const NAME_MAX = 120;
+export const URDU_MAX = 120;
+export const SKU_MAX = 40;
+export const BARCODE_MAX = 32;
+export const SUPPLIER_MAX = 80;
+
+/** What the register may charge for one unit. Well above any shop's ceiling,
+ *  low enough that a mis-keyed row is refused rather than banked. */
+export const PRICE_MAX = 9_999_999;
+export const STOCK_MAX = 999_999;
+
+export const TAX_RATES = [
+  { id: 18, label: "18% — standard (FBR)" },
+  { id: 16, label: "16% — Punjab services (PRA)" },
+  { id: 0, label: "0% — exempt or zero-rated" },
 ];
+
+export const isUnitId = (value: unknown): value is UnitId =>
+  UNITS.some((unit) => unit.id === value);
+
+export const isTrackingMode = (value: unknown): value is TrackingMode =>
+  TRACKING.some((mode) => mode.id === value);
+
+export const isFractional = (unit: UnitId) =>
+  UNITS.find((item) => item.id === unit)?.fractional ?? false;
+
+/**
+ * The department and category as the tree knows them, or the nearest thing.
+ *
+ * A CSV column saying "Bevrages" should not stop an import — the row is worth
+ * more than its spelling. So an unrecognised department falls to the first one
+ * and an unrecognised category to that department's first, which is a row the
+ * owner can re-file in two taps rather than a row they have to retype.
+ */
+export function placeInTree(
+  department: string,
+  category: string,
+): { department: string; category: string } {
+  const dept =
+    DEPARTMENTS.find(
+      (item) => item.name.toLowerCase() === department.trim().toLowerCase(),
+    ) ?? DEPARTMENTS[0];
+
+  const cat =
+    dept.categories.find(
+      (item) => item.name.toLowerCase() === category.trim().toLowerCase(),
+    ) ?? dept.categories[0];
+
+  return { department: dept.name, category: cat.name };
+}
+
+/** The subcategory only if it is one this category actually has. */
+export const placeSub = (
+  department: string,
+  category: string,
+  sub: string,
+): string | null => {
+  const list =
+    categoriesIn(department).find((item) => item.name === category)?.sub ?? [];
+
+  return list.find((item) => item.toLowerCase() === sub.trim().toLowerCase()) ?? null;
+};
+
+/**
+ * What goes into `items.search_terms`, which carries a GIN index.
+ *
+ * Lower-cased and de-duplicated, so the column is a set of handles rather than
+ * a second copy of the row. The Urdu name goes in as typed — the script has no
+ * case, and `toLowerCase` on it is a no-op that only looks thorough.
+ */
+export function searchTerms(item: {
+  name: string;
+  urdu?: string | null;
+  sku?: string | null;
+  barcode?: string | null;
+}): string[] {
+  const parts = [
+    item.name,
+    item.urdu ?? "",
+    item.sku ?? "",
+    item.barcode ?? "",
+    // Words as well as the whole name, so "danedar" finds "Tapal Danedar 475 g".
+    ...item.name.split(/\s+/),
+  ];
+
+  return [
+    ...new Set(
+      parts
+        .map((part) => part.trim())
+        .filter((part) => part.length > 1)
+        .map((part) => (/[a-z0-9]/i.test(part) ? part.toLowerCase() : part)),
+    ),
+  ];
+}
+
+/**
+ * Does this item answer to what somebody typed?
+ *
+ * Shared by the catalog list and the till so the two agree about what a search
+ * finds — a cashier who cannot find an item the owner can see assumes it is not
+ * in the list and adds it a second time.
+ *
+ * The barcode is matched deliberately: the fastest way to ask whether an item
+ * is already in the catalog is to scan it, and somebody standing at the counter
+ * will do exactly that.
+ */
+export function matchesProduct(item: Product, query: string): boolean {
+  const raw = query.trim();
+  if (!raw) return true;
+
+  const needle = raw.toLowerCase();
+
+  return (
+    item.name.toLowerCase().includes(needle) ||
+    item.sku.toLowerCase().includes(needle) ||
+    item.supplier.toLowerCase().includes(needle) ||
+    item.category.toLowerCase().includes(needle) ||
+    (item.barcode?.includes(needle) ?? false) ||
+    item.urdu.includes(raw)
+  );
+}
 
 /* ---------------- Arithmetic ---------------- */
 

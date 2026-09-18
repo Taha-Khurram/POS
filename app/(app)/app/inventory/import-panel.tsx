@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import {
@@ -9,7 +10,9 @@ import {
   IconClose,
   IconUpload,
 } from "@/components/pos/icons";
-import { SAMPLE_ITEMS } from "@/lib/pos/catalog";
+import { useToast } from "@/components/pos/toaster";
+import { importProducts } from "./actions";
+import type { ImportResult, ImportRow } from "./state";
 
 /**
  * Bulk import — the screen onboarding lives or dies on.
@@ -25,7 +28,10 @@ import { SAMPLE_ITEMS } from "@/lib/pos/catalog";
  * pre-guessed but never hidden, and the preview is of *mapped* rows — what will
  * be written — not of the raw sheet.
  *
- * The parse and every check below are real. Only the last step is missing.
+ * The file never leaves the browser until Import is pressed. What is sent then
+ * is the mapped rows and nothing else — not the file — and the Server Action
+ * puts every one of them through the same validator the add-product sheet uses,
+ * because a check that only ran here is a check a crafted request skipped.
  */
 
 type FieldId =
@@ -86,7 +92,7 @@ function parseCsv(text: string): string[][] {
 
   // Excel writes a BOM on "CSV UTF-8", and it would otherwise become part of
   // the first header — which is how "name" silently stops matching.
-  const body = text.replace(/^\uFEFF/, "");
+  const body = text.replace(/^﻿/, "");
 
   for (let index = 0; index < body.length; index += 1) {
     const char = body[index];
@@ -136,8 +142,18 @@ type Checked = {
   warnings: string[];
 };
 
-export function ImportPanel() {
+export function ImportPanel({
+  knownBarcodes,
+  knownSkus,
+}: {
+  /** The codes the shop already carries, so a duplicate is named before the
+   *  file is sent. The action checks again — this list is stale the moment
+   *  somebody else adds an item. */
+  knownBarcodes: string[];
+  knownSkus: string[];
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -145,12 +161,15 @@ export function ImportPanel() {
   const [mapping, setMapping] = useState<Mapping>({});
   const [problem, setProblem] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [sending, startImport] = useTransition();
 
   const loaded = body.length > 0;
 
   const takeFile = async (file: File | undefined) => {
     if (!file) return;
     setProblem("");
+    setResult(null);
 
     if (/\.xlsx?$/i.test(file.name)) {
       return setProblem(
@@ -195,11 +214,12 @@ export function ImportPanel() {
     setBody([]);
     setMapping({});
     setProblem("");
+    setResult(null);
     if (fileRef.current) fileRef.current.value = "";
   };
 
   const downloadTemplate = () => {
-    const blob = new Blob([`\uFEFF${TEMPLATE}`], {
+    const blob = new Blob([`﻿${TEMPLATE}`], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -213,10 +233,10 @@ export function ImportPanel() {
   const checked = useMemo<Checked[]>(() => {
     if (body.length === 0) return [];
 
-    const known = new Set(
-      SAMPLE_ITEMS.map((item) => item.barcode).filter(Boolean) as string[],
-    );
+    const codes = new Set(knownBarcodes);
+    const skus = new Set(knownSkus);
     const seen = new Map<string, number>();
+    const seenSku = new Map<string, number>();
 
     return body.map((row, index) => {
       const values: Partial<Record<FieldId, string>> = {};
@@ -245,16 +265,28 @@ export function ImportPanel() {
         if (!/^\d{8}$|^\d{12,14}$/.test(barcode)) {
           warnings.push("Barcode is not a UPC or EAN length");
         }
-        if (known.has(barcode)) errors.push("Barcode already in your catalog");
+        if (codes.has(barcode)) errors.push("Barcode already in your catalog");
 
         const first = seen.get(barcode);
         if (first !== undefined) errors.push(`Same barcode as row ${first + 1}`);
         else seen.set(barcode, index);
       }
 
+      // The SKU carries a unique index of its own, so a repeat is refused by
+      // the database rather than merged — and a row refused after the fact is a
+      // row the owner has to go and find.
+      const sku = values.sku;
+      if (sku) {
+        if (skus.has(sku)) errors.push("SKU already in your catalog");
+
+        const first = seenSku.get(sku);
+        if (first !== undefined) errors.push(`Same SKU as row ${first + 1}`);
+        else seenSku.set(sku, index);
+      }
+
       return { values, errors, warnings };
     });
-  }, [body, mapping]);
+  }, [body, mapping, knownBarcodes, knownSkus]);
 
   const missing = FIELDS.filter(
     (field) => field.required && mapping[field.id] === undefined,
@@ -265,6 +297,58 @@ export function ImportPanel() {
     (row) => row.errors.length === 0 && row.warnings.length > 0,
   ).length;
   const clean = checked.length - bad - warned;
+  const sendable = clean + warned;
+
+  /**
+   * Off it goes. A row with a warning is sent — a missing cost is a fact about
+   * the shop's sheet, not a reason to lose the item. A row with an error is
+   * not, because the server would only refuse it again.
+   */
+  const send = () => {
+    const rows: ImportRow[] = checked
+      .filter((row) => row.errors.length === 0)
+      .map((row) => ({
+        name: row.values.name,
+        urdu: row.values.urdu,
+        barcode: row.values.barcode,
+        sku: row.values.sku,
+        department: row.values.department,
+        category: row.values.category,
+        unit: row.values.unit,
+        cost: row.values.cost,
+        price: row.values.price,
+        stock: row.values.stock,
+        lowAt: row.values.lowAt,
+        supplier: row.values.supplier,
+      }));
+
+    startImport(async () => {
+      const answer = await importProducts(rows);
+      setResult(answer);
+
+      if (!answer.ok) {
+        toast({ title: "Nothing was imported", detail: answer.error, tone: "bad" });
+        return;
+      }
+
+      toast({
+        title: `${answer.inserted.toLocaleString("en-PK")} ${
+          answer.inserted === 1 ? "item" : "items"
+        } imported`,
+        detail:
+          answer.skipped.length > 0
+            ? `${answer.skipped.length} ${
+                answer.skipped.length === 1 ? "row was" : "rows were"
+              } skipped.`
+            : null,
+        tone: answer.skipped.length > 0 ? "warn" : "good",
+      });
+    });
+  };
+
+  if (result?.ok) {
+    return <Landed result={result} onAgain={reset} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -389,7 +473,7 @@ export function ImportPanel() {
                     </select>
 
                     <p className="pos-hint truncate">
-                      {sample ? `First row: ${sample}` : "\u00a0"}
+                      {sample ? `First row: ${sample}` : " "}
                     </p>
                   </label>
                 );
@@ -411,15 +495,19 @@ export function ImportPanel() {
             footer={
               <>
                 <p className="mr-auto text-[0.75rem] text-graphite-500">
-                  Import writes nothing yet — Part 3 builds the{" "}
-                  <code>items</code> table behind it.
+                  Everything comes in at 0% tax and on sale. Set the rate on the
+                  items that need one afterwards — a rate list has no tax column
+                  and a guess would print on receipts.
                 </p>
                 <button
                   type="button"
-                  className="pos-btn pos-btn-primary"
-                  disabled
+                  onClick={send}
+                  disabled={sending || missing.length > 0 || sendable === 0}
+                  className="pos-btn pos-btn-primary disabled:opacity-50"
                 >
-                  Import {clean + warned} {clean + warned === 1 ? "item" : "items"}
+                  {sending
+                    ? "Importing…"
+                    : `Import ${sendable} ${sendable === 1 ? "item" : "items"}`}
                 </button>
               </>
             }
@@ -429,6 +517,13 @@ export function ImportPanel() {
               <Tally label="with a warning" count={warned} tone="warn" />
               <Tally label="will be skipped" count={bad} tone="bad" />
             </div>
+
+            {result && !result.ok ? (
+              <p className="mx-4 mb-3 flex items-start gap-2 rounded-xl border border-orchid-100 bg-orchid-50/60 px-3.5 py-3 text-[0.8125rem] leading-relaxed text-signal-bad">
+                <IconAlert className="mt-0.5 h-4 w-4 flex-none" />
+                {result.error}
+              </p>
+            ) : null}
 
             <div className="overflow-x-auto">
               <table className="pos-table">
@@ -503,6 +598,78 @@ export function ImportPanel() {
 }
 
 /* ---------------- Pieces ---------------- */
+
+/**
+ * What landed.
+ *
+ * The skipped rows are listed by their place in the file and not by name,
+ * because the owner is going to go back to the sheet on the other screen and
+ * look at row 214 — a name they would have to search for is a name that costs
+ * them the line.
+ */
+function Landed({
+  result,
+  onAgain,
+}: {
+  result: Extract<ImportResult, { ok: true }>;
+  onAgain: () => void;
+}) {
+  const shown = result.skipped.slice(0, 25);
+
+  return (
+    <ChartCard
+      title="Imported"
+      caption={`${result.inserted.toLocaleString("en-PK")} ${
+        result.inserted === 1 ? "item is" : "items are"
+      } in your list.`}
+      footer={
+        <>
+          <button type="button" onClick={onAgain} className="pos-btn pos-btn-soft">
+            Import another file
+          </button>
+          <Link href="/app/inventory?tab=items" className="pos-btn pos-btn-primary">
+            See the item list
+          </Link>
+        </>
+      }
+    >
+      <p className="flex items-start gap-2 text-[0.875rem] leading-relaxed text-graphite-700">
+        <IconCheck className="mt-0.5 h-4 w-4 flex-none text-signal-good" />
+        They are on sale at the counter right away, at 0% tax. Set a rate and
+        correct the units on the ones that need it — the till will ring them up
+        either way.
+      </p>
+
+      {result.skipped.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-orchid-100">
+          <p className="border-b border-orchid-100 px-3.5 py-2.5 text-[0.8125rem] font-semibold text-graphite-900">
+            {result.skipped.length}{" "}
+            {result.skipped.length === 1 ? "row was" : "rows were"} skipped
+          </p>
+
+          <ul className="divide-y divide-orchid-100">
+            {shown.map((row) => (
+              <li
+                key={row.row}
+                className="flex flex-wrap items-baseline gap-x-2 px-3.5 py-2 text-[0.8125rem]"
+              >
+                <span className="font-mono text-graphite-500">Row {row.row}</span>
+                <span className="text-graphite-700">{row.reason}</span>
+              </li>
+            ))}
+          </ul>
+
+          {result.skipped.length > shown.length ? (
+            <p className="border-t border-orchid-100 px-3.5 py-2 text-[0.75rem] text-graphite-500">
+              The first {shown.length} of them. Fix these, export again, and the
+              ones that already landed will be named as duplicates.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </ChartCard>
+  );
+}
 
 const STEPS = ["Pick the file", "Match the columns", "Check and import"];
 

@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
 import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
-import { SAMPLE_ITEMS } from "@/lib/pos/catalog";
+import { listSellableProducts } from "@/lib/pos/items";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
 import { getAssignedCounterId } from "@/lib/pos/staff";
 import { CounterPicker } from "./counter-picker";
@@ -41,9 +41,11 @@ export const metadata: Metadata = {
  * assigned to it, quietly back to the device's counter — rather than to a
  * register whose every sale would be refused.
  *
- * The item list is still `SAMPLE_ITEMS`, the same rows Products & stock shows,
- * so the register and the catalog cannot disagree about what is on the shelf.
- * When `items` has real rows this becomes a query and nothing else moves.
+ * The item list is the shop's own `items`, minus the ones switched off — the
+ * same rows Products & stock shows, so the register and the catalog cannot
+ * disagree about what is on the shelf. The action that records the sale re-reads
+ * them with the same filter, so a tab left open on an item since withdrawn
+ * cannot sell it.
  */
 export default async function RegisterPage({
   searchParams,
@@ -52,11 +54,12 @@ export default async function RegisterPage({
 
   if (!session.tenantId) return <NotAttached />;
 
-  const [counters, shop, settings, assigned, jar] = await Promise.all([
+  const [counters, shop, settings, assigned, items, jar] = await Promise.all([
     listCounters(session.tenantId),
     getShopProfile(session.tenantId),
     getShopSettings(session.tenantId),
     getAssignedCounterId(session.userId),
+    listSellableProducts(session.tenantId),
     cookies(),
   ]);
 
@@ -118,7 +121,7 @@ export default async function RegisterPage({
       </header>
 
       <Till
-        items={SAMPLE_ITEMS}
+        items={items}
         counter={counter}
         shop={shop}
         settings={settings}

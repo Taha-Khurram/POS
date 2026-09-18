@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { BarcodeScanner } from "@/components/pos/barcode-scanner";
 import {
@@ -14,35 +14,46 @@ import {
   IconTag,
   IconTrash,
 } from "@/components/pos/icons";
+import { useActionToast } from "@/components/pos/toaster";
 import {
   categoriesIn,
   DEPARTMENTS,
   GLOBAL_SAMPLE,
   internalBarcode,
+  isFractional,
   looksScanned,
   marginOf,
-  SAMPLE_ITEMS,
   suggestSku,
+  TAX_RATES,
   TRACKING,
   UNITS,
+  type Product,
   type TrackingMode,
   type UnitId,
 } from "@/lib/pos/catalog";
 import { rupees } from "@/lib/format";
+import { deleteProduct, saveProduct } from "./actions";
+import { IDLE } from "./state";
 
 /**
- * Adding one product.
+ * One product, added or corrected.
  *
  * The order of the sheet is the order of the hands: the barcode comes first
  * because the item is already on the counter and the scanner is already in
  * reach, and everything a lookup can fill is directly under it. Pricing sits
- * above stock because a shopkeeper always knows what they paid and often has
- * to go and count what is on the shelf.
+ * above stock because a shopkeeper always knows what they paid and often has to
+ * go and count what is on the shelf.
  *
  * Three things here are real arithmetic rather than decoration — the margin
  * readout, the internal EAN-13, and the variant matrix — because those are the
- * three that are wrong on every spreadsheet this screen replaces. Saving is
- * what is missing, and the footer says so.
+ * three that are wrong on every spreadsheet this screen replaces.
+ *
+ * Every field is controlled, which is unusual for this codebase and is what the
+ * two lookups need: filling six boxes from a barcode is not something
+ * `defaultValue` can do. The reset after "Save and add another" is therefore
+ * ours to do too, and it deliberately keeps the department, category and
+ * supplier — a shopkeeper entering a delivery is entering twelve things from
+ * one distributor in one aisle, and clearing those would be twelve re-picks.
  */
 
 /** Rupee fields arrive as strings; an empty one is 0, never NaN. */
@@ -55,12 +66,6 @@ const num = (value: string) => {
 type CodeSource = "none" | "scanned" | "typed" | "internal";
 
 type LookupState = "idle" | "searching" | "hit" | "miss";
-
-const TAX_RATES = [
-  { id: "18", label: "18% — standard (FBR)" },
-  { id: "16", label: "16% — Punjab services (PRA)" },
-  { id: "0", label: "0% — exempt or zero-rated" },
-];
 
 /** Quick ways to land on a round margin instead of doing the division. */
 const MARGIN_STEPS = [15, 20, 25, 30];
@@ -92,39 +97,77 @@ function matrixOf(options: Option[]) {
   );
 }
 
-export function ProductSheet({ onClose }: { onClose: () => void }) {
+export function ProductSheet({
+  item,
+  nextSerial,
+  onClose,
+}: {
+  /** The row being corrected, or null for a new product. */
+  item: Product | null;
+  nextSerial: number;
+  onClose: () => void;
+}) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const deleteFormId = useId();
 
-  const [barcode, setBarcode] = useState("");
-  const [source, setSource] = useState<CodeSource>("none");
+  const [state, action, pending] = useActionState(saveProduct, IDLE);
+  const [removal, removeAction, removing] = useActionState(deleteProduct, IDLE);
+
+  useActionToast(state, {
+    saved:
+      state.saved?.action === "updated"
+        ? `${state.saved.name} saved`
+        : `${state.saved?.name ?? "Item"} added`,
+    failed: "That item did not save",
+  });
+
+  useActionToast(removal, {
+    saved: `${removal.saved?.name ?? "Item"} removed from the list`,
+    failed: "That item was not removed",
+  });
+
+  const [barcode, setBarcode] = useState(item?.barcode ?? "");
+  const [source, setSource] = useState<CodeSource>(item?.barcode ? "typed" : "none");
   const [scanning, setScanning] = useState(false);
   const [lookup, setLookup] = useState<LookupState>("idle");
 
-  const [name, setName] = useState("");
-  const [urdu, setUrdu] = useState("");
-  const [department, setDepartment] = useState(DEPARTMENTS[0].name);
-  const [category, setCategory] = useState(DEPARTMENTS[0].categories[0].name);
-  const [sub, setSub] = useState("");
-  const [supplier, setSupplier] = useState("");
+  const [name, setName] = useState(item?.name ?? "");
+  const [urdu, setUrdu] = useState(item?.urdu ?? "");
+  const [department, setDepartment] = useState(
+    item?.department || DEPARTMENTS[0].name,
+  );
+  const [category, setCategory] = useState(
+    item?.category || DEPARTMENTS[0].categories[0].name,
+  );
+  const [sub, setSub] = useState(item?.sub ?? "");
+  const [supplier, setSupplier] = useState(item?.supplier ?? "");
 
-  const [cost, setCost] = useState("");
-  const [price, setPrice] = useState("");
-  const [taxRate, setTaxRate] = useState("18");
+  const [cost, setCost] = useState(item ? String(item.cost) : "");
+  const [price, setPrice] = useState(item ? String(item.price) : "");
+  const [taxRate, setTaxRate] = useState(String(item?.taxRate ?? 18));
 
-  const [tracking, setTracking] = useState<TrackingMode>("unit");
-  const [unit, setUnit] = useState<UnitId>("piece");
-  const [stock, setStock] = useState("");
-  const [lowAt, setLowAt] = useState("12");
+  const [tracking, setTracking] = useState<TrackingMode>(item?.tracking ?? "unit");
+  const [unit, setUnit] = useState<UnitId>(item?.unit ?? "piece");
+  const [stock, setStock] = useState(item ? String(item.stock) : "");
+  const [lowAt, setLowAt] = useState(String(item?.lowAt ?? 12));
   const [options, setOptions] = useState<Option[]>(NEW_OPTIONS);
+  const [onSale, setOnSale] = useState(item?.isActive ?? true);
 
-  // The serial the next in-store code and the suggested SKU are cut from. It
-  // stands in for a `nextval` on the tenant's own sequence — which is what
-  // makes the printed label unique to this shop rather than to this tab.
-  const [serial, setSerial] = useState(SAMPLE_ITEMS.length + 1);
+  // The serial the next in-store code and the suggested SKU are cut from. It is
+  // a suggestion and not a claim: the unique index on `(tenant_id, barcode)` is
+  // what guarantees the code, and the action turns its refusal into a sentence.
+  const [serial, setSerial] = useState(nextSerial);
 
-  const [skuTouched, setSkuTouched] = useState(false);
-  const [sku, setSku] = useState("");
+  const [skuTouched, setSkuTouched] = useState(Boolean(item?.sku));
+  const [sku, setSku] = useState(item?.sku ?? "");
+
+  const [armed, setArmed] = useState(false);
+
+  // Which button was pressed. A ref rather than state because it is read by the
+  // effect below after the action settles and must never cause a render of its
+  // own — the two submit buttons differ only in what happens afterwards.
+  const closeAfter = useRef(true);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -145,8 +188,44 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
     };
   }, [onClose, scanning]);
 
+  // What the sheet does once the server has answered. Keyed off `savedAt` and
+  // not off the state object, for the reason the toaster is: the
+  // `revalidatePath` re-render arrives as a second state and would otherwise
+  // clear the form somebody had already started typing the next item into.
+  const settled = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!state.savedAt || state.savedAt === settled.current) return;
+    settled.current = state.savedAt;
+
+    if (closeAfter.current) return onClose();
+
+    // Same aisle, same distributor, next item. The department, category,
+    // supplier and tax rate stay; everything that identifies one product goes.
+    setBarcode("");
+    setSource("none");
+    setLookup("idle");
+    setName("");
+    setUrdu("");
+    setStock("");
+    setCost("");
+    setPrice("");
+    setSku("");
+    setSkuTouched(false);
+    setSerial((value) => value + 1);
+    codeRef.current?.focus();
+  }, [state.savedAt, onClose]);
+
+  const removed = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!removal.savedAt || removal.savedAt === removed.current) return;
+    removed.current = removal.savedAt;
+    onClose();
+  }, [removal.savedAt, onClose]);
+
   const categories = categoriesIn(department);
-  const subs = categories.find((item) => item.name === category)?.sub ?? [];
+  const subs = categories.find((entry) => entry.name === category)?.sub ?? [];
 
   const suggested = suggestSku(department, name, serial);
   const effectiveSku = skuTouched ? sku : suggested;
@@ -155,7 +234,8 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
   const losing = money !== null && money.profit < 0;
 
   const combos = useMemo(() => matrixOf(options), [options]);
-  const fractional = UNITS.find((item) => item.id === unit)?.fractional ?? false;
+  const fractional = isFractional(unit);
+  const locked = pending || removing;
 
   /* ---------------- Barcode capture ----------------
      A USB scanner is a keyboard that types a whole code in under a tenth of a
@@ -168,6 +248,8 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
 
   const onCodeKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
+      // The sheet is a form now, so a scanner's trailing Enter would submit it
+      // with nothing but a barcode in it. It ends the scan instead.
       event.preventDefault();
       const elapsed = Date.now() - burstStart.current;
       const value = event.currentTarget.value.trim();
@@ -242,461 +324,480 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
     <div
       className="pos-modal"
       onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && !locked) onClose();
       }}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Add a product"
+        aria-label={item ? `Edit ${item.name}` : "Add a product"}
         tabIndex={-1}
         className="pos-sheet pos-sheet-wide outline-none"
       >
-        <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-orchid-100 bg-paper-50 px-4 py-3.5 sm:px-5">
-          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
-            <IconBarcode className="h-[18px] w-[18px]" />
-          </span>
+        <form action={action}>
+          {/* The row this form writes to. Checked against the shop's own items
+              inside the action — a crafted id must never reach the update. */}
+          {item ? <input type="hidden" name="item_id" value={item.id} /> : null}
+          <input type="hidden" name="tracking" value={tracking} />
+          <input type="hidden" name="department" value={department} />
+          <input type="hidden" name="category" value={category} />
+          <input type="hidden" name="subcategory" value={sub} />
+          <input
+            type="hidden"
+            name="variant_count"
+            value={tracking === "variant" ? combos.length : ""}
+          />
 
-          <div className="min-w-0 flex-1">
-            <h2 className="font-display text-[1rem] leading-tight font-bold">
-              Add a product
-            </h2>
-            <p className="mt-0.5 text-[0.75rem] text-graphite-500">
-              Scan it, price it, count it. Roughly forty seconds an item.
-            </p>
-          </div>
+          <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-orchid-100 bg-paper-50 px-4 py-3.5 sm:px-5">
+            <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
+              <IconBarcode className="h-[18px] w-[18px]" />
+            </span>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="pos-icon-btn"
-            aria-label="Close"
-          >
-            <IconClose />
-          </button>
-        </header>
-
-        <div className="space-y-6 px-4 py-5 sm:px-5">
-          {/* ---------------- 1 · The code ---------------- */}
-          <section>
-            <Step n={1} title="Barcode" hint="Scan it, or make one for the shop." />
-
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="min-w-[13rem] flex-1 block">
-                <span className="pos-label">Barcode — UPC or EAN</span>
-                <input
-                  ref={codeRef}
-                  className="pos-field font-mono tracking-[0.06em]"
-                  value={barcode}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="Click here and scan"
-                  onKeyDown={onCodeKeyDown}
-                  onChange={(event) => {
-                    setBarcode(event.target.value);
-                    setSource(event.target.value ? "typed" : "none");
-                    setLookup("idle");
-                  }}
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => setScanning(true)}
-                className="pos-btn pos-btn-soft"
-              >
-                <IconCamera className="h-4 w-4" />
-                Camera
-              </button>
-
-              <button
-                type="button"
-                onClick={runLookup}
-                disabled={!looksScanned(barcode) || lookup === "searching"}
-                className="pos-btn pos-btn-soft disabled:opacity-45"
-              >
-                <IconSearch className="h-4 w-4" />
-                {lookup === "searching" ? "Looking up…" : "Look up"}
-              </button>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-[1rem] leading-tight font-bold">
+                {item ? item.name : "Add a product"}
+              </h2>
+              <p className="mt-0.5 truncate text-[0.75rem] text-graphite-500">
+                {item
+                  ? "Correct anything. The register picks it up on its next load."
+                  : "Scan it, price it, count it. Roughly forty seconds an item."}
+              </p>
             </div>
 
-            {scanning ? (
-              <div className="mt-3">
-                <BarcodeScanner onRead={acceptScan} onClose={() => setScanning(false)} />
-              </div>
-            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="pos-icon-btn"
+              aria-label="Close"
+            >
+              <IconClose />
+            </button>
+          </header>
 
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              {source === "scanned" ? (
-                <span className="pos-badge pos-badge-good">
-                  <IconCheck className="h-3 w-3" />
-                  Scanned
-                </span>
+          <fieldset disabled={locked} className="space-y-6 px-4 py-5 sm:px-5">
+            {/* ---------------- 1 · The code ---------------- */}
+            <section>
+              <Step n={1} title="Barcode" hint="Scan it, or make one for the shop." />
+
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="min-w-[13rem] flex-1 block">
+                  <span className="pos-label">Barcode — UPC or EAN</span>
+                  <input
+                    ref={codeRef}
+                    name="barcode"
+                    className="pos-field font-mono tracking-[0.06em]"
+                    value={barcode}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Click here and scan"
+                    onKeyDown={onCodeKeyDown}
+                    onChange={(event) => {
+                      setBarcode(event.target.value);
+                      setSource(event.target.value ? "typed" : "none");
+                      setLookup("idle");
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setScanning(true)}
+                  className="pos-btn pos-btn-soft"
+                >
+                  <IconCamera className="h-4 w-4" />
+                  Camera
+                </button>
+
+                <button
+                  type="button"
+                  onClick={runLookup}
+                  disabled={!looksScanned(barcode) || lookup === "searching"}
+                  className="pos-btn pos-btn-soft disabled:opacity-45"
+                >
+                  <IconSearch className="h-4 w-4" />
+                  {lookup === "searching" ? "Looking up…" : "Look up"}
+                </button>
+              </div>
+
+              {scanning ? (
+                <div className="mt-3">
+                  <BarcodeScanner onRead={acceptScan} onClose={() => setScanning(false)} />
+                </div>
+              ) : null}
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {source === "scanned" ? (
+                  <span className="pos-badge pos-badge-good">
+                    <IconCheck className="h-3 w-3" />
+                    Scanned
+                  </span>
+                ) : null}
+
+                {source === "internal" ? (
+                  <span className="pos-badge pos-badge-info">
+                    <IconTag className="h-3 w-3" />
+                    In-store code
+                  </span>
+                ) : null}
+
+                {source === "typed" && !looksScanned(barcode) && barcode ? (
+                  <span className="pos-badge pos-badge-warn">
+                    Not a full UPC or EAN
+                  </span>
+                ) : null}
+
+                {barcode ? (
+                  <button
+                    type="button"
+                    onClick={clearCode}
+                    className="pos-btn pos-btn-quiet pos-btn-sm"
+                  >
+                    <IconTrash className="h-3.5 w-3.5" />
+                    Clear
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={generateCode}
+                    className="pos-btn pos-btn-quiet pos-btn-sm"
+                  >
+                    <IconPlus className="h-3.5 w-3.5" />
+                    No barcode on it — make one
+                  </button>
+                )}
+              </div>
+
+              {lookup === "hit" ? (
+                <p className="pos-hint flex items-start gap-1.5">
+                  <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-good" />
+                  Filled from the barcode database —{" "}
+                  <strong>{GLOBAL_SAMPLE[barcode.trim()]?.brand}</strong>,{" "}
+                  {GLOBAL_SAMPLE[barcode.trim()]?.size}. Check the name before
+                  saving; these entries are written by whoever uploaded them.
+                </p>
+              ) : null}
+
+              {lookup === "miss" ? (
+                <p className="pos-hint flex items-start gap-1.5">
+                  <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
+                  Nothing came back for that code. Type the name below — most
+                  local brands and every bakery item are missing from the global
+                  databases, which is normal, not an error.
+                </p>
               ) : null}
 
               {source === "internal" ? (
-                <span className="pos-badge pos-badge-info">
-                  <IconTag className="h-3 w-3" />
-                  In-store code
-                </span>
-              ) : null}
-
-              {source === "typed" && !looksScanned(barcode) && barcode ? (
-                <span className="pos-badge pos-badge-warn">
-                  Not a full UPC or EAN
-                </span>
-              ) : null}
-
-              {barcode ? (
-                <button
-                  type="button"
-                  onClick={clearCode}
-                  className="pos-btn pos-btn-quiet pos-btn-sm"
-                >
-                  <IconTrash className="h-3.5 w-3.5" />
-                  Clear
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={generateCode}
-                  className="pos-btn pos-btn-quiet pos-btn-sm"
-                >
-                  <IconPlus className="h-3.5 w-3.5" />
-                  No barcode on it — make one
-                </button>
-              )}
-            </div>
-
-            {lookup === "hit" ? (
-              <p className="pos-hint flex items-start gap-1.5">
-                <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-good" />
-                Filled from the barcode database — <strong>{GLOBAL_SAMPLE[barcode.trim()]?.brand}</strong>
-                , {GLOBAL_SAMPLE[barcode.trim()]?.size}. Check the name before
-                saving; these entries are written by whoever uploaded them.
-              </p>
-            ) : null}
-
-            {lookup === "miss" ? (
-              <p className="pos-hint flex items-start gap-1.5">
-                <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
-                Nothing came back for that code. Type the name below — most
-                local brands and every bakery item are missing from the global
-                databases, which is normal, not an error.
-              </p>
-            ) : null}
-
-            {source === "internal" ? <LabelPreview
-              code={barcode}
-              name={name}
-              price={num(price)}
-              sku={effectiveSku}
-              onAnother={() => {
-                setSerial((value) => value + 1);
-                setBarcode(internalBarcode(serial + 1));
-              }}
-            /> : null}
-          </section>
-
-          {/* ---------------- 2 · What it is ---------------- */}
-          <section>
-            <Step n={2} title="The item" hint="What the cashier searches for." />
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="pos-label">Name</span>
-                <input
-                  className="pos-field"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Tapal Danedar 475 g"
-                />
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Urdu name — optional</span>
-                <input
-                  className="pos-field"
-                  dir="rtl"
-                  value={urdu}
-                  onChange={(event) => setUrdu(event.target.value)}
-                  placeholder="ٹپال دانے دار"
-                />
-                <p className="pos-hint">
-                  Searchable in Urdu script and in roman — <em>chini</em> finds
-                  چینی.
-                </p>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Department</span>
-                <select
-                  className="pos-field"
-                  value={department}
-                  onChange={(event) => {
-                    setDepartment(event.target.value);
-                    setCategory(categoriesIn(event.target.value)[0]?.name ?? "");
-                    setSub("");
-                  }}
-                >
-                  {DEPARTMENTS.map((item) => (
-                    <option key={item.id} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Category</span>
-                <select
-                  className="pos-field"
-                  value={category}
-                  onChange={(event) => {
-                    setCategory(event.target.value);
-                    setSub("");
-                  }}
-                >
-                  {categories.map((item) => (
-                    <option key={item.id} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Subcategory — optional</span>
-                <select
-                  className="pos-field"
-                  value={sub}
-                  onChange={(event) => setSub(event.target.value)}
-                  disabled={subs.length === 0}
-                >
-                  <option value="">None</option>
-                  {subs.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Supplier — optional</span>
-                <input
-                  className="pos-field"
-                  value={supplier}
-                  onChange={(event) => setSupplier(event.target.value)}
-                  placeholder="Ravi Trading — Akbari Mandi"
-                />
-              </label>
-
-              <label className="block sm:col-span-2">
-                <span className="pos-label">SKU</span>
-                <input
-                  className="pos-field font-mono"
-                  value={effectiveSku}
-                  onChange={(event) => {
-                    setSkuTouched(true);
-                    setSku(event.target.value);
+                <LabelPreview
+                  code={barcode}
+                  name={name}
+                  price={num(price)}
+                  sku={effectiveSku}
+                  onAnother={() => {
+                    setSerial((value) => value + 1);
+                    setBarcode(internalBarcode(serial + 1));
                   }}
                 />
-                <p className="pos-hint">
-                  {skuTouched ? (
-                    <>
-                      Your own code.{" "}
-                      <button
-                        type="button"
-                        className="font-semibold text-orchid-700 underline underline-offset-2"
-                        onClick={() => setSkuTouched(false)}
-                      >
-                        Go back to {suggested}
-                      </button>
-                    </>
-                  ) : (
-                    "Made up from the department and the name. Edit it if your rate list already has one."
-                  )}
-                </p>
-              </label>
-            </div>
-          </section>
-
-          {/* ---------------- 3 · Money ---------------- */}
-          <section>
-            <Step
-              n={3}
-              title="Cost and price"
-              hint="What you pay, and what the customer pays."
-            />
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <label className="block">
-                <span className="pos-label">Cost price</span>
-                <input
-                  className="pos-field"
-                  inputMode="decimal"
-                  value={cost}
-                  onChange={(event) => setCost(event.target.value)}
-                  placeholder="985"
-                />
-                <p className="pos-hint">Per unit, what the supplier charges.</p>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Retail price</span>
-                <input
-                  className="pos-field"
-                  inputMode="decimal"
-                  value={price}
-                  onChange={(event) => setPrice(event.target.value)}
-                  placeholder="1150"
-                />
-                <p className="pos-hint">Tax included — as Settings has it.</p>
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Tax rate</span>
-                <select
-                  className="pos-field"
-                  value={taxRate}
-                  onChange={(event) => setTaxRate(event.target.value)}
-                >
-                  {TAX_RATES.map((rate) => (
-                    <option key={rate.id} value={rate.id}>
-                      {rate.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-[0.75rem] font-semibold text-graphite-500">
-                Price it at
-              </span>
-              {MARGIN_STEPS.map((step) => (
-                <button
-                  key={step}
-                  type="button"
-                  onClick={() => applyMargin(step)}
-                  disabled={num(cost) <= 0}
-                  className="pos-btn pos-btn-soft pos-btn-sm disabled:opacity-45"
-                >
-                  {step}% margin
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-3 grid gap-2 rounded-xl border border-orchid-100 bg-orchid-50/55 p-3.5 sm:grid-cols-3">
-              <Figure
-                label="Profit per unit"
-                value={money ? rupees(money.profit) : "—"}
-                tone={losing ? "bad" : "good"}
-              />
-              <Figure
-                label="Margin"
-                value={money ? `${money.marginPct.toFixed(1)}%` : "—"}
-                note="of the selling price"
-                tone={losing ? "bad" : "plain"}
-              />
-              <Figure
-                label="Markup"
-                value={money ? `${money.markupPct.toFixed(1)}%` : "—"}
-                note="on top of the cost"
-                tone="plain"
-              />
-
-              {losing ? (
-                <p className="flex items-start gap-1.5 text-[0.75rem] leading-relaxed text-signal-bad sm:col-span-3">
-                  <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none" />
-                  The retail price is under the cost. That is fine for a loss
-                  leader — the register will not stop the sale — but the
-                  dashboard will count it as a loss, because it is one.
-                </p>
               ) : null}
-            </div>
-          </section>
+            </section>
 
-          {/* ---------------- 4 · Stock ---------------- */}
-          <section>
-            <Step
-              n={4}
-              title="How it is counted"
-              hint="Pieces, weight, or a grid of sizes."
-            />
+            {/* ---------------- 2 · What it is ---------------- */}
+            <section>
+              <Step n={2} title="The item" hint="What the cashier searches for." />
 
-            <fieldset>
-              <legend className="sr-only">Stock tracking</legend>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {TRACKING.map((mode) => (
-                  <label
-                    key={mode.id}
-                    className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
-                      tracking === mode.id
-                        ? "border-orchid-400 bg-orchid-50"
-                        : "border-orchid-100"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="tracking"
-                      value={mode.id}
-                      checked={tracking === mode.id}
-                      onChange={() => {
-                        setTracking(mode.id);
-                        if (mode.id === "weight" && !fractional) setUnit("kg");
-                        if (mode.id !== "weight" && fractional) setUnit("piece");
-                      }}
-                      className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
-                    />
-                    <span>
-                      <span className="block text-[0.875rem] font-semibold text-graphite-900">
-                        {mode.label}
-                      </span>
-                      <span className="block text-[0.75rem] leading-relaxed text-graphite-500">
-                        {mode.blurb}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {tracking === "variant" ? (
-              <VariantMatrix
-                options={options}
-                combos={combos}
-                sku={effectiveSku}
-                onChange={setOption}
-                onAdd={addOption}
-                onRemove={(id) =>
-                  setOptions((rows) => rows.filter((row) => row.id !== id))
-                }
-              />
-            ) : (
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="pos-label">Sold in</span>
+                  <span className="pos-label">Name</span>
+                  <input
+                    name="name"
+                    className="pos-field"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Tapal Danedar 475 g"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Urdu name — optional</span>
+                  <input
+                    name="urdu"
+                    className="pos-field"
+                    dir="rtl"
+                    value={urdu}
+                    onChange={(event) => setUrdu(event.target.value)}
+                    placeholder="ٹپال دانے دار"
+                  />
+                  <p className="pos-hint">
+                    Searchable in Urdu script at the till, beside the roman name.
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Department</span>
                   <select
                     className="pos-field"
-                    value={unit}
-                    onChange={(event) => setUnit(event.target.value as UnitId)}
+                    value={department}
+                    onChange={(event) => {
+                      setDepartment(event.target.value);
+                      setCategory(categoriesIn(event.target.value)[0]?.name ?? "");
+                      setSub("");
+                    }}
                   >
-                    {UNITS.filter((item) =>
-                      tracking === "weight" ? item.fractional : true,
-                    ).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
+                    {DEPARTMENTS.map((entry) => (
+                      <option key={entry.id} value={entry.name}>
+                        {entry.name}
                       </option>
                     ))}
                   </select>
                 </label>
 
                 <label className="block">
-                  <span className="pos-label">Stock on hand now</span>
+                  <span className="pos-label">Category</span>
+                  <select
+                    className="pos-field"
+                    value={category}
+                    onChange={(event) => {
+                      setCategory(event.target.value);
+                      setSub("");
+                    }}
+                  >
+                    {categories.map((entry) => (
+                      <option key={entry.id} value={entry.name}>
+                        {entry.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Subcategory — optional</span>
+                  <select
+                    className="pos-field"
+                    value={sub}
+                    onChange={(event) => setSub(event.target.value)}
+                    disabled={subs.length === 0}
+                  >
+                    <option value="">None</option>
+                    {subs.map((entry) => (
+                      <option key={entry} value={entry}>
+                        {entry}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Supplier — optional</span>
                   <input
+                    name="supplier"
+                    className="pos-field"
+                    value={supplier}
+                    onChange={(event) => setSupplier(event.target.value)}
+                    placeholder="Ravi Trading — Akbari Mandi"
+                  />
+                </label>
+
+                <label className="block sm:col-span-2">
+                  <span className="pos-label">SKU</span>
+                  <input
+                    name="sku"
+                    className="pos-field font-mono"
+                    value={effectiveSku}
+                    onChange={(event) => {
+                      setSkuTouched(true);
+                      setSku(event.target.value);
+                    }}
+                  />
+                  <p className="pos-hint">
+                    {skuTouched ? (
+                      <>
+                        Your own code.{" "}
+                        <button
+                          type="button"
+                          className="font-semibold text-orchid-700 underline underline-offset-2"
+                          onClick={() => setSkuTouched(false)}
+                        >
+                          Go back to {suggested}
+                        </button>
+                      </>
+                    ) : (
+                      "Made up from the department and the name. Edit it if your rate list already has one."
+                    )}
+                  </p>
+                </label>
+              </div>
+            </section>
+
+            {/* ---------------- 3 · Money ---------------- */}
+            <section>
+              <Step
+                n={3}
+                title="Cost and price"
+                hint="What you pay, and what the customer pays."
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="pos-label">Cost price</span>
+                  <input
+                    name="cost"
+                    className="pos-field"
+                    inputMode="decimal"
+                    value={cost}
+                    onChange={(event) => setCost(event.target.value)}
+                    placeholder="985"
+                  />
+                  <p className="pos-hint">Per unit, what the supplier charges.</p>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Retail price</span>
+                  <input
+                    name="price"
+                    className="pos-field"
+                    inputMode="decimal"
+                    value={price}
+                    onChange={(event) => setPrice(event.target.value)}
+                    placeholder="1150"
+                  />
+                  <p className="pos-hint">Tax included — as Settings has it.</p>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">Tax rate</span>
+                  <select
+                    name="tax_rate"
+                    className="pos-field"
+                    value={taxRate}
+                    onChange={(event) => setTaxRate(event.target.value)}
+                  >
+                    {TAX_RATES.map((rate) => (
+                      <option key={rate.id} value={rate.id}>
+                        {rate.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[0.75rem] font-semibold text-graphite-500">
+                  Price it at
+                </span>
+                {MARGIN_STEPS.map((step) => (
+                  <button
+                    key={step}
+                    type="button"
+                    onClick={() => applyMargin(step)}
+                    disabled={num(cost) <= 0}
+                    className="pos-btn pos-btn-soft pos-btn-sm disabled:opacity-45"
+                  >
+                    {step}% margin
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 grid gap-2 rounded-xl border border-orchid-100 bg-orchid-50/55 p-3.5 sm:grid-cols-3">
+                <Figure
+                  label="Profit per unit"
+                  value={money ? rupees(money.profit) : "—"}
+                  tone={losing ? "bad" : "good"}
+                />
+                <Figure
+                  label="Margin"
+                  value={money ? `${money.marginPct.toFixed(1)}%` : "—"}
+                  note="of the selling price"
+                  tone={losing ? "bad" : "plain"}
+                />
+                <Figure
+                  label="Markup"
+                  value={money ? `${money.markupPct.toFixed(1)}%` : "—"}
+                  note="on top of the cost"
+                  tone="plain"
+                />
+
+                {losing ? (
+                  <p className="flex items-start gap-1.5 text-[0.75rem] leading-relaxed text-signal-bad sm:col-span-3">
+                    <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                    The retail price is under the cost. That is fine for a loss
+                    leader — the register will not stop the sale — but the
+                    dashboard will count it as a loss, because it is one.
+                  </p>
+                ) : null}
+              </div>
+            </section>
+
+            {/* ---------------- 4 · Stock ---------------- */}
+            <section>
+              <Step
+                n={4}
+                title="How it is counted"
+                hint="Pieces, weight, or a grid of sizes."
+              />
+
+              <fieldset>
+                <legend className="sr-only">Stock tracking</legend>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {TRACKING.map((mode) => (
+                    <label
+                      key={mode.id}
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
+                        tracking === mode.id
+                          ? "border-orchid-400 bg-orchid-50"
+                          : "border-orchid-100"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="tracking_choice"
+                        value={mode.id}
+                        checked={tracking === mode.id}
+                        onChange={() => {
+                          setTracking(mode.id);
+                          if (mode.id === "weight" && !fractional) setUnit("kg");
+                          if (mode.id !== "weight" && fractional) setUnit("piece");
+                        }}
+                        className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
+                      />
+                      <span>
+                        <span className="block text-[0.875rem] font-semibold text-graphite-900">
+                          {mode.label}
+                        </span>
+                        <span className="block text-[0.75rem] leading-relaxed text-graphite-500">
+                          {mode.blurb}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <label className="block">
+                  <span className="pos-label">Sold in</span>
+                  <select
+                    name="unit"
+                    className="pos-field"
+                    value={unit}
+                    onChange={(event) => setUnit(event.target.value as UnitId)}
+                  >
+                    {UNITS.filter((entry) =>
+                      tracking === "weight" ? entry.fractional : true,
+                    ).map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">
+                    {item ? "Stock on hand" : "Stock on hand now"}
+                  </span>
+                  <input
+                    name="stock"
                     className="pos-field"
                     inputMode="decimal"
                     value={stock}
@@ -706,13 +807,14 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
                   <p className="pos-hint">
                     {fractional
                       ? "Decimals allowed — 84.5 kg is a legitimate count."
-                      : "Leave empty if you will count it at the stock-take."}
+                      : "Whole units. Leave it empty to start at nothing."}
                   </p>
                 </label>
 
                 <label className="block">
                   <span className="pos-label">Warn me below</span>
                   <input
+                    name="low_at"
                     className="pos-field"
                     inputMode="decimal"
                     value={lowAt}
@@ -724,21 +826,167 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
                   </p>
                 </label>
               </div>
-            )}
-          </section>
-        </div>
 
-        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 bg-paper-50 px-4 py-3 sm:px-5">
-          <p className="mr-auto text-[0.75rem] text-graphite-500">
-            Nothing saves yet — the <code>items</code> table lands in Part 3.
-          </p>
-          <button type="button" onClick={onClose} className="pos-btn pos-btn-soft">
-            Cancel
-          </button>
-          <button type="button" className="pos-btn pos-btn-primary" disabled>
-            Save and add another
-          </button>
-        </footer>
+              {tracking === "variant" ? (
+                <VariantMatrix
+                  options={options}
+                  combos={combos}
+                  sku={effectiveSku}
+                  onChange={setOption}
+                  onAdd={addOption}
+                  onRemove={(id) =>
+                    setOptions((rows) => rows.filter((row) => row.id !== id))
+                  }
+                />
+              ) : null}
+            </section>
+
+            {/* ---------------- 5 · At the till ---------------- */}
+            <section>
+              <Step
+                n={5}
+                title="At the till"
+                hint="Whether the register offers it at all."
+              />
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3.5">
+                <input
+                  type="checkbox"
+                  name="is_active"
+                  checked={onSale}
+                  onChange={(event) => setOnSale(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
+                />
+
+                <span className="min-w-0">
+                  <span className="block font-display text-[0.875rem] font-semibold text-graphite-900">
+                    The register can ring this up
+                  </span>
+                  <span className="mt-1 block text-[0.8125rem] leading-relaxed text-graphite-700">
+                    {onSale ? (
+                      <>
+                        It is in the till&rsquo;s search and on the shelf list.
+                      </>
+                    ) : (
+                      <>
+                        Hidden. The cashier cannot find it, and it stays out of
+                        the low-stock warnings — which is what a seasonal item or
+                        something you have stopped carrying wants. Its past sales
+                        are untouched.
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+            </section>
+
+            {/* ---------------- Removing it ---------------- */}
+            {item ? (
+              <section className="rounded-2xl border border-orchid-100 p-3.5">
+                <h3 className="font-display text-[0.9375rem] font-semibold">
+                  Delete {item.name}
+                </h3>
+                <p className="mt-1 text-[0.8125rem] leading-relaxed text-graphite-700">
+                  Gone from the list for good. Every receipt it is already on
+                  still prints exactly as it was rung up — but nothing will be
+                  able to total last month&rsquo;s sales by this item again. If
+                  you have simply stopped carrying it, switch it off above
+                  instead.
+                </p>
+
+                {removal.error ? (
+                  <p className="mt-3 text-[0.8125rem] leading-relaxed text-signal-bad">
+                    {removal.error}
+                  </p>
+                ) : null}
+
+                <div className="mt-3.5 flex flex-wrap items-center gap-2">
+                  {armed ? (
+                    <>
+                      {/* `form=` rather than nesting: a form inside a form is
+                          invalid HTML and the browser drops the inner one, so
+                          the delete button lives here and submits the empty
+                          form declared beside this one. */}
+                      <button
+                        type="submit"
+                        form={deleteFormId}
+                        disabled={removing}
+                        className="pos-btn pos-btn-sm bg-signal-bad text-white disabled:opacity-60"
+                      >
+                        <IconTrash className="h-4 w-4" />
+                        {removing ? "Deleting…" : `Yes, delete ${item.name}`}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setArmed(false)}
+                        className="pos-btn pos-btn-quiet pos-btn-sm"
+                      >
+                        Keep it
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setArmed(true)}
+                      className="pos-btn pos-btn-soft pos-btn-sm"
+                    >
+                      <IconTrash className="h-4 w-4" />
+                      Delete product
+                    </button>
+                  )}
+                </div>
+              </section>
+            ) : null}
+          </fieldset>
+
+          <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 bg-paper-50 px-4 py-3 sm:px-5">
+            {state.error ? (
+              <p className="mr-auto min-w-[8rem] flex-1 text-[0.75rem] leading-snug text-signal-bad">
+                {state.error}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={locked}
+              className="pos-btn pos-btn-soft"
+            >
+              Cancel
+            </button>
+
+            {item ? null : (
+              <button
+                type="submit"
+                disabled={locked}
+                onClick={() => {
+                  closeAfter.current = false;
+                }}
+                className="pos-btn pos-btn-soft disabled:opacity-60"
+              >
+                {pending ? "Saving…" : "Save and add another"}
+              </button>
+            )}
+
+            <button
+              type="submit"
+              disabled={locked}
+              onClick={() => {
+                closeAfter.current = true;
+              }}
+              className="pos-btn pos-btn-primary disabled:opacity-60"
+            >
+              {pending ? "Saving…" : item ? "Save changes" : "Save and close"}
+            </button>
+          </footer>
+        </form>
+
+        {item ? (
+          <form id={deleteFormId} action={removeAction} className="hidden">
+            <input type="hidden" name="item_id" value={item.id} />
+          </form>
+        ) : null}
       </div>
     </div>
   );
@@ -749,9 +997,7 @@ export function ProductSheet({ onClose }: { onClose: () => void }) {
 function Step({ n, title, hint }: { n: number; title: string; hint: string }) {
   return (
     <header className="mb-3 flex items-center gap-2.5">
-      <span className="pos-stamp h-6 w-6 rounded-lg text-[0.6875rem]">
-        {n}
-      </span>
+      <span className="pos-stamp h-6 w-6 rounded-lg text-[0.6875rem]">{n}</span>
       <h3 className="font-display text-[0.9375rem] font-semibold">{title}</h3>
       <span className="truncate text-[0.75rem] text-graphite-500">{hint}</span>
     </header>
@@ -855,6 +1101,12 @@ function LabelPreview({
  * Capped, and the cap is the point: six sizes by five colours by three fits is
  * ninety rows to count at stock-take, and a cloth house that wants that should
  * be asked whether it means it rather than finding out in January.
+ *
+ * What is saved today is the *number* of rows, not the rows — `item_variants`
+ * is not built, so each combination has no stock of its own yet and the count
+ * above covers the lot. The grid is here because the SKUs it generates are what
+ * a shop prints its labels from, and it says so rather than offering a per-row
+ * stock box that would go nowhere.
  */
 const MATRIX_CAP = 60;
 
@@ -930,8 +1182,7 @@ function VariantMatrix({
             <thead>
               <tr>
                 <th>Variant</th>
-                <th>SKU</th>
-                <th className="text-right">Opening stock</th>
+                <th>SKU it would carry</th>
               </tr>
             </thead>
             <tbody>
@@ -940,17 +1191,7 @@ function VariantMatrix({
                   <td className="font-medium text-graphite-900">{combo.join(" · ")}</td>
                   <td className="font-mono text-[0.75rem] text-graphite-500">
                     {sku}-
-                    {combo
-                      .map((value) => value.slice(0, 2).toUpperCase())
-                      .join("")}
-                  </td>
-                  <td className="text-right">
-                    <input
-                      className="pos-field ml-auto w-24 text-right"
-                      inputMode="numeric"
-                      defaultValue="0"
-                      aria-label={`Opening stock for ${combo.join(" ")}`}
-                    />
+                    {combo.map((value) => value.slice(0, 2).toUpperCase()).join("")}
                   </td>
                 </tr>
               ))}
@@ -975,8 +1216,9 @@ function VariantMatrix({
           ) : (
             <>
               <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-orchid-600" />
-              {combos.length} {combos.length === 1 ? "row" : "rows"}, each with
-              its own stock, barcode and price override.
+              {combos.length} {combos.length === 1 ? "row" : "rows"}. The count
+              is saved with the item; stock and a barcode per row arrive with the
+              variants table.
             </>
           )}
         </p>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { redeemInvite } from "@/app/(site)/signup/actions";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -9,8 +10,12 @@ export const metadata: Metadata = {
   description: "Redeem your Flo invitation and join your shop workspace.",
 };
 
+/** Per request, never at build time — see the note in `checkout/page.tsx`. */
 async function loadInvite(token: string) {
   if (!token) return null;
+
+  await connection();
+
   const supabase = createAdminClient();
   const tokenHash = await sha256Hex(token);
   const { data, error } = await supabase

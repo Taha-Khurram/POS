@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { uploadPaymentProof } from "@/app/(site)/order/[reference]/actions";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -8,7 +9,10 @@ export const metadata: Metadata = {
   description: "Submit payment proof for your Flo activation order.",
 };
 
+/** Per request, never at build time — see the note in `checkout/page.tsx`. */
 async function loadOrder(reference: string) {
+  await connection();
+
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("orders")

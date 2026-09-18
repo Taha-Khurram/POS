@@ -31,6 +31,7 @@ import {
 } from "@/lib/pos/counter";
 import {
   UNITS,
+  matchesProduct,
   stockState,
   unitShort,
   type Product,
@@ -89,26 +90,15 @@ export function Till({
 
   /* ---------------- Finding an item ---------------- */
 
-  // Matched the way the catalog screen matches, and for the same reason: the
-  // fastest way to find something at the counter is to scan it, so the barcode
-  // is searched alongside the name. Urdu is compared as typed — the script has
-  // no case and `toLowerCase` on it only looks reassuring.
+  // `matchesProduct` is the catalog screen's own matcher, not a copy of it: a
+  // cashier who cannot find an item the owner can see assumes it is not in the
+  // list and adds it a second time. It searches the barcode alongside the name
+  // because the fastest way to find something at the counter is to scan it.
   const results = useMemo(() => {
     const raw = query.trim();
     if (!raw) return items.slice(0, 12);
 
-    const needle = raw.toLowerCase();
-
-    return items
-      .filter(
-        (item) =>
-          item.name.toLowerCase().includes(needle) ||
-          item.sku.toLowerCase().includes(needle) ||
-          item.category.toLowerCase().includes(needle) ||
-          (item.barcode?.includes(needle) ?? false) ||
-          item.urdu.includes(raw),
-      )
-      .slice(0, 24);
+    return items.filter((item) => matchesProduct(item, raw)).slice(0, 24);
   }, [items, query]);
 
   const focusSearch = useCallback(() => {
@@ -397,9 +387,19 @@ export function Till({
               and loose items have no barcode to scan at all. */}
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
             {results.length === 0 ? (
-              <p className="px-2 py-8 text-center text-[0.875rem] text-graphite-500">
-                Nothing matches that. Check the spelling, or add the item on
-                Products &amp; stock.
+              <p className="px-2 py-8 text-center text-[0.875rem] leading-relaxed text-graphite-500">
+                {items.length === 0 ? (
+                  <>
+                    There is nothing in the item list yet, so this counter has
+                    nothing to ring up. Add your first products on Products
+                    &amp; stock, or bring your sheet in through Bulk import.
+                  </>
+                ) : (
+                  <>
+                    Nothing matches that. Check the spelling, or add the item on
+                    Products &amp; stock.
+                  </>
+                )}
               </p>
             ) : (
               <ul className="space-y-1">

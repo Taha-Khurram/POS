@@ -7,6 +7,7 @@ import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import {
   IconBarcode,
+  IconChevron,
   IconPlus,
   IconSearch,
   IconTag,
@@ -15,6 +16,7 @@ import {
 import {
   DEPARTMENTS,
   marginOf,
+  matchesProduct,
   stockState,
   unitShort,
   type Product,
@@ -28,12 +30,14 @@ import { ProductSheet } from "./product-sheet";
  * Client, and it is the one screen in the console where that is the right call:
  * a shopkeeper adding stock searches, corrects, searches again, ten times a
  * minute, and a round trip per keystroke over shop 3G would make the search box
- * feel broken. Five thousand rows filter in a frame; when the real table
- * arrives this narrows to a server query with the same box in front of it.
+ * feel broken. Five thousand rows filter in a frame; when the list outgrows
+ * that this narrows to a server query with the same box in front of it.
  *
  * Search deliberately matches the barcode too — the fastest way to find out
  * whether an item is already in the list is to scan it, and a cashier standing
- * at the counter will do exactly that.
+ * at the counter will do exactly that. The matching itself is
+ * `matchesProduct`, shared with the till, so an item the owner can find is an
+ * item the cashier can find.
  */
 
 const STOCK_FILTERS = [
@@ -41,16 +45,26 @@ const STOCK_FILTERS = [
   { id: "low", label: "Running low" },
   { id: "out", label: "Out of stock" },
   { id: "nocode", label: "No barcode" },
+  { id: "hidden", label: "Hidden" },
 ] as const;
 
 type StockFilter = (typeof STOCK_FILTERS)[number]["id"];
 
-const COLUMNS: Column<Product>[] = [
+/**
+ * A function rather than a const, because the name cell is the control that
+ * opens the editor. The button is the name itself: a row of nine columns with
+ * one small pencil at the end of it is a target nobody hits on a tablet.
+ */
+const columnsFor = (onEdit: (item: Product) => void): Column<Product>[] => [
   {
     key: "item",
     header: "Item",
     cell: (item) => (
-      <span className="flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={() => onEdit(item)}
+        className="flex w-full items-center gap-2.5 text-left"
+      >
         <span
           className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-orchid-50 text-orchid-700"
           aria-hidden
@@ -62,15 +76,20 @@ const COLUMNS: Column<Product>[] = [
           )}
         </span>
         <span className="min-w-0">
-          <span className="block truncate font-medium text-graphite-900">
+          <span className="block truncate font-medium text-graphite-900 underline-offset-2 hover:underline">
             {item.name}
+            {item.isActive ? null : (
+              <span className="pos-badge pos-badge-warn ml-2 align-middle">
+                Hidden
+              </span>
+            )}
           </span>
           <span className="block truncate font-mono text-[0.6875rem] text-graphite-500">
-            {item.sku}
+            {item.sku || item.barcode || "no code"}
             {item.variants ? ` · ${item.variants} variants` : ""}
           </span>
         </span>
-      </span>
+      </button>
     ),
   },
   {
@@ -160,39 +179,70 @@ const COLUMNS: Column<Product>[] = [
       );
     },
   },
+  {
+    key: "open",
+    header: "",
+    align: "end",
+    cell: (item) => (
+      <button
+        type="button"
+        onClick={() => onEdit(item)}
+        className="pos-icon-btn"
+        aria-label={`Edit ${item.name}`}
+      >
+        <IconChevron className="h-4 w-4 -rotate-90" />
+      </button>
+    ),
+  },
 ];
 
-export function CatalogPanel({ items }: { items: Product[] }) {
+export function CatalogPanel({
+  items,
+  nextSerial,
+}: {
+  items: Product[];
+  /** What the next in-store barcode and suggested SKU are cut from. */
+  nextSerial: number;
+}) {
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("all");
   const [filter, setFilter] = useState<StockFilter>("all");
-  const [adding, setAdding] = useState(false);
 
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+  // Null is closed, a product is the editor, and `"new"` is the empty sheet.
+  // One piece of state rather than two, so the two cannot both be true.
+  const [editing, setEditing] = useState<Product | "new" | null>(null);
 
-    return items.filter((item) => {
-      if (department !== "all" && item.department !== department) return false;
+  // The row the sheet is open on, re-read from the list the server just sent.
+  // Without this the sheet would go on showing the values it was opened with
+  // after a save, and the owner would correct a price, watch the table update
+  // behind the sheet, and see the old one still in the box in front of them.
+  //
+  // It falls back to the row as it was opened, which is the moment after a
+  // delete: the list comes back without it a frame before the sheet closes
+  // itself, and without the fallback that frame would redraw the editor as an
+  // empty Add-a-product form.
+  const open =
+    editing && editing !== "new"
+      ? (items.find((item) => item.id === editing.id) ?? editing)
+      : null;
 
-      const state = stockState(item);
-      if (filter === "low" && state !== "low") return false;
-      if (filter === "out" && state !== "out") return false;
-      if (filter === "nocode" && item.barcode) return false;
+  const rows = useMemo(
+    () =>
+      items.filter((item) => {
+        if (department !== "all" && item.department !== department) return false;
 
-      if (!needle) return true;
+        const state = stockState(item);
+        if (filter === "low" && state !== "low") return false;
+        if (filter === "out" && state !== "out") return false;
+        if (filter === "nocode" && item.barcode) return false;
+        if (filter === "hidden" && item.isActive) return false;
 
-      // Urdu is matched as typed rather than lowercased — the script has no
-      // case, and `toLowerCase` on it is a no-op that only looks reassuring.
-      return (
-        item.name.toLowerCase().includes(needle) ||
-        item.sku.toLowerCase().includes(needle) ||
-        item.supplier.toLowerCase().includes(needle) ||
-        item.category.toLowerCase().includes(needle) ||
-        (item.barcode?.includes(needle) ?? false) ||
-        item.urdu.includes(query.trim())
-      );
-    });
-  }, [items, query, department, filter]);
+        return matchesProduct(item, query);
+      }),
+    [items, query, department, filter],
+  );
+
+  const columns = useMemo(() => columnsFor(setEditing), []);
 
   return (
     <>
@@ -212,7 +262,7 @@ export function CatalogPanel({ items }: { items: Product[] }) {
             </Link>
             <button
               type="button"
-              onClick={() => setAdding(true)}
+              onClick={() => setEditing("new")}
               className="pos-btn pos-btn-primary"
             >
               <IconPlus className="h-4 w-4" />
@@ -266,18 +316,26 @@ export function CatalogPanel({ items }: { items: Product[] }) {
         </div>
 
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           rows={rows}
           rowKey={(item) => item.id}
           empty={
-            query
-              ? `Nothing matches “${query.trim()}”. Check the spelling, or add it as a new product.`
-              : "No items under this filter."
+            items.length === 0
+              ? "Nothing in the list yet. Add your first product, or bring the sheet you already keep in through Bulk import."
+              : query
+                ? `Nothing matches “${query.trim()}”. Check the spelling, or add it as a new product.`
+                : "No items under this filter."
           }
         />
       </ChartCard>
 
-      {adding ? <ProductSheet onClose={() => setAdding(false)} /> : null}
+      {editing ? (
+        <ProductSheet
+          item={open}
+          nextSerial={nextSerial}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
     </>
   );
 }

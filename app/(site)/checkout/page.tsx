@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { createCheckoutOrder } from "@/app/(site)/checkout/actions";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -8,7 +9,20 @@ export const metadata: Metadata = {
   description: "Choose a Flo plan and request activation for your shop.",
 };
 
+/**
+ * The plans, read per request.
+ *
+ * `connection()` before the client is built, because `next build` renders this
+ * page once to see whether it can be prerendered — and without this that
+ * attempt reaches Supabase, so a deploy whose environment is missing
+ * `SUPABASE_SERVICE_ROLE_KEY` fails the *build* rather than the page. A
+ * marketing site must not need a live database to compile. Nothing but luck
+ * was stopping it: `await searchParams` below bails out of a prerender too,
+ * but it runs after this and nothing said it had to.
+ */
 async function loadPlans() {
+  await connection();
+
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("plans")
