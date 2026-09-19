@@ -49,11 +49,18 @@ const COLUMNS: Column<RecentSale>[] = [
     key: "method",
     header: "Payment",
     hideBelow: "md",
-    cell: (sale) => (
-      <span className="pos-badge pos-badge-info">
-        {METHOD_LABEL[sale.method]}
-      </span>
-    ),
+    // A bill settled two ways has no single method, so it is named as what it
+    // is rather than shown as the larger half — the same call `writeTender`
+    // makes on the history. A bill with no tender row at all is a held one,
+    // and it has not been paid by anything yet.
+    cell: (sale) =>
+      sale.method === null ? (
+        <span className="text-graphite-500">—</span>
+      ) : (
+        <span className="pos-badge pos-badge-info">
+          {sale.split ? "Split" : METHOD_LABEL[sale.method]}
+        </span>
+      ),
   },
   {
     key: "total",

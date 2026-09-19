@@ -293,14 +293,12 @@ address, checked *before* Supabase verifies the password, and every successful
 sign-in lands on `/app` — there is no `next` return path and no role-based
 fork. Delete the constant and its check to open it up.
 
-There is no platform console. `/app` reads one `tenants` column and nothing
-else: the layout calls `getShopName()` for the rail's account block, and both
-that and the dashboard's sample figures fall back rather than fail, so an
-account with a null `tenant_id` still reaches the dashboard — keep that true.
-Nothing reads `branches`; there is no branch picker and no counters list until
-a shop can actually have a second one. `lib/pos/dashboard.ts` documents the
-queries that replace the sample data, and `Plan.md` has the order the modules
-arrive in.
+There is no platform console. The layout calls `getShopName()` for the rail's
+account block, and both that and the dashboard fall back rather than fail, so an
+account with a null `tenant_id` still reaches the dashboard and is shown a shop
+that has sold nothing — keep that true. Nothing reads `branches`; there is no
+branch picker and no counters list until a shop can actually have a second one.
+`Plan.md` has the order the modules arrive in.
 
 Settings is real. `tenant_settings` and `role_permissions` (migration `0009`)
 and `counters` (`0010`, reshaped by `0011`) back the currency/clock, permissions
@@ -463,3 +461,44 @@ screen is what comes out, the same bargain printing strikes. Money leaves as bar
 numbers with the currency in the heading, because a spreadsheet cannot add up
 "Rs 1,250.00", and the file opens with a BOM so Excel reads a customer named in
 Urdu as UTF-8.
+
+## The dashboard
+
+`/app` is real since `0019`. Every figure on it is **one** call to
+`public.dashboard_summary` — the window and the one before it, the trend, the
+departments, the best sellers and the last eight bills, grouped in Postgres.
+`takings.ts` totals a day in TypeScript and says why; the dashboard's windows
+are months, and a month of a busy kiryana is tens of thousands of sale lines
+with no business crossing shop 3G to be added up in a browser runtime.
+
+The function is `security invoker`, so it runs under the shop's own JWT and
+`p_tenant` is a filter rather than a permission — a caller who names another
+shop gets that shop's rows refused by the policy. It is the only function here
+granted to `authenticated`, and `rls.test.sql` proves the claim. Like every
+other reader in `lib/pos/`, `getDashboardData` **may not be wrapped in React
+`cache()`**.
+
+**Profit is real because the cost is on the line.** `sale_lines.cost_snapshot`
+is stamped by `record_sale` from `items.cost_price` at the moment of sale, for
+the reason `name_snapshot` is stamped beside it: a bill is what happened, and
+joining last month's sales to today's cost column rewrites last month's margins
+every time a supplier raises a price. The cost is read inside the transaction
+and never taken from the Server Action's payload — it is the one number on a
+bill the customer never sees and nobody would notice being wrong. What is still
+honest-but-lossy: a line whose item never had a cost filled in reads as pure
+profit rather than as unknown.
+
+**The window is `sales.business_day`**, like everything else that reports. The
+time filter resolves to instants because it also fills two date inputs;
+`businessWindow` in `lib/pos/dashboard.ts` is the one place those become trading
+days, and it clamps to the shop's own today — at 1 am in a shop that shuts at 3
+the calendar says today and the books still say yesterday, and a window running
+to the calendar date would come back empty with a shop full of customers. The
+page captions what it actually read rather than what the filter is called.
+
+Departments come off `items` through `sale_lines.item_id`, so an item since
+deleted has no department to read — `sale_lines` keeps the name it was sold
+under and not where it was filed. That money is grouped under "Not filed" rather
+than dropped. Best sellers group by the catalog row where there is one and by
+the printed name where there is not, because two deleted items that shared a
+name were one thing on the shelf.

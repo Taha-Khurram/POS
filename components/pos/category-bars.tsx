@@ -18,6 +18,14 @@ import type { CategorySlice } from "@/lib/pos/dashboard";
  * No client JavaScript — the bars grow with a CSS animation.
  */
 export function CategoryBars({ slices }: { slices: CategorySlice[] }) {
+  if (slices.length === 0) {
+    return (
+      <p className="py-8 text-center text-[0.8125rem] text-graphite-500">
+        Nothing sold in this period yet.
+      </p>
+    );
+  }
+
   const largest = Math.max(...slices.map((slice) => slice.sales), 1);
 
   return (

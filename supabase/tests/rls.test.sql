@@ -228,6 +228,31 @@ values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001', 'cash', 450.00),
   ('bbbbbbbb-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000002', 'card', 1200.00);
 
+-- Something for each sale to have been a sale *of*, so the dashboard has a
+-- department to group by and a best seller to rank.
+--
+-- Note the cost: the catalog says 999 and the line says 300. That gap is the
+-- whole of 0019 — the shop raised what it pays for cooking oil after it sold
+-- this bottle, and last week's margin must not move with it.
+insert into public.items (id, tenant_id, name, unit, selling_price, cost_price, department, category)
+values
+  ('0a0a0a0a-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Sufi cooking oil 5L', 'piece',
+   450.00, 999.00, 'Grocery', 'Atta, rice & pulses'),
+  ('0b0b0b0b-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
+   1200.00, 800.00, 'Karahi', 'Mutton');
+
+insert into public.sale_lines
+  (tenant_id, sale_id, item_id, name_snapshot, unit, quantity, unit_price, line_total, cost_snapshot)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001',
+   '0a0a0a0a-0000-4000-8000-000000000001', 'Sufi cooking oil 5L', 'piece',
+   1, 450.00, 450.00, 300.00),
+  ('bbbbbbbb-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000002',
+   '0b0b0b0b-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
+   1, 1200.00, 1200.00, 900.00);
+
 -- =============================================================================
 -- Tenant A's owner
 -- =============================================================================
@@ -511,6 +536,62 @@ select is_empty(
   $$ select 1 from public.sales
      where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
   'tenant A cannot read tenant B takings'
+);
+
+-- The dashboard, added in 0019. `dashboard_summary` is the one function here
+-- granted to `authenticated` rather than kept for the service role, because it
+-- is `security invoker`: it runs under the caller's own JWT and every table it
+-- touches is behind a policy scoped to the `tenant_id` claim. That makes
+-- `p_tenant` a filter and not a permission, which is a claim worth proving
+-- rather than asserting in a comment.
+select is(
+  (public.dashboard_summary(
+     'aaaaaaaa-0000-4000-8000-000000000001',
+     current_date, current_date, current_date - 1, current_date - 1,
+     'Asia/Karachi') #>> '{totals,sales}')::numeric,
+  450.00::numeric,
+  'the dashboard totals tenant A own takings'
+);
+
+-- The point of the cost snapshot. `items.cost_price` on this item is 999 and
+-- the line was rung up at 300; a dashboard that joined to the catalog would
+-- report this bill as a loss.
+select is(
+  (public.dashboard_summary(
+     'aaaaaaaa-0000-4000-8000-000000000001',
+     current_date, current_date, current_date - 1, current_date - 1,
+     'Asia/Karachi') #>> '{totals,cost}')::numeric,
+  300.00::numeric,
+  'the dashboard costs a sale at what the line was stamped with, not at today''s price'
+);
+
+select is(
+  public.dashboard_summary(
+    'aaaaaaaa-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #>> '{departments,0,name}',
+  'Grocery',
+  'the dashboard groups a shop sales under its own departments'
+);
+
+-- Naming another shop does not fetch it. The policies refuse every row, so the
+-- answer is an empty shop rather than tenant B's day.
+select is(
+  public.dashboard_summary(
+    'bbbbbbbb-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #> '{totals}',
+  '{}'::jsonb,
+  'tenant A cannot read tenant B figures by naming them to dashboard_summary'
+);
+
+-- Rule 3 again, one column along: the cost snapshot is a Server Action write on
+-- the service role, and a tenant that could edit it could make its own books
+-- say anything.
+select throws_ok(
+  $$ update public.sale_lines set cost_snapshot = 0 $$,
+  '42501', null,
+  'tenant user cannot rewrite what a sale cost the shop'
 );
 
 select throws_ok(

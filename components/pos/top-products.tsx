@@ -1,13 +1,27 @@
 import { compactRupees } from "@/lib/format";
 import type { TopProduct } from "@/lib/pos/dashboard";
 
-/** How a quantity is written for each unit the register sells in. */
+/**
+ * How a quantity is written for each unit the register sells in. Every value
+ * the `sale_lines.unit` check constraint allows has a row, `kilo` included:
+ * it is 0008's spelling of `kg`, still legal in the column, so a line written
+ * before 0011 renamed it must not fall through to the raw word.
+ */
 const UNIT_LABEL: Record<string, string> = {
   piece: "pcs",
+  kg: "kg",
   kilo: "kg",
+  gram: "g",
+  litre: "L",
+  dozen: "dozen",
+  packet: "packets",
   carton: "cartons",
   plate: "plates",
 };
+
+/** Loose stock comes off a scale, so 84.5 kg is a legitimate count and `84.5`
+ *  is what has to appear in the pill — not 85, and not 84.500. */
+const QUANTITY = new Intl.NumberFormat("en-PK", { maximumFractionDigits: 2 });
 
 /**
  * The window's best sellers, ranked.
@@ -21,6 +35,14 @@ const UNIT_LABEL: Record<string, string> = {
  * in a chip on every row buys nothing.
  */
 export function TopProducts({ products }: { products: TopProduct[] }) {
+  if (products.length === 0) {
+    return (
+      <p className="py-8 text-center text-[0.8125rem] text-graphite-500">
+        Nothing sold in this period yet.
+      </p>
+    );
+  }
+
   return (
     <ol className="space-y-3">
       {products.map((product, index) => (
@@ -45,7 +67,7 @@ export function TopProducts({ products }: { products: TopProduct[] }) {
             </div>
 
             <span className="pos-pill" data-rank={index}>
-              {product.quantity}
+              {QUANTITY.format(product.quantity)}
             </span>
 
             <span className="w-11 flex-none text-[0.6875rem] text-graphite-500">

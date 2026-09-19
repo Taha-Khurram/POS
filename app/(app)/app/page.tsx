@@ -16,6 +16,9 @@ import { TopProducts } from "@/components/pos/top-products";
 import { TrendChart, TrendLegend } from "@/components/pos/trend-chart";
 import { requireSession } from "@/lib/auth";
 import { delta, getDashboardData } from "@/lib/pos/dashboard";
+import { writeDayLong } from "@/lib/pos/history";
+import { DEFAULT_SETTINGS } from "@/lib/pos/settings-options";
+import { getShopSettings } from "@/lib/pos/shop";
 import { resolveTimeframe } from "@/lib/pos/timeframes";
 
 export const metadata: Metadata = {
@@ -41,14 +44,26 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
   const session = await requireSession();
 
   const range = resolveTimeframe(await searchParams);
-  // Seeded off the signed-in account rather than a shop: the "not attached to a
-  // shop" gate that used to stand here is gone, so every session reaches the
-  // dashboard. The sample data only needs a stable key, and when the real
-  // queries land this argument becomes the tenant the rows are scoped to.
-  const data = await getDashboardData(session.userId, range);
+  // The "not attached to a shop" gate that used to stand here is gone, so every
+  // session reaches the dashboard — an account with a null `tenant_id` gets a
+  // shop that has sold nothing, which is exactly what it has. The settings are
+  // what turn the filter's window into trading days, so the defaults stand in
+  // for the same reason the rail's shop name falls back rather than failing.
+  const settings = session.tenantId
+    ? await getShopSettings(session.tenantId)
+    : DEFAULT_SETTINGS;
 
-  const { totals, previous } = data;
-  const versus = range.id === "today" ? "vs yesterday" : `vs previous ${range.days} days`;
+  const data = await getDashboardData(session.tenantId, range, settings);
+
+  const { totals, previous, window } = data;
+  // Counted off the trading days actually read, not off the filter's label: at
+  // 1 am in a shop that shuts at 3 they are not the same number.
+  const versus =
+    window.days === 1 ? "vs the day before" : `vs previous ${window.days} days`;
+  const covering =
+    window.days === 1
+      ? writeDayLong(window.to)
+      : `${range.label} · ${window.days} trading days`;
 
   return (
     <div className="space-y-4">
@@ -58,7 +73,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
             Good to see you
           </h1>
           <p className="mt-1 text-[0.8125rem] text-graphite-500">
-            {range.label} · {totals.transactions.toLocaleString("en-PK")} sales
+            {covering} · {totals.transactions.toLocaleString("en-PK")} sales
             rung up
           </p>
         </div>
@@ -116,7 +131,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
       <div className="grid gap-4 xl:grid-cols-3">
         <ChartCard
           title="Sales and profit"
-          caption={`${range.label} · ${range.bucket === "hour" ? "by hour" : data.trend.length > 31 ? "by week" : "by day"}`}
+          caption={`${range.label} · ${window.days === 1 ? "by hour" : window.days > 31 ? "by week" : "by day"}`}
           actions={<TrendLegend totals={totals} />}
           className="xl:col-span-2"
         >
@@ -125,7 +140,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/app">)
 
         <ChartCard
           title="Where the money came from"
-          caption="Share of sales by category"
+          caption="Share of sales by department"
         >
           <CategoryBars slices={data.categories} />
         </ChartCard>
