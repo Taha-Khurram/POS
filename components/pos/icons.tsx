@@ -336,3 +336,28 @@ export const IconCart = (props: IconProps) => (
     <circle cx="17" cy="19.5" r="1.4" />
   </Glyph>
 );
+
+/** The "how is this worked out?" marker on Reports. A lower-case `i` in a ring
+ *  rather than a question mark: a question mark reads as "I need help", and
+ *  this is a footnote on a number somebody already understands. */
+export const IconInfo = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5" />
+    <path d="M12 7.6v.1" />
+  </Glyph>
+);
+
+export const IconBox = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M21 8.2v7.6a1.8 1.8 0 0 1-.95 1.59l-7.2 3.9a1.8 1.8 0 0 1-1.7 0l-7.2-3.9A1.8 1.8 0 0 1 3 15.8V8.2a1.8 1.8 0 0 1 .95-1.59l7.2-3.9a1.8 1.8 0 0 1 1.7 0l7.2 3.9A1.8 1.8 0 0 1 21 8.2Z" />
+    <path d="M3.3 7.3 12 12l8.7-4.7M12 12v9.3" />
+  </Glyph>
+);
+
+export const IconLayers = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M12 2.8 2.8 7.5 12 12.2l9.2-4.7L12 2.8Z" />
+    <path d="M2.8 12.4 12 17.1l9.2-4.7M2.8 16.9 12 21.6l9.2-4.7" />
+  </Glyph>
+);

@@ -585,6 +585,53 @@ select is(
   'tenant A cannot read tenant B figures by naming them to dashboard_summary'
 );
 
+-- Reports, added in 0021. `reports_summary` is the second `security invoker`
+-- function granted to `authenticated`, and it inherits the whole of the claim
+-- above: it runs under the caller's own JWT, so `p_tenant` filters rows a
+-- policy has already decided the caller may see.
+select is(
+  (public.reports_summary(
+     'aaaaaaaa-0000-4000-8000-000000000001',
+     current_date, current_date, current_date - 1, current_date - 1,
+     'Asia/Karachi') #>> '{totals,sales}')::numeric,
+  450.00::numeric,
+  'reports total tenant A own takings'
+);
+
+-- The two aggregates are read by two screens and have to agree to the rupee,
+-- or an owner who checks the dashboard against the report has found a bug in
+-- one of them and no way to tell which.
+select is(
+  public.reports_summary(
+    'aaaaaaaa-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #> '{totals,cost}',
+  public.dashboard_summary(
+    'aaaaaaaa-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #> '{totals,cost}',
+  'reports and the dashboard cost the same window identically'
+);
+
+select is(
+  public.reports_summary(
+    'aaaaaaaa-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #>> '{departments,0,name}',
+  'Grocery',
+  'reports group a shop sales under its own departments'
+);
+
+-- Naming another shop does not fetch it, exactly as with the dashboard.
+select is(
+  public.reports_summary(
+    'bbbbbbbb-0000-4000-8000-000000000001',
+    current_date, current_date, current_date - 1, current_date - 1,
+    'Asia/Karachi') #> '{totals}',
+  '{}'::jsonb,
+  'tenant A cannot read tenant B figures by naming them to reports_summary'
+);
+
 -- Rule 3 again, one column along: the cost snapshot is a Server Action write on
 -- the service role, and a tenant that could edit it could make its own books
 -- say anything.

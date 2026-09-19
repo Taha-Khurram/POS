@@ -79,18 +79,26 @@ export type BillPage = {
 
 const DAY_MS = 86_400_000;
 
-const shift = (day: string, days: number) =>
+/* The four of these are exported because `report.ts` offers its own, longer
+   list of periods — a quarter and a financial year are questions for Reports
+   and not for a screen somebody opened to find one bill — and month arithmetic
+   written twice is month arithmetic that will disagree about February. */
+
+/** `day` moved by whole trading days, either way. */
+export const shiftDay = (day: string, days: number) =>
   new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
-const monthStart = (day: string) => `${day.slice(0, 7)}-01`;
+/** The 1st of the month `day` falls in. */
+export const monthStart = (day: string) => `${day.slice(0, 7)}-01`;
 
-const addMonths = (day: string, count: number) => {
+/** `day` moved by whole months, landing on the 1st. */
+export const addMonths = (day: string, count: number) => {
   const [year, month] = day.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1 + count, 1)).toISOString().slice(0, 10);
 };
 
 /** The last day of the month `day` falls in. */
-const monthEnd = (day: string) => shift(addMonths(monthStart(day), 1), -1);
+export const monthEnd = (day: string) => shiftDay(addMonths(monthStart(day), 1), -1);
 
 export type RangeId =
   | "today"
@@ -151,12 +159,12 @@ export function resolveWindow(
   }
 
   if (id === "yesterday") {
-    const day = shift(today, -1);
+    const day = shiftDay(today, -1);
     return { from: day, to: day };
   }
 
-  if (id === "7d") return { from: shift(today, -6), to: today };
-  if (id === "30d") return { from: shift(today, -29), to: today };
+  if (id === "7d") return { from: shiftDay(today, -6), to: today };
+  if (id === "30d") return { from: shiftDay(today, -29), to: today };
   if (id === "this-month") return { from: monthStart(today), to: today };
 
   if (id === "last-month") {

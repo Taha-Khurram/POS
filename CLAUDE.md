@@ -187,7 +187,11 @@ limit or a reminder about money owed.
 **`plans.features` is copy too.** `0020` flipped `stock_ledger`, `shift_close`,
 `offline_register`, `staff_pins`, `restaurant_mode`, `advanced_reports` and the
 multi-branch flags back to false, because a flag is a promise the console can be
-held to. Flip one back in the same migration that lands the feature.
+held to. Flip one back in the same migration that lands the feature — `0021`
+did exactly that for `advanced_reports` on Premium. Standard's stays false and
+now understates what it gets, because nothing gates Reports by plan: the module
+is reached through `can_view_reports` alone. Either gate it or raise the flag,
+but deliberately.
 
 ## Next.js 16 notes
 
@@ -529,3 +533,71 @@ under and not where it was filed. That money is grouped under "Not filed" rather
 than dropped. Best sellers group by the catalog row where there is one and by
 the printed name where there is not, because two deleted items that shared a
 name were one thing on the shelf.
+
+## Reports
+
+`/app/reports` is real since `0021`. Five tabs over one period, because they are
+five different questions: what the period came to, which items made it, which
+half of the shop made it, how it was paid for and by whose till, and what is
+still on the shelves. Four of them are **one** call to
+`public.reports_summary` — the window and the one before it, the day-by-day
+takings, hour-of-day, profit by item, both levels of the tree, the tender mix,
+the counters and the cashiers, all grouped in Postgres. `security invoker` like
+`dashboard_summary`, so `p_tenant` is a filter and RLS is the gate, and
+`rls.test.sql` proves it and proves the two functions cost a window identically.
+Like every other reader in `lib/pos/`, `getReportData` **may not be wrapped in
+React `cache()`**.
+
+`lib/pos/report.ts` carries no `server-only` — the period list is shared with
+the picker, the same split as `history.ts`/`bills.ts` — and holds three things
+the screen cannot have two copies of:
+
+- **`EXPLAIN` is the single source for how every figure is worked out.** Every
+  hover tip, every card caption that quotes a sum, and every CSV heading reads
+  from it. A report is only worth anything if the owner believes the number, and
+  the fastest way to lose that is for the screen and the spreadsheet to explain
+  the same figure differently. One sentence per figure, in the shop's words.
+- **The arithmetic.** Profit, margin, averages and shares are derived once. The
+  SQL deliberately returns sales and cost and nothing derived from them.
+  `marginOf` is profit over the *selling price*, not over cost, and
+  `EXPLAIN.margin` says so on the screen — a supplier quoting "25% on cost" is
+  20% here, and that is the kind of gap an owner finds after acting on it.
+- **The window**, built on `history.ts`'s exported day and month arithmetic
+  rather than a second copy of it. Reports has its own longer period list
+  (a quarter, and the shop's own financial year off `fiscalYearStarts`) because
+  the sales history's list stops at thirty days by design.
+
+The hover tips are **`components/pos/info-tip.tsx` and pure CSS** — `.pos-info`
+shows the bubble on `:hover` and on `:focus-within`, so a tap works. The
+explanation is the button's `aria-label` and the bubble is `aria-hidden`, which
+is what lets it be a server component: an `aria-describedby` would need a
+`useId`. The only JavaScript this route ships is the period picker and the
+export buttons.
+
+Every share on a windowed tab uses **one denominator** — the sum of line totals,
+which is what the department, category and item tables are all summing — so
+departments add up to a hundred, so do categories, and an item's share is
+comparable with both.
+
+**Exports are a Server Action** (`exportReport`), not a CSV string sitting in the
+page payload. The tables are server-rendered, so the browser is not holding the
+rows, and shipping every figure twice for a button nobody may press is the wrong
+trade on shop 3G — the opposite call from `/app/sales`, which is a client
+component already holding its rows. The action re-resolves the window from the
+same period id the URL carries, so the file and the table cannot describe two
+different windows.
+
+**Stock value is not windowed, and the tab says so twice.** `items.stock` is
+what is on the shelf right now and there is no stock ledger, so Flo cannot
+rewind it to the 1st. The period picker is replaced by a "counted today" badge
+on that tab rather than left standing over figures it does not change.
+
+**There is no sales-tax summary and there will not be one** until a line carries
+the rate it was taxed at. `sale_lines` stores the price and not the rate behind
+it, so any tax figure would be reverse-engineered from `items.tax_rate` as it
+stands today — the same mistake as costing last month's sales from today's
+`cost_price`. The reprint on `/app/sales` already refuses to guess it.
+
+The marketing site still says the reports module is not built
+(`/pricing`, `/products`, `/roadmap`). That copy is now the wrong way round and
+is a product-announcement decision, not a code one.

@@ -1,7 +1,9 @@
 import { CountUp } from "@/components/motion/count-up";
 import type { Delta } from "@/lib/pos/dashboard";
+import type { Explainer } from "@/lib/pos/report";
 
 import { IconTrend, type IconProps } from "./icons";
+import { InfoTip } from "./info-tip";
 
 /**
  * One headline figure.
@@ -15,6 +17,11 @@ import { IconTrend, type IconProps } from "./icons";
  * - Direction is an arrow *and* a sign, never colour alone — and whether a rise
  *   is good is the caller's call. Cost going up during a stock-up week is not a
  *   problem, and the card has no way to know that.
+ *
+ * `explain` adds the hover tip that says how the figure was worked out. It is
+ * optional because the dashboard's four are the ones everybody already knows;
+ * on Reports every card carries one, because a figure an owner cannot check is
+ * a figure they will eventually stop believing.
  */
 export function KpiCard({
   label,
@@ -27,6 +34,7 @@ export function KpiCard({
   tone = "neutral",
   icon: Icon,
   delay = 0,
+  explain,
 }: {
   label: string;
   /** Rendered with a count-up, so pass the raw number, not a string. */
@@ -41,6 +49,8 @@ export function KpiCard({
   tone?: "neutral" | "more-is-better" | "less-is-better";
   icon: (props: IconProps) => React.ReactElement;
   delay?: number;
+  /** How this figure is worked out, from `EXPLAIN` in `lib/pos/report.ts`. */
+  explain?: Explainer;
 }) {
   const good =
     tone === "neutral" || !delta || delta.direction === "flat"
@@ -57,8 +67,9 @@ export function KpiCard({
   return (
     <article className="pos-card pos-kpi p-4">
       <header className="relative flex items-start justify-between gap-3">
-        <h3 className="font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
+        <h3 className="flex items-center gap-1 font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
           {label}
+          {explain ? <InfoTip label={label} explain={explain} /> : null}
         </h3>
         <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-50 text-orchid-700">
           <Icon className="h-4 w-4" />

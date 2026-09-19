@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { businessDayOf, currentBusinessDay, round2 } from "@/lib/pos/counter";
 import { writeClock, writeDay } from "@/lib/pos/history";
+import { writeReadError } from "@/lib/pos/read-error";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { Timeframe } from "@/lib/pos/timeframes";
 import { createClient } from "@/utils/supabase/server";
@@ -440,8 +441,10 @@ export async function getDashboardData(
   if (error) {
     // A dashboard that throws is a console an owner cannot get into. Zeroes are
     // wrong, but they are wrong in a way that is visible on the screen and in
-    // the log, where a crash is only visible in the log.
-    console.error("[dashboard] summary failed", error);
+    // the log, where a crash is only visible in the log — so the log has to say
+    // something. A PostgrestError handed to `console.error` whole prints as
+    // `{}`; see `writeReadError`.
+    console.error(`[dashboard] summary failed — ${writeReadError(error)}`);
     return empty(window);
   }
 
