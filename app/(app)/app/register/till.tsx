@@ -62,7 +62,9 @@ import { Receipt, type Sale } from "./receipt";
  * is a keyboard that types digits and presses Enter, so it needs no code at all
  * — it types into the box that already has focus and the Enter handler puts the
  * item on the bill. Focus is therefore returned to that box after every action,
- * because a scanner firing into a closed dialog is a scan that vanished.
+ * because a scanner firing into a closed dialog is a scan that vanished — and
+ * the matches hang under it as a dropdown that is closed until something is
+ * typed, so the screen at rest is the bill and nothing else.
  *
  * The sale is recorded before it prints, through `recordSale`, which re-prices
  * every line from the catalog server-side — so the browser decides what and how
@@ -104,16 +106,41 @@ export function Till({
 
   /* ---------------- Finding an item ---------------- */
 
+  // The list hangs off the search box and nothing else. It used to sit open
+  // beside the bill showing the first twelve rows of the catalog, which for a
+  // shop with four hundred items is a wall to read past rather than a way in —
+  // and the two ways in are the scanner and this box. Nothing is offered until
+  // somebody asks for something.
+  const {
+    ref: finder,
+    open: listOpen,
+    setOpen: setListOpen,
+  } = useDismiss<HTMLDivElement>();
+
+  // Which row Enter would take. Not the same thing as the row under the
+  // pointer: a cashier arrowing down the list has their hands on the keyboard
+  // and their eyes on the counter.
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
+
   // `matchesProduct` is the catalog screen's own matcher, not a copy of it: a
   // cashier who cannot find an item the owner can see assumes it is not in the
   // list and adds it a second time. It searches the barcode alongside the name
   // because the fastest way to find something at the counter is to scan it.
   const results = useMemo(() => {
     const raw = query.trim();
-    if (!raw) return items.slice(0, 12);
+    if (!raw) return [];
 
     return items.filter((item) => matchesProduct(item, raw)).slice(0, 24);
   }, [items, query]);
+
+  const showResults = listOpen && results.length > 0;
+
+  // Arrowing past the bottom of the list has to move the list.
+  useEffect(() => {
+    if (!showResults) return;
+    listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
+  }, [showResults, active]);
 
   const focusSearch = useCallback(() => {
     searchRef.current?.focus();
@@ -160,12 +187,21 @@ export function Till({
     setConfirmClear(false);
   }, []);
 
+  /** Take an item off the list: on the bill, box emptied, list shut, focus
+   *  back where the scanner types. */
+  const take = (item: Product) => {
+    add(item);
+    setQuery("");
+    setListOpen(false);
+    focusSearch();
+  };
+
   /**
    * Enter in the search box — which is also every scan off a USB scanner.
    *
    * An exact barcode or SKU wins over the filtered list, because a scan is an
    * unambiguous statement about which item is on the counter and a substring
-   * match is a guess. Only then does the top result get taken.
+   * match is a guess. Only then does the row the cashier arrowed to get taken.
    */
   const submit = () => {
     const raw = query.trim();
@@ -176,7 +212,7 @@ export function Till({
         item.barcode === raw || item.sku.toLowerCase() === raw.toLowerCase(),
     );
 
-    const hit = exact ?? results[0];
+    const hit = exact ?? results[active] ?? results[0];
 
     if (!hit) {
       setNotice(
@@ -185,8 +221,7 @@ export function Till({
       return;
     }
 
-    add(hit);
-    setQuery("");
+    take(hit);
   };
 
   /** A code off the tablet camera. Only a real barcode match counts — a
@@ -205,8 +240,7 @@ export function Till({
       return;
     }
 
-    add(hit);
-    focusSearch();
+    take(hit);
   };
 
   const setQuantity = (id: string, value: string) =>
@@ -346,172 +380,198 @@ export function Till({
     if (!scanning && !paying && !sale) focusSearch();
   }, [scanning, paying, sale, focusSearch]);
 
+  /**
+   * The keyboard in the search box.
+   *
+   * Arrows walk the list without the hands leaving it, Enter takes whatever
+   * `submit` decides, and Escape shuts the list before it empties the box —
+   * two different things, and a cashier who meant the first would lose a typed
+   * name to the second.
+   */
+  const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!showResults) return;
+      event.preventDefault();
+
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActive((index) =>
+        Math.min(results.length - 1, Math.max(0, index + step)),
+      );
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (showResults) setListOpen(false);
+      else setQuery("");
+    }
+  };
+
   return (
     <>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+      {/* The till is the screen, not a panel on it: it takes the window's
+          whole height so the bill grows downwards into room that is already
+          there and the Charge bar stays where the hand expects it, rather
+          than sliding down the page as lines are added. */}
+      <section className="pos-card flex min-h-[30rem] w-full flex-col lg:h-[calc(100dvh-11.25rem)]">
         {/* ================= Finding things ================= */}
-        <section className="pos-card flex min-w-0 flex-col">
-          <div className="border-b border-orchid-100 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="relative min-w-[13rem] flex-1">
-                <span className="sr-only">Scan or search an item</span>
-                <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
-                <input
-                  ref={searchRef}
-                  className="pos-field pl-9"
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    setNotice(null);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      submit();
-                    }
-                    if (event.key === "Escape") setQuery("");
-                  }}
-                  placeholder="Scan a barcode, or type a name, Urdu name or SKU"
-                  autoComplete="off"
-                  // The counter tablet's keyboard must not correct "atta" into
-                  // "attar" halfway through a queue.
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </label>
+        <div className="border-b border-orchid-100 p-3" ref={finder}>
+          <div className="relative flex items-center gap-2">
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Scan or search an item</span>
+              <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
+              <input
+                ref={searchRef}
+                className="pos-field py-2.5 pl-9 text-[0.9375rem]"
+                role="combobox"
+                aria-expanded={showResults}
+                aria-controls="till-results"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  showResults ? `till-result-${active}` : undefined
+                }
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActive(0);
+                  setListOpen(true);
+                  setNotice(null);
+                }}
+                onKeyDown={onSearchKeyDown}
+                placeholder="Scan a barcode, or type a name, Urdu name or SKU"
+                autoComplete="off"
+                // The counter tablet's keyboard must not correct "atta" into
+                // "attar" halfway through a queue.
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
 
-              <button
-                type="button"
-                onClick={() => setScanning((on) => !on)}
-                aria-pressed={scanning}
-                className={`pos-btn ${scanning ? "pos-btn-primary" : "pos-btn-soft"}`}
+            <button
+              type="button"
+              onClick={() => setScanning((on) => !on)}
+              aria-pressed={scanning}
+              className={`pos-btn flex-none ${scanning ? "pos-btn-primary" : "pos-btn-soft"}`}
+            >
+              <IconCamera className="h-4 w-4" />
+              <span className="hidden sm:inline">Camera</span>
+            </button>
+
+            {/* What was searched for, and nothing else. Tapping a row is the
+                second way in; the scanner is the first, and loose items have
+                no barcode to scan at all. */}
+            {showResults ? (
+              <ul
+                id="till-results"
+                ref={listRef}
+                role="listbox"
+                aria-label="Matching items"
+                className="pos-menu pos-select-menu"
               >
-                <IconCamera className="h-4 w-4" />
-                <span className="hidden sm:inline">Camera</span>
-              </button>
-            </div>
-
-            {notice ? (
-              <p className="mt-2.5 flex items-start gap-2 rounded-xl bg-orchid-50 px-3 py-2 text-[0.8125rem] leading-relaxed text-graphite-700">
-                <IconBarcode className="mt-0.5 h-4 w-4 flex-none text-orchid-700" />
-                {notice}
-              </p>
-            ) : null}
-
-            {scanning ? (
-              <div className="mt-3">
-                <BarcodeScanner
-                  onRead={acceptScan}
-                  onClose={() => {
-                    setScanning(false);
-                    focusSearch();
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-
-          {/* The list. Tapping is the second way in; the scanner is the first,
-              and loose items have no barcode to scan at all. */}
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {results.length === 0 ? (
-              <p className="px-2 py-8 text-center text-[0.875rem] leading-relaxed text-graphite-500">
-                {items.length === 0 ? (
-                  <>
-                    There is nothing in the item list yet, so this counter has
-                    nothing to ring up. Add your first products on Products
-                    &amp; stock, or bring your sheet in through Bulk import.
-                  </>
-                ) : (
-                  <>
-                    Nothing matches that. Check the spelling, or add the item on
-                    Products &amp; stock.
-                  </>
-                )}
-              </p>
-            ) : (
-              <ul className="space-y-1">
-                {results.map((item) => {
+                {results.map((item, index) => {
                   const state = stockState(item);
 
                   return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          add(item);
-                          setQuery("");
-                          focusSearch();
-                        }}
-                        className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-orchid-50"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-baseline gap-2">
-                            <span className="truncate font-medium text-graphite-900">
-                              {item.name}
-                            </span>
-                            <span
-                              dir="rtl"
-                              className="shrink-0 text-[0.8125rem] text-graphite-500"
-                            >
-                              {item.urdu}
-                            </span>
+                    <li
+                      key={item.id}
+                      id={`till-result-${index}`}
+                      role="option"
+                      aria-selected={index === active}
+                      data-active={index === active}
+                      className="pos-option"
+                      // Focus stays in the box the scanner types into. A row
+                      // that could take it would swallow the next scan.
+                      onPointerDown={(event) => event.preventDefault()}
+                      onPointerEnter={() => setActive(index)}
+                      onClick={() => take(item)}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline gap-2">
+                          <span className="truncate font-medium">
+                            {item.name}
                           </span>
-
-                          <span className="mt-0.5 flex items-center gap-2 text-[0.6875rem] text-graphite-500">
-                            <span className="font-mono">{item.sku}</span>
-                            {state === "out" ? (
-                              <span className="pos-badge pos-badge-bad">Out</span>
-                            ) : state === "low" ? (
-                              <span className="pos-badge pos-badge-warn">Low</span>
-                            ) : null}
+                          <span
+                            dir="rtl"
+                            className="shrink-0 text-[0.8125rem] text-graphite-500"
+                          >
+                            {item.urdu}
                           </span>
                         </span>
 
-                        <span className="flex-none text-right">
-                          <span className="block font-display text-[0.875rem] font-semibold tabular-nums">
-                            {money(item.price)}
-                          </span>
-                          <span className="block text-[0.6875rem] text-graphite-500">
-                            per {unitShort(item.unit)}
-                          </span>
+                        <span className="mt-0.5 flex items-center gap-2 text-[0.6875rem] text-graphite-500">
+                          <span className="font-mono">{item.sku}</span>
+                          {state === "out" ? (
+                            <span className="pos-badge pos-badge-bad">Out</span>
+                          ) : state === "low" ? (
+                            <span className="pos-badge pos-badge-warn">Low</span>
+                          ) : null}
                         </span>
-                      </button>
+                      </span>
+
+                      <span className="flex-none text-right">
+                        <span className="block font-display text-[0.875rem] font-semibold tabular-nums">
+                          {money(item.price)}
+                        </span>
+                        <span className="block text-[0.6875rem] text-graphite-500">
+                          per {unitShort(item.unit)}
+                        </span>
+                      </span>
                     </li>
                   );
                 })}
               </ul>
-            )}
+            ) : null}
           </div>
 
-          {!query.trim() ? (
-            <p className="border-t border-orchid-100 px-4 py-2.5 text-[0.75rem] text-graphite-500">
-              Showing {results.length} of {items.length}. Scan, or start typing.
+          {notice ? (
+            <p className="mt-2 flex items-start gap-2 rounded-xl bg-orchid-50 px-3 py-2 text-[0.8125rem] leading-relaxed text-graphite-700">
+              <IconBarcode className="mt-0.5 h-4 w-4 flex-none text-orchid-700" />
+              {notice}
             </p>
           ) : null}
-        </section>
+
+          {/* An empty catalog is worth saying once, where the searching
+              happens — a box that finds nothing whatever is typed otherwise
+              reads as a broken search. */}
+          {items.length === 0 ? (
+            <p className="mt-2 text-[0.8125rem] leading-relaxed text-graphite-500">
+              There is nothing in the item list yet, so this counter has nothing
+              to ring up. Add your first products on Products &amp; stock, or
+              bring your sheet in through Bulk import.
+            </p>
+          ) : null}
+
+          {scanning ? (
+            <div className="mt-3">
+              <BarcodeScanner
+                onRead={acceptScan}
+                onClose={() => {
+                  setScanning(false);
+                  focusSearch();
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
 
         {/* ================= The bill ================= */}
-        <section className="pos-card flex min-w-0 flex-col lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)]">
-          <header className="flex items-center gap-2 border-b border-orchid-100 px-4 py-3">
-            <IconCart className="h-4 w-4 flex-none text-orchid-700" />
-            <h2 className="flex-1 font-display text-[0.9375rem] leading-tight font-semibold">
-              This bill
-            </h2>
-
-            {lines.length > 0 ? (
-              <button
-                type="button"
-                onClick={clear}
-                onBlur={() => setConfirmClear(false)}
-                className={`pos-btn pos-btn-sm ${confirmClear ? "pos-btn-primary" : "pos-btn-quiet"}`}
-              >
-                {confirmClear ? "Tap again to clear" : "Clear"}
-              </button>
-            ) : null}
-          </header>
+        {/* One row, not three: the heading, who the bill is for, and the way
+            off it. Each of those was a band across the card of its own, and
+            three bands above an empty table is a screen that looks busier than
+            the job it is doing. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-orchid-100 px-3 py-2">
+          <IconCart className="h-4 w-4 flex-none text-orchid-700" />
+          <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
+            This bill
+          </h2>
 
           <CustomerBar
+            className="ml-auto w-full sm:w-72"
             customers={customers}
             chosen={customer}
             onChoose={(next) => {
@@ -520,35 +580,65 @@ export function Till({
             }}
           />
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {lines.length === 0 ? (
-              <p className="px-4 py-10 text-center text-[0.875rem] leading-relaxed text-graphite-500">
-                Nothing on the bill yet.
-                <span className="mt-1 block text-[0.75rem]">
-                  Scan an item, or tap it in the list.
-                </span>
-              </p>
-            ) : (
-              <ul className="divide-y divide-orchid-100">
+          {lines.length > 0 ? (
+            <button
+              type="button"
+              onClick={clear}
+              onBlur={() => setConfirmClear(false)}
+              className={`pos-btn pos-btn-sm flex-none ${confirmClear ? "pos-btn-primary" : "pos-btn-quiet"}`}
+            >
+              {confirmClear ? "Tap again to clear" : "Clear"}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {lines.length === 0 ? (
+            <p className="grid h-full place-content-center px-4 py-10 text-center text-[0.875rem] leading-relaxed text-graphite-500">
+              Nothing on the bill yet.
+              <span className="mt-1 block text-[0.75rem]">
+                Scan an item, or search for it above.
+              </span>
+            </p>
+          ) : (
+            <table className="pos-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th className="text-right">Quantity</th>
+                  <th className="text-right">Price</th>
+                  <th>
+                    <span className="sr-only">Take off the bill</span>
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
                 {lines.map((line) => (
-                  <li key={line.id} className="px-4 py-3">
-                    <div className="flex items-start gap-2">
-                      <p className="min-w-0 flex-1 text-[0.875rem] leading-snug font-medium text-graphite-900">
-                        {line.name}
-                      </p>
+                  <tr key={line.id}>
+                    <td className="whitespace-normal">
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-medium text-graphite-900">
+                          {line.name}
+                        </span>
+                        <span
+                          dir="rtl"
+                          className="text-[0.8125rem] text-graphite-500"
+                        >
+                          {line.urdu}
+                        </span>
+                      </span>
 
-                      <button
-                        type="button"
-                        onClick={() => remove(line.id)}
-                        className="pos-icon-btn h-7 w-7 flex-none"
-                        aria-label={`Take ${line.name} off the bill`}
-                      >
-                        <IconTrash className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
+                      {/* What one of them costs. The column two over is what
+                          the line comes to, and on three kilos of anything the
+                          two are not the same number. */}
+                      <span className="mt-0.5 block text-[0.75rem] tabular-nums text-graphite-500">
+                        {money(line.price)} per {unitShort(line.unit)}
+                      </span>
+                    </td>
 
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex items-center gap-1">
+                    <td>
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
                           onClick={() => step(line.id, -1)}
@@ -572,48 +662,60 @@ export function Till({
                           <IconPlus className="h-3.5 w-3.5" />
                         </button>
 
-                        <span className="ml-0.5 text-[0.75rem] text-graphite-500">
+                        <span className="ml-0.5 w-5 text-left text-[0.75rem] text-graphite-500">
                           {unitShort(line.unit)}
                         </span>
                       </div>
+                    </td>
 
-                      <span className="ml-auto text-right">
-                        <span className="block font-display text-[0.9375rem] font-semibold tabular-nums">
-                          {money(lineTotal(line))}
-                        </span>
-                        <span className="block text-[0.6875rem] text-graphite-500 tabular-nums">
-                          {money(line.price)} each
-                        </span>
-                      </span>
-                    </div>
-                  </li>
+                    <td className="pos-num font-display text-[0.9375rem] font-semibold text-graphite-900">
+                      {money(lineTotal(line))}
+                    </td>
+
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => remove(line.id)}
+                        className="pos-icon-btn h-8 w-8"
+                        aria-label={`Take ${line.name} off the bill`}
+                      >
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
                 ))}
-              </ul>
-            )}
-          </div>
+              </tbody>
+            </table>
+          )}
+        </div>
 
-          {/* ---- What it comes to ---- */}
-          <footer className="border-t border-orchid-100 px-4 py-3.5">
-            <dl className="space-y-1.5 text-[0.8125rem]">
-              <Figure label="Subtotal" value={money(bill.subtotal)} />
+        {/* ---- What it comes to ---- */}
+        {/* Across the foot of the card rather than stacked in a corner of it.
+            The total and the button that takes the money are the two things a
+            cashier looks at without looking away from the customer, so they
+            sit at the same height, at the end of the line, every time. */}
+        <footer className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-orchid-100 px-4 py-3">
+          <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.8125rem]">
+            <Figure label="Subtotal" value={money(bill.subtotal)} />
 
-              {bill.taxIncluded > 0 ? (
-                <Figure
-                  label="Sales tax, already included"
-                  value={money(bill.taxIncluded)}
-                  quiet
-                />
-              ) : null}
+            {bill.taxIncluded > 0 ? (
+              <Figure
+                label="Sales tax, already included"
+                value={money(bill.taxIncluded)}
+                quiet
+              />
+            ) : null}
+          </dl>
 
-              <div className="flex items-baseline justify-between gap-2 border-t border-orchid-100 pt-2.5">
-                <dt className="font-display text-[0.9375rem] font-semibold">
-                  Total
-                </dt>
-                <dd className="font-display text-[1.375rem] leading-none font-bold tracking-tight tabular-nums text-graphite-900">
-                  {money(bill.total)}
-                </dd>
-              </div>
-            </dl>
+          <div className="ml-auto flex flex-1 items-center justify-end gap-4 sm:flex-none">
+            <div className="text-right">
+              <p className="text-[0.75rem] leading-none text-graphite-500">
+                Total
+              </p>
+              <p className="mt-1 font-display text-[1.625rem] leading-none font-bold tracking-tight tabular-nums text-graphite-900">
+                {money(bill.total)}
+              </p>
+            </div>
 
             <button
               type="button"
@@ -622,13 +724,13 @@ export function Till({
                 setPaying(true);
               }}
               disabled={lines.length === 0}
-              className="pos-btn pos-btn-primary mt-3.5 w-full py-2.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="pos-btn pos-btn-primary px-8 py-3 text-[1rem] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Charge {lines.length > 0 ? money(bill.total) : ""}
+              Charge
             </button>
-          </footer>
-        </section>
-      </div>
+          </div>
+        </footer>
+      </section>
 
       {paying ? (
         <PaymentSheet
@@ -664,30 +766,43 @@ export function Till({
 /**
  * Who the bill is for.
  *
- * One line at the top of the bill, and a walk-in by default — because a walk-in
- * is most bills in most shops, and a register that asks for a name before it
- * will charge is a register with a queue behind it. Attaching somebody is a tap
- * and a search; the till never insists.
+ * One field in the bill's own header, and a walk-in by default — because a
+ * walk-in is most bills in most shops, and a register that asks for a name
+ * before it will charge is a register with a queue behind it. Attaching
+ * somebody is typing into it; the till never insists.
+ *
+ * The same combobox as the item box above it, for the same reason: a cashier
+ * types a name and picks it off a list, rather than opening something, typing,
+ * picking and closing it. Focusing the field offers the shop's regulars
+ * straight away, which an item list of four hundred rows could not do and a
+ * customer list can.
  *
  * The search is `matchesCustomer`, shared with the Customers screen, so
  * somebody the owner can find is somebody the cashier can find. Phone digits
  * match without their spaces: a cashier reading the number off the customer's
  * own screen types the spaces that are printed on it.
  *
- * It closes on a choice, unlike the catalog's filter menu — picking a customer
- * is one decision and the cashier's hands are needed back on the scanner.
+ * Once somebody is attached the field becomes their name, because a bill is
+ * for one person and a box still inviting a search would read as though nobody
+ * were on it. The × puts it back.
  */
 function CustomerBar({
   customers,
   chosen,
   onChoose,
+  className = "",
 }: {
   customers: Customer[];
   chosen: Customer | null;
   onChoose: (next: Customer | null) => void;
+  /** Where it sits in the header row. The control has no margins of its own —
+   *  it is one item in that row, not a band across the card. */
+  className?: string;
 }) {
   const { ref, open, setOpen } = useDismiss<HTMLDivElement>();
   const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const results = useMemo(() => {
     const raw = query.trim();
@@ -695,117 +810,149 @@ function CustomerBar({
     return customers.filter((entry) => matchesCustomer(entry, raw)).slice(0, 12);
   }, [customers, query]);
 
+  const showResults = open && results.length > 0;
+
+  useEffect(() => {
+    if (!showResults) return;
+    listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
+  }, [showResults, active]);
+
   // Nobody on the list yet is not an error and does not get a control. A shop
   // that has never added a customer sees nothing here at all rather than a
-  // button that opens an empty box.
+  // field that can only come back empty.
   if (customers.length === 0 && !chosen) return null;
 
   const pick = (next: Customer | null) => {
     onChoose(next);
     setQuery("");
+    setActive(0);
     setOpen(false);
   };
 
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActive((index) =>
+        Math.min(results.length - 1, Math.max(0, index + step)),
+      );
+      return;
+    }
+
+    if (event.key === "Enter") {
+      // Never submits anything — the bill is charged from its own button, and
+      // Enter here is only ever "this one".
+      event.preventDefault();
+      if (showResults && results[active]) pick(results[active]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (showResults) setOpen(false);
+      else setQuery("");
+    }
+  };
+
   return (
-    <div className="relative border-b border-orchid-100 px-4 py-2" ref={ref}>
-      <div className="flex items-center gap-2">
-        <IconUser className="h-3.5 w-3.5 flex-none text-graphite-500" aria-hidden />
+    <div className={`pos-select-wrap ${className}`} ref={ref}>
+      {chosen ? (
+        <div className="pos-field flex items-center gap-2 py-1.5">
+          <IconUser className="h-4 w-4 flex-none text-graphite-500" aria-hidden />
 
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          className="min-w-0 flex-1 truncate text-left text-[0.8125rem] text-graphite-700 underline-offset-2 hover:underline"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-        >
-          {chosen ? (
-            <>
-              <span className="font-medium text-graphite-900">{chosen.name}</span>
-              {chosen.phone ? (
-                <span className="ml-1.5 font-mono text-[0.75rem] text-graphite-500">
-                  {writePhone(chosen.phone)}
-                </span>
-              ) : null}
-            </>
-          ) : (
-            "Walk-in customer — tap to attach one"
-          )}
-        </button>
+          <p className="min-w-0 flex-1 truncate text-[0.8125rem]">
+            <span className="font-medium text-graphite-900">{chosen.name}</span>
+            {chosen.phone ? (
+              <span className="ml-1.5 font-mono text-[0.75rem] text-graphite-500">
+                {writePhone(chosen.phone)}
+              </span>
+            ) : null}
+          </p>
 
-        {chosen ? (
           <button
             type="button"
             onClick={() => pick(null)}
             className="pos-filter-tag-x flex-none"
-            aria-label={`Take ${chosen.name} off this bill`}
+            aria-label={`Take ${chosen.name} off this bill — make it a walk-in`}
           >
             <IconClose className="h-3 w-3" />
           </button>
-        ) : null}
-      </div>
-
-      {open ? (
-        <div className="pos-menu pos-menu-panel" role="dialog" aria-label="Attach a customer">
-          <div className="pos-menu-head">
-            <span className="pos-menu-title">Who is this bill for?</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="pos-filter-tag-x"
-              aria-label="Close"
-            >
-              <IconClose className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <input
-            className="pos-field"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name or phone"
-            aria-label="Search customers"
-            autoComplete="off"
-            autoFocus
-          />
-
-          <ul className="mt-2 max-h-56 overflow-y-auto">
-            {results.length === 0 ? (
-              <li className="px-1 py-3 text-[0.8125rem] text-graphite-500">
-                Nobody matches that. Add them on Customers — it takes a name and
-                a number.
-              </li>
-            ) : (
-              results.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    onClick={() => pick(entry)}
-                    className="pos-menu-item w-full text-left"
-                  >
-                    <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                    {entry.phone ? (
-                      <span className="ml-2 flex-none font-mono text-[0.75rem] text-graphite-500">
-                        {writePhone(entry.phone)}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-
-          {chosen ? (
-            <div className="pos-menu-foot">
-              <button
-                type="button"
-                onClick={() => pick(null)}
-                className="pos-btn pos-btn-quiet pos-btn-sm"
-              >
-                Make it a walk-in
-              </button>
-            </div>
-          ) : null}
         </div>
+      ) : (
+        <label className="relative block">
+          <span className="sr-only">Attach a customer to this bill</span>
+          <IconUser className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
+          <input
+            className="pos-field py-1.5 pl-9 text-[0.8125rem]"
+            role="combobox"
+            aria-expanded={showResults}
+            aria-controls="till-customers"
+            aria-autocomplete="list"
+            aria-activedescendant={
+              showResults ? `till-customer-${active}` : undefined
+            }
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+              setOpen(true);
+            }}
+            // The shop's regulars, offered before a letter is typed. The
+            // cashier who knows the face but not the spelling is the reason.
+            onFocus={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            placeholder="Walk-in — search a name or phone"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </label>
+      )}
+
+      {showResults ? (
+        <ul
+          id="till-customers"
+          ref={listRef}
+          role="listbox"
+          aria-label="Customers"
+          className="pos-menu pos-select-menu"
+        >
+          {results.map((entry, index) => (
+            <li
+              key={entry.id}
+              id={`till-customer-${index}`}
+              role="option"
+              aria-selected={index === active}
+              data-active={index === active}
+              className="pos-option"
+              onPointerDown={(event) => event.preventDefault()}
+              onPointerEnter={() => setActive(index)}
+              onClick={() => pick(entry)}
+            >
+              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+              {entry.phone ? (
+                <span className="flex-none font-mono text-[0.75rem] text-graphite-500">
+                  {writePhone(entry.phone)}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* Said under the field rather than in a menu nobody opened: a name that
+          is not on the list is a customer who has not been added, and the
+          cashier needs to know that without losing what they typed. */}
+      {open && results.length === 0 ? (
+        <p className="pos-menu pos-select-menu p-3 text-[0.75rem] leading-relaxed text-graphite-500">
+          Nobody matches that. Add them on Customers — it takes a name and a
+          number — or leave this bill as a walk-in.
+        </p>
       ) : null}
     </div>
   );
@@ -973,7 +1120,7 @@ function QuantityInput({
   );
 }
 
-/** A line in the bill's footer. */
+/** A figure in the bill's footer bar, label then value on one line. */
 function Figure({
   label,
   value,
@@ -984,7 +1131,7 @@ function Figure({
   quiet?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-2">
+    <div className="flex items-baseline gap-2">
       <dt className={quiet ? "text-graphite-500" : "text-graphite-700"}>
         {label}
       </dt>

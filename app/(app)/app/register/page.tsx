@@ -10,6 +10,7 @@ import { listSellableProducts } from "@/lib/pos/items";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
 import { getAssignedCounterId } from "@/lib/pos/staff";
 import { CounterPicker } from "./counter-picker";
+import { CounterSelect } from "./counter-select";
 import { Till } from "./till";
 
 export const metadata: Metadata = {
@@ -34,8 +35,8 @@ export const metadata: Metadata = {
  * right for the shared tablet bolted to the counter by the door.
  *
  * The owner can never have an assignment, so their own behaviour is untouched:
- * the staff editor refuses their row, which is what makes `?pick=1` still mean
- * what it meant.
+ * the staff editor refuses their row, which is what keeps the picker at the top
+ * of the screen meaning what it means.
  *
  * Both are re-checked against the shop's own open counters on every load, so a
  * counter shut overnight sends the tablet back to the picker — or, for somebody
@@ -53,9 +54,7 @@ export const metadata: Metadata = {
  * the row it was handed. Attaching one is always optional — a walk-in is most
  * bills in most shops.
  */
-export default async function RegisterPage({
-  searchParams,
-}: PageProps<"/app/register">) {
+export default async function RegisterPage() {
   const session = await requireSession();
 
   if (!session.tenantId) return <NotAttached />;
@@ -89,19 +88,16 @@ export default async function RegisterPage({
 
   // Which till a device bills from is the owner's call, not the cashier's: a
   // cashier who could re-point the tablet mid-shift could drop a sale into
-  // another counter's drawer and its receipt series. So `?pick=1` — the ask to
-  // switch — is owner-only. A device that has not been set up yet still gets
-  // the picker whoever unlocks it, or a new tablet could not bill at all.
+  // another counter's drawer and its receipt series. So the picker at the top
+  // of the register is owner-only. A device that has not been set up yet still
+  // gets the full-screen picker whoever unlocks it, or a new tablet could not
+  // bill at all.
   const maySwitch = session.tenantRole === "owner";
 
-  // Without it, one open counter needs no question — a single-till shop should
-  // never see this screen.
-  const switching = maySwitch && (await searchParams).pick === "1";
-
-  if (switching || !chosen) {
-    if (switching || open.length > 1) {
-      return <CounterPicker counters={open} current={chosen?.id ?? null} />;
-    }
+  // Only when the device has not been pointed anywhere yet, and only when
+  // there is a question to ask — a single-till shop never sees this screen.
+  if (!chosen && open.length > 1) {
+    return <CounterPicker counters={open} current={null} />;
   }
 
   const counter = chosen ?? open[0];
@@ -118,14 +114,9 @@ export default async function RegisterPage({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {maySwitch && open.length > 1 ? (
-            <Link href="/app/register?pick=1" className="pos-btn pos-btn-soft pos-btn-sm">
-              <IconRegister className="h-4 w-4" />
-              Switch counter
-            </Link>
-          ) : null}
-        </div>
+        {maySwitch && open.length > 1 ? (
+          <CounterSelect counters={open} current={counter.id} />
+        ) : null}
       </header>
 
       <Till
