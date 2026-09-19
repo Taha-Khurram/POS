@@ -11,15 +11,16 @@ import { PermissionsForm } from "./permissions-form";
 /**
  * User roles and permissions.
  *
- * Two kinds of people, on purpose, and the split is in the schema rather than
- * in this screen: `profiles` holds the owner and manager, who are real auth
- * users; cashiers get a PIN on the staff table and never touch auth at all.
- * That keeps a paid shop at one or two monthly active users instead of eight,
- * and it is also the only thing that lets a cashier switch mid-rush on a
- * tablet with no signal.
+ * Three access levels, and every one of them signs in the same way: a `profiles`
+ * row against a real auth user, with an email and a password. The two switchable
+ * levels are cashier and store manager; admin is the owner, is allowed
+ * everything by definition, and has no stored row that could be switched off.
  *
- * So "create an account" means two different things here, and the screen says
- * which is which rather than pretending there is one kind of person.
+ * This screen used to say a cashier was a 4-digit PIN checked on the tablet,
+ * which would work with no signal and cost nothing in monthly active users.
+ * None of that was built — `staff.ts` mints a work email and a password, and
+ * `/app/employees` reads it out. A screen describing a sign-in the product does
+ * not have is worse than no screen: an owner plans a shift around it.
  */
 
 const LEVELS: {
@@ -33,7 +34,7 @@ const LEVELS: {
     id: "cashier",
     name: "Cashier",
     icon: IconRegister,
-    signIn: "4-digit PIN at the register",
+    signIn: "Email and password",
     summary:
       "Sells, takes payment, prints. Everything beyond that is a switch below, and off by default.",
   },
@@ -66,7 +67,7 @@ export function RolesPanel({
     <div className="space-y-4">
       <ChartCard
         title="Access levels"
-        caption="Three of them, and only two need an email address."
+        caption="Three of them. Two you can change; the owner's is fixed."
       >
         <div className="grid gap-3 lg:grid-cols-3">
           {LEVELS.map((level) => (
@@ -92,10 +93,10 @@ export function RolesPanel({
         </div>
 
         <p className="pos-hint mt-3.5">
-          A cashier is not an account you pay for. The PIN is checked on the
-          tablet itself, so switching cashiers mid-rush works with the internet
-          down — and your bill stays at one or two signed-in users however many
-          people stand at the counter.
+          Staff accounts are unlimited and cost nothing extra, so add one for
+          everybody who stands at the counter rather than sharing a sign-in —
+          every bill records who rang it up, and that is only worth anything if
+          the name on it is right.
         </p>
       </ChartCard>
 

@@ -4,11 +4,13 @@ import { useActionState } from "react";
 
 import { submitLead, type LeadState } from "./actions";
 
+/** Counters, not branches — one shop is what Flo runs today. More than one
+ *  outlet is still worth hearing about; it is how the roadmap gets ordered. */
 const SIZES = [
-  "1 branch, 1 register",
-  "1 branch, 2–4 registers",
-  "2–5 branches",
-  "More than 5 branches",
+  "One counter",
+  "Two counters",
+  "Three or four counters",
+  "More than one shop",
 ];
 
 const TYPES = [
@@ -17,7 +19,8 @@ const TYPES = [
   "Bakery or mithai shop",
   "Pharmacy or medical store",
   "Clothing or fabric retail",
-  "Multi-branch chain",
+  "Hardware, paint or electrical",
+  "Cosmetics or general retail",
   "Something else",
 ];
 
@@ -33,8 +36,8 @@ const CITIES = [
 ];
 
 /**
- * Front end only — nothing is sent anywhere yet. Wire `onSubmit` to a Server
- * Action (or a route handler) once there is somewhere for the lead to land.
+ * Real: `submitLead` writes to `public.leads` through the service role, rate
+ * limited by IP. The thank-you panel below is shown only once the row is in.
  */
 export function DemoForm() {
   const [state, formAction, pending] = useActionState<LeadState, FormData>(submitLead, {
@@ -171,7 +174,7 @@ export function DemoForm() {
 
         <div>
           <label className="label" htmlFor="size">
-            How many branches and registers?
+            How many counters?
           </label>
           <select id="size" name="size" className="field" defaultValue={SIZES[0]}>
             {SIZES.map((size) => (

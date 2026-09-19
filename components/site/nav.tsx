@@ -9,8 +9,8 @@ const LINKS = [
   { label: "Solutions", href: "/solutions" },
   { label: "Products", href: "/products" },
   { label: "Pricing", href: "/pricing" },
+  { label: "Roadmap", href: "/roadmap" },
   { label: "Careers", href: "/careers" },
-  { label: "Resources", href: "/resources" },
 ];
 
 export function Nav() {

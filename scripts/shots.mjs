@@ -36,26 +36,99 @@ try {
 }
 
 const BASE = process.env.SHOTS_BASE_URL ?? "http://localhost:3000";
-const EMAIL = process.env.SHOTS_EMAIL ?? process.env.ADMIN_EMAIL ?? process.argv[2];
 const OUT = path.join(process.cwd(), "public", "shots");
 
-// What the counter is called in the picture. The console dresses itself from
-// constants today, so the name is only ever cosmetic — but the email is a real
-// person's and must never reach a landing page.
-const SHOP = "Khurram Cloth House";
+/**
+ * The shop in the pictures.
+ *
+ * `npm run demo:shop` builds it: a Lahore kiryana with a real department tree,
+ * fifty-odd items priced in rupees, twenty regulars and six weeks of trading.
+ * The screens, the readers and the arithmetic are the product’s own — only the
+ * rows are seeded, which is the one thing a screenshot of a development
+ * account gets wrong in a way nobody outside the team can check.
+ *
+ * Pass another address to photograph a different account. The dressing below
+ * catches a real person’s email before it can reach a landing page.
+ */
+const DEMO_EMAIL = "owner@almadina.flopos.pk";
+
+const EMAIL =
+  process.argv[2] ?? process.env.SHOTS_EMAIL ?? process.env.ADMIN_EMAIL ?? DEMO_EMAIL;
 
 const DRESSING = [
-  [/tahakhurramofficial@gmail\.com/gi, "owner@khurramcloth.pk"],
-  [/\bYour shop\b/g, SHOP],
+  [/tahakhurramofficial@gmail\.com/gi, DEMO_EMAIL],
 ];
 
 /** 2x so the hero stays crisp on a retina panel; Next resizes down from here. */
 const VIEWPORT = { width: 1280, height: 820 };
 
+/**
+ * Every screen the marketing site is allowed to show.
+ *
+ * One entry per picture, and the list is the contract: a page that is not here
+ * has no photograph, and a page on the site with no photograph behind it is
+ * copy nobody has checked against the product. `prepare` runs after the page
+ * has settled, for the screens that only look like themselves once somebody has
+ * touched them — the till is an empty box until something is on the bill.
+ */
 const SHOTS = [
-  { name: "dashboard-dark", theme: "dark" },
-  { name: "dashboard-light", theme: "light" },
+  { name: "dashboard-dark", theme: "dark", path: "/app?range=7d" },
+  { name: "dashboard-light", theme: "light", path: "/app?range=7d" },
+  { name: "register", theme: "light", path: "/app/register", needsCounter: true, prepare: ringUpABill },
+  { name: "inventory", theme: "light", path: "/app/inventory?tab=items" },
+  { name: "categories", theme: "light", path: "/app/inventory?tab=tree" },
+  { name: "customers", theme: "light", path: "/app/customers" },
+  { name: "sales-history", theme: "light", path: "/app/sales?tab=history" },
+  { name: "day-close", theme: "light", path: "/app/sales?tab=day" },
+  { name: "staff", theme: "light", path: "/app/employees" },
+  { name: "settings", theme: "light", path: "/app/settings?tab=store" },
+  { name: "permissions", theme: "light", path: "/app/settings?tab=roles" },
 ];
+
+/**
+ * Put a few lines on the bill before the shutter.
+ *
+ * Typed into the real search box and picked off the real menu, rather than
+ * seeded through some photograph-only hatch — a till with a hatch in it is a
+ * till whose picture can show a bill the product cannot produce.
+ */
+async function ringUpABill(page) {
+  const search = page.locator('input[placeholder^="Scan a barcode"]');
+
+  // Distinct enough that each one lands on a different row — three queries that
+  // all match the same item photograph as one line with a quantity of three.
+  for (const query of ["Sunridge", "Basmati", "Tapal", "Coca", "Surf"]) {
+    await search.fill(query);
+
+    const option = page.locator(".pos-option").first();
+    try {
+      await option.waitFor({ state: "visible", timeout: 2500 });
+    } catch {
+      continue; // Nothing matched that in this shop's catalog.
+    }
+
+    await option.click();
+    await page.waitForTimeout(120);
+  }
+
+  // A regular on the bill, because attaching one is the till's own step and a
+  // picture of the walk-in case says nothing about it.
+  const customer = page.locator('input[placeholder^="Walk-in"]');
+  await customer.fill("Hafiz");
+
+  const match = page.locator(".pos-option").first();
+  try {
+    await match.waitFor({ state: "visible", timeout: 2500 });
+    await match.click();
+  } catch {
+    await customer.fill("");
+  }
+
+  await search.fill("");
+  await page.keyboard.press("Escape");
+  // The bill panel animates its new rows in; let them land.
+  await page.waitForTimeout(400);
+}
 
 const die = (message) => {
   console.error(`\n  ${message}\n`);
@@ -68,14 +141,6 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !publishableKey || !serviceRoleKey) {
   die("Missing Supabase env. Run `npm run doctor` first — it names what is absent.");
-}
-
-if (!EMAIL) {
-  die(
-    "No account to sign in as.\n" +
-      "  Pass one:  npm run shots -- you@example.com\n" +
-      "  Or set SHOTS_EMAIL in .env.local.",
-  );
 }
 
 let chromium;
@@ -162,6 +227,31 @@ const browser = await chromium.launch();
 
 await mkdir(OUT, { recursive: true });
 
+/**
+ * Which till the register photographs from.
+ *
+ * Read here rather than clicked through the picker: the picker is a screen in
+ * its own right and photographing it would mean every register shot started by
+ * capturing something else. The cookie is exactly what `chooseCounter` writes,
+ * and the page re-checks it against the shop's open counters anyway.
+ */
+const { data: openCounters } = await admin
+  .from("counters")
+  .select("id, name")
+  .eq("tenant_id", claims.tenant_id ?? "00000000-0000-0000-0000-000000000000")
+  .eq("is_active", true)
+  .order("sort_order", { ascending: true })
+  .limit(1);
+
+const counterId = openCounters?.[0]?.id ?? null;
+
+if (!counterId) {
+  console.warn(
+    "  ! No open counter on this shop — the register will photograph its " +
+      "\"counter is shut\" screen rather than a till.",
+  );
+}
+
 for (const shot of SHOTS) {
   const context = await browser.newContext({
     viewport: VIEWPORT,
@@ -185,10 +275,13 @@ for (const shot of SHOTS) {
     // The console's own two preferences, read by the layout before first byte.
     { name: "flo_theme", value: shot.theme, domain: hostname, path: "/" },
     { name: "flo_rail", value: "0", domain: hostname, path: "/" },
+    ...(shot.needsCounter && counterId
+      ? [{ name: "flo_counter", value: counterId, domain: hostname, path: "/" }]
+      : []),
   ]);
 
   const page = await context.newPage();
-  await page.goto(`${BASE}/app?range=7d`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}${shot.path}`, { waitUntil: "networkidle" });
 
   if (page.url().includes("/login")) {
     die("Landed back on /login — the session cookies were rejected.");
@@ -202,9 +295,12 @@ for (const shot of SHOTS) {
   // would take it away while actually working too.
   await page.addStyleTag({ content: "nextjs-portal { display: none !important }" });
 
+  // Before the dressing, so whatever it puts on the screen is dressed too.
+  if (shot.prepare) await shot.prepare(page);
+
   // Dress over the signed-in identity. A walk over text nodes rather than a
   // selector: it survives every re-layout of the rail and the topbar.
-  await page.evaluate(({ rules, initial }) => {
+  await page.evaluate(({ rules }) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const patterns = rules.map(([source, flags, to]) => [new RegExp(source, flags), to]);
 
@@ -215,14 +311,8 @@ for (const shot of SHOTS) {
       }
     }
 
-    // The avatars hold one letter taken from the shop's name, which the walk
-    // above has just changed underneath them.
-    for (const stamp of document.querySelectorAll(".pos-stamp")) {
-      stamp.textContent = initial;
-    }
   }, {
     rules: DRESSING.map(([from, to]) => [from.source, from.flags, to]),
-    initial: SHOP.charAt(0).toUpperCase(),
   });
 
   const file = path.join(OUT, `${shot.name}.png`);
@@ -243,9 +333,11 @@ Generated — do not edit by hand, and do not retouch. Re-run \`npm run shots\`
 after any change to the console's look, or the marketing site starts showing a
 product that no longer exists.
 
-Captured at ${VIEWPORT.width}×${VIEWPORT.height} at 2x from \`/app?range=7d\`,
-with motion reduced so entrances are settled and the signed-in account's email
-dressed over. The figures in them are the dashboard's own sample data.
+Captured at ${VIEWPORT.width}×${VIEWPORT.height} at 2x, with motion reduced so
+entrances are settled and the signed-in account's email dressed over. The
+figures in them are one real shop's own rows.
+
+${SHOTS.map((shot) => `- \`${shot.name}.png\` — \`${shot.path}\`${shot.theme === "dark" ? " (dark)" : ""}`).join("\n")}
 `,
   "utf8",
 );

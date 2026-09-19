@@ -8,100 +8,126 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Two plans, priced in rupees. Standard at Rs 5,000 per branch per month and Premium at Rs 10,000 — FBR digital invoicing included on both.",
+    "Two plans, priced in rupees. Standard at Rs 5,000 a month for up to two counters and Premium at Rs 10,000 for up to four — with a list of what is built and what is not.",
 };
 
+/**
+ * Every line below is a thing the software does today. The plan rows in
+ * `0020_plans_tell_the_truth.sql` say the same, because a feature flag is a
+ * promise the console can be held to and the two must not drift.
+ */
 const PLANS = [
   {
     name: "Standard",
     price: "Rs 5,000",
-    cadence: "per branch / month",
-    pitch: "For a single shop or restaurant that needs clean billing and honest stock.",
+    cadence: "per month",
+    pitch: "For a shop with one counter, or two.",
     cta: { label: "Get started", href: "/checkout" },
     features: [
-      "Up to 2 registers, unlimited staff PINs",
-      "Cash, card, Raast, Easypaisa and JazzCash",
-      "FBR digital invoicing with QR receipts",
-      "Item catalog with rates, deals, and sizes",
+      "Up to 2 counters, each with its own receipt series",
+      "Unlimited staff accounts, each with their own sign-in",
+      "Cash and card, recorded separately",
+      "Your item list — cost, price, margin, Urdu name, barcode",
+      "Departments and categories you name yourself",
       "Customer list, searchable by name or phone",
-      "Stock in and out, low-stock alerts",
-      "Daily sales and cash-count report",
+      "Every bill findable, and reprintable marked DUPLICATE",
+      "Day close per counter, and CSV export",
+      "Dashboard: sales, profit, cost of goods, margin",
       "WhatsApp support in Urdu and English",
     ],
   },
   {
     name: "Premium",
     price: "Rs 10,000",
-    cadence: "per branch / month",
-    pitch: "For busy floors and multi-branch owners who want one set of numbers.",
+    cadence: "per month",
+    pitch: "For a busy floor that needs more than two tills — and wants each new module the week it ships.",
     cta: { label: "Get started", href: "/checkout" },
     featured: true,
     features: [
       "Everything in Standard",
-      "Unlimited registers per branch",
-      "Multi-branch dashboard and central catalog",
-      "Recipe-level depletion for kitchens",
-      "Purchase orders and supplier rate history",
-      "Foodpanda and delivery reconciliation",
-      "Attendance, roster, and payroll export",
-      "PRA and SRB service-tax filing support",
-      "Loyalty plus WhatsApp and SMS campaigns",
-      "API access, data exports, priority support",
+      "Up to 4 counters",
+      "New modules the week they land, at no extra cost",
+      "Your rate list imported and checked for you",
+      "Named person for setup and support",
+      "Priority on the queue when something breaks",
     ],
   },
 ];
 
+/**
+ * What is not built. On the pricing page on purpose — this is the page an owner
+ * reads with a calculator, and it is the last honest moment before money moves.
+ */
+const NOT_INCLUDED = [
+  "Returns and refunds at the till",
+  "Discounts at the till",
+  "Held or parked bills",
+  "Shift open and close, with the drawer counted",
+  "Billing while the internet is down",
+  "The reports module — the dashboard is live, reports are not",
+  "Purchase orders and supplier ledgers",
+  "Batch numbers and expiry dates",
+  "Size and colour variants",
+  "More than one branch",
+  "Raast, Easypaisa, JazzCash and card processing through us",
+  "FBR digital invoicing and provincial tax filing",
+];
+
 const ADD_ONS = [
   {
-    name: "Card and wallet processing",
+    name: "Getting your list in",
     detail:
-      "1.9% per card tap or swipe through our acquiring partners. Raast and wallet QR settle at 0.9%. Cash costs nothing, and there is no monthly minimum.",
+      "Send a spreadsheet, an old export, or photos of the price board. We turn it into the import file and run it with you on a call. No charge, on either plan.",
   },
   {
-    name: "Counter hardware bundle",
+    name: "Extra counter on Standard",
     detail:
-      "Android billing terminal, thermal receipt printer, barcode scanner, and cash drawer — delivered configured for Rs 65,000, or Rs 3,500 per month.",
+      "Rs 1,500 per additional counter per month, up to the Premium ceiling. Beyond four counters, talk to us — the number has not been tested past that and we would rather say so.",
   },
   {
-    name: "Extra register on Standard",
+    name: "Hardware",
     detail:
-      "Rs 1,500 per additional register per month. Premium includes as many registers as your branch can fit.",
+      "We do not sell it. Flo runs in the browser on a tablet, a terminal or the shop computer, prints to any thermal printer your device can already reach, and takes a USB scanner as-is. We will tell you what to buy.",
   },
   {
-    name: "FBR and provincial setup",
+    name: "Your data, out",
     detail:
-      "POS registration, IRIS integration, and your first fiscal invoice — done with you on a call, at no charge on either plan.",
+      "Sales export to CSV from the screen. Ask and we will send you everything else — items, customers, every bill and line — in a format your accountant can open. No charge and no notice period.",
   },
 ];
 
 const FAQS = [
   {
     q: "Is there a free plan?",
-    a: "No. Flo has two plans — Standard at Rs 5,000 per branch per month and Premium at Rs 10,000 — because a register that half works is worse than none. Every demo is free, and the first month is refundable in full if the counter does not run better.",
+    a: "No. Flo has two plans — Rs 5,000 and Rs 10,000 a month — because a register that half works is worse than none. Every demo is free, and the first month is refundable in full if the counter does not run better.",
+  },
+  {
+    q: "What is genuinely not built yet?",
+    a: "Returns, discounts at the till, held bills, shift close, offline billing, the reports module, purchasing, batch and expiry, variants, multi-branch, wallet payments, and FBR invoicing. The full list is above and the order they are being built in is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
+  },
+  {
+    q: "Does Flo file my FBR invoices?",
+    a: "No, and it does not print a fiscal invoice number or a verification QR. If your outlet is required to be integrated with FBR, Flo is not the right software for you today. It is on the roadmap without a date, because the date would be a guess.",
+  },
+  {
+    q: "What happens when the internet goes?",
+    a: "The register needs the connection to record a sale. If it fails mid-sale, Flo offers to print the receipt anyway — that copy carries an UNSAVED number, is stamped NOT RECORDED on the roll, and is deliberately left out of the day's takings, so the shop keeps selling and nothing lies about what was counted. Offline billing that queues and syncs is being built; it is not here.",
+  },
+  {
+    q: "Which payment methods can I record?",
+    a: "Cash and card. Card means the machine you already have — the sale is recorded against it so your day close and the settlement reconcile, but Flo does not process the payment and takes no cut of it. Raast and the wallets are not built.",
   },
   {
     q: "Is sales tax included in those figures?",
     a: "Prices are quoted before tax. Federal sales tax on services is added on your invoice at the prevailing rate, and we issue a proper tax invoice with our NTN and STRN so your accountant can claim it.",
   },
   {
-    q: "How does the FBR integration work?",
-    a: "Your branch is registered as a POS with FBR, and every bill Flo prints carries the fiscal invoice number and verification QR code that the law requires. Invoices queue locally if IRIS is unreachable and post automatically once it responds — nothing is filed by hand.",
-  },
-  {
-    q: "What happens when the power or internet goes?",
-    a: "The register keeps billing offline on the tablet or terminal, holds card and wallet receipts in a local queue, and settles everything when the connection returns. Reports and FBR filings backfill on their own.",
-  },
-  {
-    q: "Which payment methods can I accept?",
-    a: "Cash, cards through any 1LINK-connected acquirer, Raast QR, Easypaisa, JazzCash, and bank transfer against an invoice. Every one of them is recorded as its own tender, so the drawer, the card settlement and the day-end report reconcile against each other.",
-  },
-  {
-    q: "Is there a contract, and can I add branches later?",
-    a: "Monthly billing, cancel at the end of any period, and your data exports in full whenever you ask. Branches and registers are prorated to the day, so a seasonal outlet for Ramadan or Eid costs only the weeks it runs.",
+    q: "Is there a contract?",
+    a: "Monthly billing, cancel at the end of any period, and your data exports in full whenever you ask — including on the way out.",
   },
   {
     q: "Do you charge per staff member?",
-    a: "Never. Staff PINs are unlimited on both plans, so hiring for the wedding season or Ramadan does not change your bill.",
+    a: "Never. Staff accounts are unlimited on both plans, so hiring for the wedding season or Ramadan does not change your bill.",
   },
 ];
 
@@ -116,7 +142,7 @@ export default function PricingPage() {
             <span className="text-gradient">in rupees</span>
           </>
         }
-        lede="Rs 5,000 or Rs 10,000 per branch per month. FBR invoicing, the customer list, and support in Urdu are in both — no free tier, and no fees invented at the end of the quarter."
+        lede="Rs 5,000 or Rs 10,000 a month. Everything on this page is built and running today — and what is not is listed further down, on the same page, before you decide."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -148,7 +174,7 @@ export default function PricingPage() {
                       className="absolute -right-14 -top-16 h-52 w-52 rounded-full bg-white/20 blur-3xl"
                     />
                     <span className="relative self-start rounded-full border border-white/30 bg-white/15 px-3 py-1 font-display text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white">
-                      Most chosen in Pakistan
+                      More than two tills
                     </span>
                   </>
                 ) : null}
@@ -230,22 +256,52 @@ export default function PricingPage() {
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
 
+      {/* ---------- What is not in either plan ---------- */}
+      <section className="section pt-0">
+        <div className="shell">
           <Reveal
-            className="panel mx-auto mt-4 max-w-4xl rounded-2xl px-6 py-5 text-center"
-            delay={220}
-            y={20}
+            className="panel rim mx-auto max-w-4xl rounded-[24px] p-7 sm:p-9"
+            y={24}
           >
-            <p className="text-[0.8125rem] leading-relaxed text-mist-400">
-              Running more than ten branches, or a franchise network?{" "}
-              <Link
-                href="/demo"
-                className="font-medium text-iris-600 transition-colors duration-300 hover:text-iris-500"
-              >
-                Talk to sales
-              </Link>{" "}
-              — we quote annually on Premium and put an onboarding lead on it.
+            <h2 className="font-display text-[1.25rem] font-bold">
+              Not in either plan, because it is not built
+            </h2>
+            <p className="mt-2 max-w-2xl text-[0.875rem] leading-relaxed text-mist-400">
+              No plan unlocks any of this. It is listed so nobody finds out on
+              the third day, and it is the same list that decides what gets
+              built next.
             </p>
+
+            <ul className="mt-6 grid gap-2.5 border-t border-ink-700 pt-6 sm:grid-cols-2">
+              {NOT_INCLUDED.map((item) => (
+                <li
+                  key={item}
+                  className="flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-mist-400"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="mt-[0.25rem] h-3.5 w-3.5 shrink-0"
+                    aria-hidden
+                  >
+                    <path
+                      d="M5 5l6 6M11 5l-6 6"
+                      fill="none"
+                      stroke="var(--color-mist-500)"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  {item}
+                </li>
+              ))}
+            </ul>
+
+            <Link href="/roadmap" className="btn btn-ghost btn-sm mt-7">
+              See what is being built, and in what order
+            </Link>
           </Reveal>
         </div>
       </section>

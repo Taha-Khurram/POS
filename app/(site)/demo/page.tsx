@@ -13,19 +13,19 @@ export const metadata: Metadata = {
 const EXPECT = [
   {
     title: "Thirty minutes, your rate list",
-    copy: "Send a spreadsheet, an old export, or photos of your price board and we will have it loaded before the call starts.",
+    copy: "Send a spreadsheet, an old export, or photos of your price board and we will have it loaded before the call starts. You will watch Flo ring up your own items at your own rates.",
   },
   {
     title: "In Urdu or English",
-    copy: "Everyone who runs demos here has worked a counter. Ask the awkward questions in whichever language is easier.",
+    copy: "Ask the awkward questions in whichever language is easier — including what the software cannot do.",
   },
   {
-    title: "FBR sorted on the call",
-    copy: "We will show you exactly what your receipt looks like with the fiscal invoice number and verification QR on it.",
+    title: "What is missing, said out loud",
+    copy: "Returns, discounts at the till and offline billing are not built yet. We will tell you on the call rather than let you find out in week two.",
   },
   {
     title: "A real number in rupees",
-    copy: "Branches, registers, and hardware priced out — Rs 5,000 or Rs 10,000 per branch, in writing, the same day.",
+    copy: "Counters and staff priced out — Rs 5,000 or Rs 10,000 a month, in writing, the same day.",
   },
 ];
 

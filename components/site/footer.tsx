@@ -15,7 +15,7 @@ const COLUMNS = [
     heading: "Company",
     links: [
       { label: "Careers", href: "/careers" },
-      { label: "Resources", href: "/resources" },
+      { label: "Roadmap", href: "/roadmap" },
       { label: "Log in", href: "/login" },
     ],
   },
@@ -35,9 +35,9 @@ export function Footer() {
               <FloMark className="h-7 w-auto" />
             </Link>
             <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
-              Point of sale for Pakistani shops and restaurants — FBR-ready
-              billing, your regulars on file, and stock that adds up. Lahore and
-              Karachi.
+              Point of sale for Pakistani shops — billing at the counter, your
+              own item list, your regulars on file, and the day&rsquo;s books
+              before you reach home. Lahore.
             </p>
           </div>
 

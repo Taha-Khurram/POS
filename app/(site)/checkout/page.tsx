@@ -57,8 +57,11 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
             <div><label htmlFor="shop_type" className="label">Shop type</label><select id="shop_type" name="shop_type" className="field" defaultValue="kiryana"><option value="kiryana">Kiryana</option><option value="restaurant">Restaurant</option><option value="bakery">Bakery</option><option value="retail">Retail</option><option value="other">Other</option></select></div>
             <div><label htmlFor="plan_code" className="label">Plan</label><select id="plan_code" name="plan_code" className="field" defaultValue={plans[0]?.code ?? "standard"}>{plans.map((plan) => <option key={plan.code} value={plan.code}>{plan.name} · Rs {Number(plan.list_price).toLocaleString("en-PK")}</option>)}</select></div>
             <div><label htmlFor="billing_cycle" className="label">Billing cycle</label><select id="billing_cycle" name="billing_cycle" className="field" defaultValue="monthly"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
-            <div><label htmlFor="branches" className="label">Branches</label><input id="branches" name="branches" type="number" min="1" className="field" defaultValue="1" /></div>
-            <div><label htmlFor="registers" className="label">Registers</label><input id="registers" name="registers" type="number" min="1" className="field" defaultValue="1" /></div>
+            {/* One shop. `branches` is still sent, because the order row and
+                the price both take it — but Flo runs a single branch today and
+                a field offering more is a promise the software cannot keep. */}
+            <input type="hidden" name="branches" value="1" />
+            <div><label htmlFor="registers" className="label">Counters</label><input id="registers" name="registers" type="number" min="1" max="4" className="field" defaultValue="1" /></div>
           </div>
           <button type="submit" className="btn btn-primary mt-7">Create payment order</button>
         </form>

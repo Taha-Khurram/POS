@@ -1,24 +1,17 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-
 import Link from "next/link";
 
 import { Starfield } from "./starfield";
-import { DashboardMock } from "./dashboard-mock";
 import { DashboardShot } from "./dashboard-shot";
 
 /**
- * The hero shows a photograph of the real console — but only once someone has
- * taken one. `npm run shots` writes it; until then the hand-built replica
- * stands in, so a fresh clone never serves a broken homepage.
+ * The hero shows a photograph of the real console, written by `npm run shots`
+ * and committed under `public/shots/`.
  *
- * Once the shots are committed, this branch and the `DashboardMock` import can
- * both go: it is the only thing still pulling `CountUp` and `SalesChart` into
- * the landing page's bundle, and neither is doing anything behind a PNG.
+ * A hand-built replica used to stand in behind an `existsSync` check, and it is
+ * gone: a drawing of your own product drifts the moment the product moves, and
+ * drifts silently, because nothing links the two files. Re-run the script after
+ * a visual change and the page is honest again in twenty seconds.
  */
-const HAS_SHOT = existsSync(
-  path.join(process.cwd(), "public", "shots", "dashboard-dark.png"),
-);
 
 /** Above-the-fold copy animates on load, so entrances are plain CSS delays. */
 const entrance = (delay: number) => ({
@@ -62,16 +55,16 @@ export function Hero() {
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="display" style={entrance(80)}>
             <span className="text-gradient">Rush hour</span> ready.
-            <br className="hidden sm:block" /> FBR ready.
+            <br className="hidden sm:block" /> Books that agree.
           </h1>
 
           <p
             className="lede mx-auto mt-6 max-w-xl"
             style={entrance(260)}
           >
-            The point of sale built for Pakistani counters — FBR digital
-            invoicing, stock that adds up, cash, card, Raast and wallet
-            payments, all in one screen your staff learns in a day.
+            The point of sale built for Pakistani counters — scan or type in
+            Urdu, a numbered receipt for every bill, and the real profit on
+            every item. One screen your staff learns in a day.
           </p>
 
           <div
@@ -92,7 +85,7 @@ export function Hero() {
           className="relative mx-auto mt-16 max-w-[980px] sm:mt-20"
           style={entrance(600)}
         >
-          {HAS_SHOT ? <DashboardShot /> : <DashboardMock />}
+          <DashboardShot />
         </div>
       </div>
     </section>

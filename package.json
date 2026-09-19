@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "doctor": "node scripts/doctor.mjs",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "demo:shop": "node scripts/demo-shop.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

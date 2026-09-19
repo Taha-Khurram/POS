@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Reveal } from "@/components/motion/reveal";
 import { PageHeader } from "@/components/site/page-header";
+import { AlsoInTheBox, ProductTour } from "@/components/site/product-tour";
 import { Capabilities } from "@/components/site/capabilities";
 import { Foundation } from "@/components/site/foundation";
 import { Cta } from "@/components/site/cta";
@@ -10,78 +11,73 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Products",
   description:
-    "Billing, payments, stock, customers, staff, FBR compliance, and reporting — the modules that run a Pakistani counter and everything behind it.",
+    "The six screens of Flo: the register, sales history, products and stock, customers, staff and permissions, and the dashboard. Everything on this page is photographed from the working software.",
 };
 
+/**
+ * Six modules, and they are the six a signed-in shop actually sees in the rail.
+ * The seventh card names what is not built rather than leaving a shopkeeper to
+ * find out on the day they tap it.
+ */
 const MODULES = [
   {
-    name: "Billing",
+    name: "Register",
     tag: "On the counter",
-    copy: "A register your staff picks up in one shift. Fast item search in English or Urdu, weight and carton sales, returns, and holds — without hunting through menus.",
+    copy: "Scan a barcode, or type three letters of the English or Urdu name. One line per item, a running total, and a receipt off the roll.",
     points: [
-      "Works offline through power cuts",
-      "Sell by piece, kilo, carton, or plate",
-      "Kitchen and bakery print routing",
+      "Loose goods by weight, packets and cartons by the piece",
+      "Cash with change worked out, or card",
+      "A regular attached to the bill — always optional",
     ],
   },
   {
-    name: "Payments",
-    tag: "At the counter",
-    copy: "Cash, card, Raast QR, Easypaisa, and JazzCash settle into one day-end figure, so the drawer and the bank statement finally agree.",
+    name: "Sales history",
+    tag: "After the sale",
+    copy: "Every bill the shop has rung up, searchable by number, customer, phone or amount — and a day-close view that counts one drawer against one row.",
     points: [
-      "Raast and wallet QR on the receipt",
-      "Card terminals via 1LINK acquirers",
-      "Split a bill across cash and wallet",
+      "Narrow by counter, by cashier, by cash or card",
+      "Open a bill, look at its lines, print it again marked DUPLICATE",
+      "Export what is on screen to CSV",
     ],
   },
   {
-    name: "Stock",
+    name: "Products & stock",
     tag: "In the store",
-    copy: "Counts that stay honest between deliveries, with wastage, expiry, and supplier rates tracked per branch.",
+    copy: "Your own item list: barcode, SKU, Urdu name, unit, supplier, tax rate, what it costs you and what you sell it for — with the margin worked out beside them.",
     points: [
-      "Recipe and BOM depletion",
-      "Expiry and batch tracking",
-      "Supplier rate history per item",
+      "A low-stock alert set per item, not one number for the shop",
+      "Departments and categories you name yourself",
+      "Bring a rate list in as CSV, checked row by row",
     ],
   },
   {
     name: "Customers",
     tag: "For regulars",
-    copy: "The register book, kept properly. A name, a number, and every bill they have been on — so the new rate list goes to the people who actually buy from you.",
+    copy: "The register book, kept properly. A name, a number, and every bill they have been on — so you can tell a regular from a walk-in without remembering a face.",
     points: [
-      "Found by name or phone at the till",
-      "Every bill attached to the customer",
-      "The note you would have written in the margin",
+      "The phone is the identity, so one number is one person",
+      "Found at the till mid-queue",
+      "Their own page shows what they have actually bought",
     ],
   },
   {
     name: "Staff",
-    tag: "On the roster",
-    copy: "Attendance, permissions, and shift-wise cash accountability that match how the day actually ran.",
+    tag: "Behind the till",
+    copy: "Add a cashier or a store manager and Flo mints a work email and a password to read out. Every bill records who rang it up.",
     points: [
-      "PIN-level permissions and discount limits",
-      "Attendance and overtime records",
-      "Shift-wise cash and short reports",
+      "Assign somebody to a counter",
+      "Suspend an account the day somebody leaves",
+      "One owner per shop, and this screen cannot make a second",
     ],
   },
   {
-    name: "FBR & tax",
-    tag: "For compliance",
-    copy: "Fiscal invoice numbers and verification QR codes printed on every bill, filed as you sell — plus the provincial service-tax returns for restaurants.",
+    name: "Settings",
+    tag: "Once, at setup",
+    copy: "Your currency and how it prints, your timezone, and the hour your trading day ends — so a shop that shuts at 1am keeps its last hour on the right day.",
     points: [
-      "FBR POS integration with IRIS",
-      "Offline invoices queue and post later",
-      "PRA, SRB, and KPRA service tax",
-    ],
-  },
-  {
-    name: "Reporting",
-    tag: "After closing",
-    copy: "One number per question. Sales by hour, by item, by cashier, and by branch — on your phone before you reach home.",
-    points: [
-      "Hour-by-hour sales heatmap",
-      "Branch comparisons across cities",
-      "Daily WhatsApp closing summary",
+      "A counter each for the front and the back, with its own receipt series",
+      "What a cashier may do, and the discount ceiling they stop at",
+      "A line of your own at the foot of every receipt",
     ],
   },
 ];
@@ -94,10 +90,10 @@ export default function ProductsPage() {
         title={
           <>
             Everything the counter needs,{" "}
-            <span className="text-gradient">nothing it doesn&rsquo;t</span>
+            <span className="text-gradient">and nothing it doesn&rsquo;t</span>
           </>
         }
-        lede="Seven modules sharing one catalog, one customer list, and one set of numbers — so the register, the store, the tax file, and the owner&rsquo;s phone never disagree."
+        lede="Six screens sharing one item list, one customer list, and one set of numbers — so the register, the store room and the owner&rsquo;s phone never disagree."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -142,6 +138,9 @@ export default function ProductsPage() {
               </Reveal>
             ))}
 
+            {/* The card that says what is missing. It is on the products page
+                on purpose: a shopkeeper who was going to ask on the call should
+                find the answer before it. */}
             <Reveal
               className="relative flex min-h-[220px] flex-col justify-between overflow-hidden rounded-[22px] border border-iris-200/25 bg-gradient-to-br from-iris-500 via-iris-600 to-iris-700 p-6 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.28),0_30px_70px_-34px_rgb(79_70_229/0.85)]"
               delay={MODULES.length * 90}
@@ -151,27 +150,30 @@ export default function ProductsPage() {
                 aria-hidden
                 className="absolute -right-12 -top-14 h-48 w-48 rounded-full bg-white/20 blur-3xl"
               />
-              <h2 className="relative font-display text-[1.25rem] font-bold leading-tight text-white">
-                Use the hardware
-                <br />
-                you already have.
-              </h2>
-              <p className="relative mt-3 text-[0.8125rem] leading-relaxed text-white/80">
-                Flo runs on any Android tablet, billing terminal, or shop
-                computer. Need the full counter kit with printer, scanner, and
-                drawer? We ship it configured anywhere in Pakistan.
-              </p>
+              <div className="relative">
+                <h2 className="font-display text-[1.25rem] font-bold leading-tight text-white">
+                  What is not here yet
+                </h2>
+                <p className="mt-3 text-[0.8125rem] leading-relaxed text-white/85">
+                  Returns, discounts at the till, held bills, shift close, the
+                  reports module, and billing while the internet is down. They
+                  are being built in that order, and none of them are on this
+                  page pretending otherwise.
+                </p>
+              </div>
               <Link
-                href="/demo"
+                href="/roadmap"
                 className="btn btn-ghost btn-sm relative mt-5 self-start border-white/40 bg-white/10 text-white"
               >
-                Talk to us
+                See the roadmap
               </Link>
             </Reveal>
           </div>
         </div>
       </section>
 
+      <ProductTour />
+      <AlsoInTheBox />
       <Capabilities />
       <Foundation />
       <Cta />

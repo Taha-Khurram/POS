@@ -8,7 +8,7 @@ const LINKS = [
   { label: "Products", href: "/products" },
   { label: "Solutions", href: "/solutions" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Resources", href: "/resources" },
+  { label: "Roadmap", href: "/roadmap" },
 ];
 
 const entrance = (delay: number) => ({

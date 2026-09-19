@@ -3,10 +3,10 @@ import Link from "next/link";
 import { Reveal } from "@/components/motion/reveal";
 
 const PILLARS = [
-  { title: "Billing", copy: "Cash, card, Raast, or wallet" },
-  { title: "Stock", copy: "Every carton and kilo accounted for" },
+  { title: "Billing", copy: "Cash or card, a numbered receipt either way" },
+  { title: "Stock", copy: "Your own list, with what each line costs you" },
   { title: "Customers", copy: "The regulars, and what they buy" },
-  { title: "FBR", copy: "Invoices filed as they are printed" },
+  { title: "The books", copy: "Every bill findable, every drawer countable" },
 ];
 
 /** Traces run from the card block (left edge) into the chip's left pads. */
@@ -40,8 +40,8 @@ export function UnifiedPlatform() {
           </Reveal>
           <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
             From the first bill of the morning to the cash count at closing —
-            one screen for sales, stock, customers, and everything the tax
-            people ask for.
+            one item list, one customer list, and one set of numbers, so the
+            counter and the back office never disagree.
           </Reveal>
         </div>
 
@@ -131,8 +131,10 @@ export function UnifiedPlatform() {
                   aria-hidden
                   className="absolute inset-0 bg-[radial-gradient(circle_at_30%_22%,rgb(255_255_255/0.45),transparent_60%)]"
                 />
+                {/* One chip, because there is one database under all four
+                    cards — not four products with an integration between. */}
                 <span className="relative font-display text-[clamp(1.75rem,5vw,2.75rem)] font-extrabold tracking-tight text-white">
-                  AI
+                  Flo
                 </span>
               </div>
             </div>

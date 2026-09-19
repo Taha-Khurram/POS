@@ -18,8 +18,8 @@ const SECTIONS = [
     title: "What we collect",
     body: [
       "Account data you give us: the names, email addresses, and mobile numbers of the people who administer your Flo account, plus your business name, NTN or STRN, branch addresses, and billing details.",
-      "Transaction data produced by your registers: line items, totals, sales tax, discounts, returns, timestamps, the fiscal invoice number issued for each bill, and the register and staff PIN that recorded it. Card numbers never touch our servers — the terminal tokenises them and we store only the token, the last four digits, and the card scheme.",
-      "Customer data you choose to hold in Flo: names, mobile numbers, addresses, loyalty points, and order history, entered either by your staff or by a customer at the counter.",
+      "Transaction data produced by your counters: line items, quantities, totals, the sales tax inside them, timestamps, the receipt number issued for each bill, and which counter and which staff account recorded it. Card numbers never touch our servers — a card sale is recorded as the method it was paid by and nothing more, because the payment is settled on your own machine.",
+      "Customer data you choose to hold in Flo: names, mobile numbers, addresses, a free-text note, and the bills that customer has been attached to, entered by your staff at the counter.",
       "Product and site data: pages viewed on this website, device and browser type, and in-app events such as which reports are opened. We use this to work out which parts of the product need attention.",
     ],
   },
@@ -27,9 +27,9 @@ const SECTIONS = [
     id: "why-we-hold-it",
     title: "Why we hold it",
     body: [
-      "To run the service you pay for — billing, syncing catalogs across branches, producing reports, and keeping registers working offline and back in sync after a power cut.",
-      "To meet legal obligations, including the invoice and record-keeping requirements of the Sales Tax Act 1990 and the FBR POS integration rules, provincial revenue authority filings, and the retention periods our payment partners are held to by the State Bank of Pakistan.",
-      "To support you: diagnosing a failed card payment, a rejected fiscal invoice, or a stock discrepancy sometimes means looking at the records behind it.",
+      "To run the service you pay for — recording sales, holding your item and customer lists, and producing the day close and the dashboard you read them from.",
+      "To meet legal obligations, including the record-keeping requirements of the Sales Tax Act 1990. Flo is not integrated with the FBR POS system and does not report your invoices to any revenue authority.",
+      "To support you: working out why a sale did not save, or why a figure on a report is not the figure you expected, sometimes means looking at the records behind it.",
       "To improve the product, using aggregated and de-identified data. We do not sell personal data, and we do not use your customers' data to advertise to them.",
     ],
   },
@@ -37,8 +37,7 @@ const SECTIONS = [
     id: "who-sees-it",
     title: "Who else sees it",
     body: [
-      "The Federal Board of Revenue and the relevant provincial revenue authority, which receive the invoice data that the law requires a registered POS to report.",
-      "Payment partners — acquiring banks, 1LINK, Raast, and wallet providers — which receive what they need to authorise and settle a payment.",
+      "Nobody, for your sales data. Flo does not report your invoices to the Federal Board of Revenue or any provincial authority, and it does not process payments — so no acquirer, no 1LINK, no Raast and no wallet provider receives anything from us.",
       "Infrastructure providers who host the service under contract and are barred from using the data for anything else.",
       "Authorities, where a valid legal request compels disclosure. Where we are permitted to tell you about such a request, we will.",
       "Nobody else. We do not share or sell data to advertisers, data brokers, or list resellers.",

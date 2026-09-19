@@ -8,10 +8,10 @@ import { Reveal } from "@/components/motion/reveal";
  */
 const TAGS = [
   { text: "Iftar rush handled", left: 32, drop: 92, duration: 6.2, delay: 0.6, accent: true },
-  { text: "Raast QR cleared", left: 76, drop: 140, duration: 6.6, delay: 0.3, accent: false },
-  { text: "FBR invoice filed", left: 12, drop: 186, duration: 5.4, delay: 0, accent: false },
+  { text: "Barcode scanned", left: 76, drop: 140, duration: 6.6, delay: 0.3, accent: false },
+  { text: "Quarter kilo weighed", left: 12, drop: 186, duration: 5.4, delay: 0, accent: false },
   { text: "Regular looked up", left: 52, drop: 232, duration: 5.1, delay: 0.9, accent: false },
-  { text: "Cash drawer tallied", left: 24, drop: 276, duration: 5.8, delay: 1.1, accent: false },
+  { text: "Drawer counted", left: 24, drop: 276, duration: 5.8, delay: 1.1, accent: false },
 ];
 
 export function RushCard() {
@@ -34,15 +34,16 @@ export function RushCard() {
               <h2 className="heading">
                 The rush won&rsquo;t
                 <br />
-                wait for the light
+                wait for the screen
               </h2>
               <p className="lede mt-4 max-w-sm">
-                Iftar, the Sunday dinner crowd, the 7pm kiryana queue. Flo keeps
-                billing when the power cuts and the internet drops, then syncs
-                every invoice the moment it&rsquo;s back.
+                Iftar, the Sunday crowd, the 7pm kiryana queue. Scan it, or type
+                three letters of the Urdu name. Loose goods go on by the quarter
+                kilo, the tax is already inside the price, and the total is
+                never a second screen away.
               </p>
               <Link href="/solutions" className="btn btn-ghost btn-sm mt-6">
-                See Flo by business type
+                See who Flo is for
               </Link>
             </div>
 

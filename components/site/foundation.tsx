@@ -1,6 +1,6 @@
 import { Reveal } from "@/components/motion/reveal";
 
-type Glyph = "insights" | "catalog" | "integrations" | "workflows" | "ai";
+type Glyph = "insights" | "catalog" | "integrations" | "workflows" | "receipt";
 
 type Pillar = {
   glyph: Glyph;
@@ -14,14 +14,14 @@ type Pillar = {
 const ROW_ONE: Pillar[] = [
   {
     glyph: "insights",
-    title: "Insights",
-    copy: "See which hours and which items pay the rent.",
+    title: "Profit",
+    copy: "The cost is stamped on the line as it sells.",
     tilt: -7,
   },
   {
     glyph: "catalog",
     title: "Catalog",
-    copy: "Rates, deals, sizes, and units in one place.",
+    copy: "Rates, units, Urdu names, and your own aisles.",
     tilt: 7,
   },
 ];
@@ -29,21 +29,21 @@ const ROW_ONE: Pillar[] = [
 const ROW_TWO: Pillar[] = [
   {
     glyph: "integrations",
-    title: "Integrations",
-    copy: "FBR, Raast, Easypaisa, JazzCash, Foodpanda.",
+    title: "Import",
+    copy: "Your rate list in as CSV, checked row by row.",
     tilt: -6,
     accent: true,
   },
   {
     glyph: "workflows",
-    title: "Workflows",
-    copy: "Automate deals, returns, and day-end closing.",
+    title: "Permissions",
+    copy: "What a cashier may do, decided once.",
     tilt: 0,
   },
   {
-    glyph: "ai",
-    title: "AI",
-    copy: "Knows your season, from Ramadan to Eid.",
+    glyph: "receipt",
+    title: "Receipts",
+    copy: "One numbered series per counter, per day.",
     tilt: 6,
   },
 ];
@@ -59,6 +59,16 @@ export function Foundation() {
       <div className="shell relative">
         <Reveal as="h2" className="heading text-center">
           Built for how Pakistan sells
+        </Reveal>
+
+        <Reveal
+          as="p"
+          className="lede mx-auto mt-4 max-w-lg text-center"
+          delay={120}
+        >
+          Rupees, Urdu on the shelf label, loose goods off a scale, and a
+          trading day that ends when you pull the shutter down — not at
+          midnight.
         </Reveal>
 
         <div className="mt-14 flex flex-col items-center lg:mt-20">
@@ -222,13 +232,15 @@ function FoundationGlyph({
               <path d="M9.6 7.5h3.4a3 3 0 0 1 3 3v3.4" {...stroke} />
             </>
           )}
-          {kind === "ai" && (
+          {kind === "receipt" && (
             <>
+              {/* A roll with a torn foot — the zig-zag is what reads as paper
+                  at 24 px, more than any amount of detail above it. */}
               <path
-                d="M12 4.5l1.7 4.3 4.3 1.7-4.3 1.7L12 16.5l-1.7-4.3L6 10.5l4.3-1.7L12 4.5Z"
+                d="M6.5 3.5h11v16l-1.8-1.2-1.9 1.2-1.8-1.2-1.9 1.2-1.8-1.2L6.5 19.5v-16Z"
                 {...stroke}
               />
-              <path d="M18 17.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8.8-1.9Z" {...stroke} />
+              <path d="M9.5 8h5M9.5 11.5h5M9.5 15h3" {...stroke} />
             </>
           )}
         </svg>

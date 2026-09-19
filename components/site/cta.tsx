@@ -50,9 +50,9 @@ export function Cta() {
         </Reveal>
 
         <Reveal as="p" className="lede mx-auto mt-5 max-w-md" delay={200}>
-          Send us your price list or menu and we&rsquo;ll load it before the
-          call — you&rsquo;ll see Flo ringing up your own items, in Urdu or
-          English.
+          Send us your rate list and we&rsquo;ll load it before the call —
+          you&rsquo;ll see Flo ringing up your own items at your own rates, with
+          the Urdu names on them.
         </Reveal>
 
         <Reveal

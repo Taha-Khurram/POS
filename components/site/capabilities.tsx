@@ -1,7 +1,12 @@
+import Image from "next/image";
+
 import { Reveal } from "@/components/motion/reveal";
 
-import { FloMark } from "./flo-mark";
-
+/**
+ * Four claims, and each one is a thing the software does rather than a thing a
+ * category does. They were chosen the same way: read the code, take the part a
+ * shopkeeper would care about, and say only that.
+ */
 export function Capabilities() {
   return (
     <section className="section pt-0">
@@ -25,15 +30,16 @@ export function Capabilities() {
 
               <div className="relative">
                 <h3 className="font-display text-[1.4rem] font-bold leading-tight text-white sm:text-[1.6rem]">
-                  Every branch,
+                  The day&rsquo;s figures,
                   <br />
-                  on one screen,
+                  before you
                   <br />
-                  from anywhere.
+                  reach home.
                 </h3>
                 <p className="mt-4 max-w-[16rem] text-[0.8125rem] leading-relaxed text-white/80">
-                  Sales, cash, stock, and customers across all your outlets —
-                  live on your phone, whether you are at the shop or not.
+                  Sales, profit, what it cost you and the margin between them —
+                  for today, this month, or any range you pick. On the phone in
+                  your pocket, not only on the shop computer.
                 </p>
               </div>
 
@@ -55,7 +61,7 @@ export function Capabilities() {
               </div>
             </Reveal>
 
-            {/* Tilted product preview */}
+            {/* Tilted product preview — the real console, photographed */}
             <Reveal
               className="panel relative min-h-[290px] overflow-hidden rounded-[22px]"
               delay={110}
@@ -68,8 +74,15 @@ export function Capabilities() {
               />
 
               <div className="absolute inset-0 grid place-items-center [perspective:1200px]">
-                <div className="w-[118%] translate-x-[8%] translate-y-[6%] [transform:rotateX(16deg)_rotateY(-19deg)_rotateZ(7deg)] transition-transform duration-[900ms] ease-[var(--ease-out-soft)] hover:[transform:rotateX(9deg)_rotateY(-11deg)_rotateZ(4deg)]">
-                  <MiniDashboard />
+                <div className="w-[118%] translate-x-[8%] translate-y-[6%] overflow-hidden rounded-xl border border-ink-700 shadow-[0_40px_90px_-40px_rgb(33_21_102/0.35)] [transform:rotateX(16deg)_rotateY(-19deg)_rotateZ(7deg)] transition-transform duration-[900ms] ease-[var(--ease-out-soft)] hover:[transform:rotateX(9deg)_rotateY(-11deg)_rotateZ(4deg)]">
+                  <Image
+                    src="/shots/dashboard-light.png"
+                    width={2560}
+                    height={1640}
+                    sizes="(min-width: 1024px) 700px, 100vw"
+                    className="block h-auto w-full"
+                    alt="The Flo dashboard, showing sales, profit, cost of goods and margin for the last seven days."
+                  />
                 </div>
               </div>
             </Reveal>
@@ -77,7 +90,7 @@ export function Capabilities() {
 
           {/* ---------- Row two ---------- */}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.84fr)]">
-            {/* Customer updates */}
+            {/* What comes off the roll */}
             <Reveal
               className="panel relative min-h-[300px] overflow-hidden rounded-[22px] p-7"
               y={34}
@@ -87,70 +100,50 @@ export function Capabilities() {
                 className="glow -left-16 top-6 h-56 w-56 bg-iris-600/22"
               />
 
-              <div className="relative grid gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] sm:items-end sm:gap-4">
+              <div className="relative grid gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] sm:items-center sm:gap-4">
                 <div className="order-2 sm:order-1">
                   <h3 className="font-display text-[1.3rem] font-bold leading-tight sm:text-[1.5rem]">
-                    Updates on WhatsApp,
+                    A receipt that
                     <br />
-                    where customers read.
+                    cannot be argued with.
                   </h3>
-                  <p className="mt-3 max-w-[18rem] text-[0.8125rem] leading-relaxed text-mist-400">
-                    Order ready, parcel on the way, new rate list — sent from
-                    the counter, in Urdu or English.
+                  <p className="mt-3 max-w-[19rem] text-[0.8125rem] leading-relaxed text-mist-400">
+                    Each counter runs its own numbered series, claimed in the
+                    same instant the sale is saved — so there are no holes and
+                    two tablets on one till can never print the same number.
                   </p>
                 </div>
 
                 <div className="order-1 grid gap-2.5 sm:order-2">
-                  {MESSAGES.map((message, index) => (
+                  {ROLLS.map((roll, index) => (
                     <Reveal
-                      key={message.id}
-                      className="glass rounded-2xl p-3 transition-transform duration-500 ease-[var(--ease-out-soft)] hover:-translate-y-1"
+                      key={roll.number}
+                      className="glass rounded-2xl px-4 py-3"
                       delay={200 + index * 130}
                       x={26}
                       y={10}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className="rounded-full px-2 py-[3px] font-display text-[0.625rem] font-semibold"
-                          style={{
-                            backgroundColor: message.tint,
-                            color: "#fff",
-                          }}
-                        >
-                          {message.status}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-mono text-[0.6875rem] text-mist-200">
+                          {roll.number}
                         </span>
-                        <span className="text-[0.5625rem] text-mist-500">
-                          {message.id} · {message.ago}
+                        <span
+                          className="rounded-full px-2 py-[3px] font-display text-[0.5625rem] font-semibold uppercase tracking-[0.1em]"
+                          style={{ backgroundColor: roll.tint, color: "#fff" }}
+                        >
+                          {roll.stamp}
                         </span>
                       </div>
-
-                      <p className="mt-2 text-[0.6875rem] leading-relaxed text-mist-300">
-                        {message.body}
+                      <p className="mt-2 text-[0.6875rem] leading-relaxed text-mist-400">
+                        {roll.note}
                       </p>
-
-                      <div className="mt-2.5 flex items-center gap-2">
-                        <span
-                          className="grid h-5 w-5 place-items-center rounded-full font-display text-[0.5rem] font-bold text-ink-900"
-                          style={{ background: message.avatar }}
-                        >
-                          {message.initials}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-[0.5625rem] font-medium text-mist-200">
-                            {message.name}
-                          </span>
-                          <span className="block truncate text-[0.5rem] text-mist-500">
-                            {message.contact}
-                          </span>
-                        </span>
-                      </div>
                     </Reveal>
                   ))}
                 </div>
               </div>
             </Reveal>
 
-            {/* AI manager */}
+            {/* The price the shop set */}
             <Reveal
               className="panel spotlight relative flex min-h-[300px] flex-col justify-between overflow-hidden rounded-[22px] p-7"
               delay={110}
@@ -163,35 +156,31 @@ export function Capabilities() {
 
               <div className="relative">
                 <h3 className="font-display text-[1.3rem] font-bold leading-tight sm:text-[1.45rem]">
-                  Flo AI orders stock like your best munshi —{" "}
-                  <span className="text-iris-600">on its own.</span>
+                  Nobody types a price{" "}
+                  <span className="text-iris-600">into a bill.</span>
                 </h3>
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-mist-400">
-                  Sees what is running out before Eid, drafts the purchase
-                  order, and flags the supplier who quietly raised his rate.
+                  The tablet sends item numbers and quantities. The rate, the
+                  tax and the total are worked out again on the server from your
+                  own list, every single time — and the cost of each line is
+                  stamped on it as it sells, so last month&rsquo;s profit does
+                  not move when a supplier raises his rate next week.
                 </p>
               </div>
 
-              <div className="relative mt-7 flex items-center gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-iris-200/40 bg-gradient-to-br from-iris-400 to-iris-700 font-display text-[0.6875rem] font-extrabold text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.3)]">
-                  AI
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-iris-400 to-iris-200"
-                      style={{
-                        width: "72%",
-                        transformOrigin: "left",
-                        animation:
-                          "bar-grow 1.4s var(--ease-out-soft) 0.5s both",
-                      }}
+              <div className="relative mt-7 grid gap-2">
+                {GUARDS.map((guard) => (
+                  <div
+                    key={guard}
+                    className="flex items-start gap-2.5 text-[0.75rem] leading-relaxed text-mist-300"
+                  >
+                    <span
+                      aria-hidden
+                      className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-mint-400"
                     />
+                    {guard}
                   </div>
-                  <p className="mt-2 text-[0.625rem] text-mist-500">
-                    6 orders drafted · 2 awaiting your approval
-                  </p>
-                </div>
+                ))}
               </div>
             </Reveal>
           </div>
@@ -216,106 +205,30 @@ const SPARKLES = [
   { x: 60, y: 22, r: 2, dur: 3.5, delay: 0.9 },
 ];
 
-const MESSAGES = [
+/** The three things that can be printed, and what each one says about itself. */
+const ROLLS = [
   {
-    id: "#1042",
-    status: "Ready",
+    number: "ALM-260919-0034",
+    stamp: "Original",
     tint: "#3b28cc",
-    ago: "2m",
-    body: "Your parcel is ready at the counter — thanks for waiting.",
-    name: "Bilal Ahmed",
-    contact: "+92 300 842 1176",
-    initials: "BA",
-    avatar: "linear-gradient(135deg,#f472b6,#fbbf24)",
+    note: "Front counter, thirty-fourth bill of the trading day.",
   },
   {
-    id: "#1043",
-    status: "Preparing",
+    number: "ALM-260919-0034",
+    stamp: "Duplicate",
     tint: "#6f52dc",
-    ago: "7m",
-    body: "Karahi is on the fire — about ten minutes for your table.",
-    name: "Ayesha Siddiqui",
-    contact: "+92 321 455 9032",
-    initials: "AS",
-    avatar: "linear-gradient(135deg,#34d399,#9b85ea)",
+    note: "A reprint says so on the paper. A copy that looks original is a bill a customer can present twice.",
+  },
+  {
+    number: "UNSAVED-214703",
+    stamp: "Not recorded",
+    tint: "#e5484d",
+    note: "The connection died mid-sale. The shop keeps selling, and this one is not counted in the takings until it is.",
   },
 ];
 
-/** Static, lightweight stand-in for the product UI inside the bento cell. */
-function MiniDashboard() {
-  return (
-    <div className="panel overflow-hidden rounded-xl shadow-[0_40px_90px_-40px_rgb(33_21_102/0.30)]">
-      <div className="flex items-center justify-between border-b border-ink-700 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <FloMark className="h-3.5 w-auto" />
-        </div>
-        <div className="flex items-center gap-2 text-[0.4375rem] text-mist-500">
-          <span className="rounded-full bg-ink-800 px-1.5 py-[2px] text-mist-200">
-            Overview
-          </span>
-          <span>Bills</span>
-          <span>Stock</span>
-          <span>Customers</span>
-        </div>
-        <span className="h-3 w-3 rounded-full bg-gradient-to-br from-flare-400 to-sun-400" />
-      </div>
-
-      <div className="p-3">
-        <p className="font-display text-[0.6875rem] font-bold text-mist-50">
-          Assalam-o-alaikum, <span className="text-iris-600">Bilal</span>
-        </p>
-
-        <div className="mt-2 grid grid-cols-4 gap-1.5">
-          {[
-            { w: "22%", c: "var(--color-iris-700)" },
-            { w: "34%", c: "var(--color-iris-600)" },
-            { w: "46%", c: "var(--color-iris-500)" },
-            { w: "18%", c: "var(--color-mist-500)" },
-          ].map((bar) => (
-            <div key={bar.c} className="h-2 rounded-full bg-ink-800">
-              <div
-                className="h-full rounded-full"
-                style={{ width: bar.w, backgroundColor: bar.c }}
-              />
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] gap-2">
-          <div className="rounded-lg border border-ink-700 bg-ink-900 p-2">
-            {["Paid", "Returns", "Held"].map((row) => (
-              <div
-                key={row}
-                className="mt-1 flex items-center justify-between rounded bg-ink-800/70 px-1.5 py-1 first:mt-0"
-              >
-                <span className="text-[0.4375rem] text-mist-400">{row}</span>
-                <span className="text-[0.4375rem] font-semibold text-mist-50">
-                  {row === "Paid" ? "1234" : row === "Returns" ? "3" : "24"}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-lg border border-ink-700 bg-ink-900 p-2">
-            <svg viewBox="0 0 160 54" className="h-full w-full" aria-hidden>
-              <path
-                d="M2 40 C 20 34, 30 16, 46 22 S 74 44, 90 30 S 118 8, 134 18 S 152 30, 158 24"
-                fill="none"
-                stroke="var(--color-iris-600)"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-              <path
-                d="M2 22 C 22 30, 34 42, 52 36 S 76 16, 94 24 S 122 40, 158 34"
-                fill="none"
-                stroke="var(--color-mist-400)"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const GUARDS = [
+  "A cashier cannot edit a rate into the bill",
+  "Discounts only up to the ceiling you set",
+  "Every bill records which counter and which person",
+];

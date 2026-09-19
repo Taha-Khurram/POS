@@ -17,7 +17,16 @@ npm run lint    # eslint (flat config, next core-web-vitals + typescript)
 
 ```bash
 npm run doctor        # Supabase preflight: env, schema, bucket, JWT claims
+npm run demo:shop     # seed (or --drop) the demo shop the site is photographed from
+npm run shots         # photograph the running console into public/shots/
 ```
+
+`npm run shots` drives a live `npm run dev` and writes eleven PNGs of the real
+console. **Re-run it after any change to how `/app` looks**, or the marketing
+site starts showing a product that no longer exists. It signs in as the demo
+shop `npm run demo:shop` builds — a self-contained tenant, deletable in one
+command, so no screenshot ever carries a real person's email or a development
+account's "Test Product".
 
 There are no tests and no CI. `npm run lint` and `npm run build` are the only
 verification gates, and both must be green at the end of every part. `tsc` has
@@ -54,6 +63,10 @@ and fonts only — chrome belongs to the group.
   itself.
 - `components/site/` — page sections and site chrome (`nav`, `footer`, `hero`,
   `page-header`, `cta`, …). Composed by pages; not generic UI primitives.
+  `product-tour.tsx` and `dashboard-shot.tsx` render the PNGs in
+  `public/shots/`; nothing on the site redraws the console by hand any more, and
+  the replica that used to (`dashboard-mock.tsx`, `sales-chart.tsx`) is deleted
+  because it drifted silently every time `/app` moved.
 - `components/motion/` — the animation primitives: `Reveal`, `CountUp`, `Tilt`,
   and the `useInView` / `usePrefersReducedMotion` hooks.
 - `lib/` — server-only domain logic, each module opening with `import
@@ -138,8 +151,8 @@ first place.
   stay server components); everything below the fold wraps in `<Reveal>`, which
   shares one IntersectionObserver and toggles `.is-in` on `[data-reveal]`.
   Reduced motion is handled globally in `globals.css`, plus
-  `usePrefersReducedMotion()` for JS-driven animation (`CountUp`, `SalesChart`,
-  `Starfield`, `Tilt`). `app/layout.tsx` carries a `<noscript>` fallback that
+  `usePrefersReducedMotion()` for JS-driven animation (`CountUp`, `Starfield`,
+  `Tilt`). `app/layout.tsx` carries a `<noscript>` fallback that
   un-hides reveals — keep it working.
 - **Metadata.** `app/layout.tsx` sets a title template, so pages export a bare
   `title` ("Pricing", not "Pricing — Flo").
@@ -152,12 +165,29 @@ first place.
 
 ## Copy
 
-The voice is specific and local: rupee prices, FBR digital invoicing, the
-register book, load-shedding, named cities and shop types, occasional Urdu
-("Shukriya"). **There is no udhaar khata and no credit anywhere in Flo** —
-`0018` removed the last of it from the schema and the site, so no new copy may
-promise a balance, a limit or a reminder about money owed.
-Keep new copy concrete and in that register — no generic SaaS filler.
+The voice is specific and local: rupee prices, the register book,
+load-shedding, named cities and shop types, occasional Urdu ("Shukriya"). Keep
+new copy concrete and in that register — no generic SaaS filler.
+
+**The site may only claim what the code does.** It once promised FBR digital
+invoicing, Raast and wallet payments, offline billing, recipe depletion, kitchen
+printing, batch and expiry, size/colour variants, attendance and payroll, a
+multi-branch dashboard, WhatsApp campaigns, an AI that drafts purchase orders,
+six customer logos and a benchmark across 900 counters. None of it existed.
+Every one of those is gone, and the rule that replaced them is in
+`components/site/product-tour.tsx`: **a claim on the site must be visible in the
+screenshot beside it.** `/roadmap` is where anything not yet built belongs —
+named, ordered, and without an invented date. `PRODUCT-REPORT.md` holds the full
+before-and-after audit.
+
+**There is no udhaar khata and no credit anywhere in Flo** — `0018` removed the
+last of it from the schema and the site, so no new copy may promise a balance, a
+limit or a reminder about money owed.
+
+**`plans.features` is copy too.** `0020` flipped `stock_ledger`, `shift_close`,
+`offline_register`, `staff_pins`, `restaurant_mode`, `advanced_reports` and the
+multi-branch flags back to false, because a flag is a promise the console can be
+held to. Flip one back in the same migration that lands the feature.
 
 ## Next.js 16 notes
 
@@ -283,9 +313,6 @@ it off first. Variants are counted (`variant_count`) but not enumerated —
 and says so.
 
 ## Not built yet
-
-`app/(site)/demo/demo-form.tsx` swaps to a thank-you panel locally — nothing is
-sent anywhere. Wire it to a Server Action writing to `leads`.
 
 Sign-in is real, but deliberately narrow while the product is in private
 preview: `app/(auth)/login/actions.ts` holds an `ALLOWED_EMAILS` list of one
