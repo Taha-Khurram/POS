@@ -8,7 +8,6 @@ import {
   type Bill,
   type CartLine,
   type Counter,
-  type TenderId,
 } from "@/lib/pos/counter";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
@@ -45,12 +44,29 @@ export type Sale = {
    *  words "walk-in", which would be a line of paper saying nothing. */
   customer: string | null;
   bill: Bill;
-  tender: TenderId;
+  /**
+   * How it was settled — one row per tender, because `sale_tenders` is a
+   * one-to-many by design. The payment sheet writes exactly one today; a split
+   * bill must print both halves rather than the first one twice, and a reprint
+   * off the history prints back whatever was actually stored.
+   */
+  tenders: { method: string; amount: number }[];
   /** What the customer handed over. Null on a card sale — there is nothing to
-   *  count and no change to give. */
+   *  count and no change to give — and null on a reprint, because the notes in
+   *  the hand at the time were never written down. */
   tendered: number | null;
   change: number;
+  /**
+   * A second copy of a bill that has already been printed, taken off the sales
+   * history. Said on the roll, because a duplicate that looks like an original
+   * is a bill that can be presented twice for the same return.
+   */
+  reprint?: boolean;
 };
+
+/** The tender as the roll spells it. Upper case, because the customer checks
+ *  this line and the drawer is counted against it. */
+const writeMethod = (method: string) => method.toUpperCase();
 
 export function Receipt({
   sale,
@@ -60,11 +76,14 @@ export function Receipt({
 }: {
   sale: Sale;
   shop: ShopProfile;
-  counter: Counter;
+  /** Only the two fields that print. A reprint of a bill from a counter since
+   *  deleted has a name and no row behind it, and that still prints. */
+  counter: Pick<Counter, "name" | "receiptFooter">;
   settings: ShopSettings;
 }) {
   const money = moneyFormatter(settings);
-  const cash = sale.tender === "cash";
+  const only = sale.tenders.length === 1 ? sale.tenders[0] : null;
+  const cash = only?.method === "cash";
 
   return (
     <div className="pos-receipt">
@@ -107,8 +126,20 @@ export function Receipt({
         </p>
       ) : null}
 
+      {/* A duplicate is stamped, and stamped where the "not recorded" box goes
+          — the place a cashier's eye already lands. A reprint that looks like
+          an original is a bill a customer can present twice. */}
+      {sale.reprint ? (
+        <p className="mt-2 border border-dashed border-black px-1.5 py-1 text-center font-display text-[0.8125rem] font-bold uppercase">
+          Duplicate
+          <span className="mt-0.5 block text-[0.6875rem] leading-snug font-normal normal-case">
+            A copy of a bill already issued. Counted once in the takings.
+          </span>
+        </p>
+      ) : null}
+
       {/* ---- Which bill ---- */}
-      <dl className={sale.recorded ? undefined : "mt-2"}>
+      <dl className={sale.recorded && !sale.reprint ? undefined : "mt-2"}>
         <Row label="Bill" value={sale.receiptNo} mono />
         <Row label="Date" value={receiptStamp(sale.at, settings.timezone)} />
         <Row label="Counter" value={counter.name} />
@@ -177,7 +208,25 @@ export function Receipt({
           The line the customer checks and the line the drawer is counted
           against, so the method is spelled out rather than abbreviated. */}
       <dl>
-        <Row label="Paid by" value={cash ? "CASH" : "CARD"} />
+        {only ? (
+          <Row label="Paid by" value={writeMethod(only.method)} />
+        ) : sale.tenders.length === 0 ? (
+          // Nothing settled it. `record_sale` always writes a tender, so this
+          // is a bill from before that was true — and a blank line is a worse
+          // answer than saying so.
+          <Row label="Paid by" value="NOT RECORDED" />
+        ) : (
+          // Split. Every half printed, and the arithmetic left visible so the
+          // customer can check it adds to the total above.
+          sale.tenders.map((tender, index) => (
+            <Row
+              key={`${tender.method}-${index}`}
+              label={index === 0 ? "Paid by" : ""}
+              value={`${writeMethod(tender.method)}  ${money(tender.amount)}`}
+              money
+            />
+          ))
+        )}
 
         {cash && sale.tendered !== null ? (
           <>
@@ -186,7 +235,9 @@ export function Receipt({
           </>
         ) : null}
 
-        {!cash ? <Row label="Card" value="Approved on the machine" /> : null}
+        {only?.method === "card" ? (
+          <Row label="Card" value="Approved on the machine" />
+        ) : null}
       </dl>
 
       <Rule />

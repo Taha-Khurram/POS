@@ -301,7 +301,9 @@ export function Till({
       // happened, not a view onto rows that can change afterwards.
       customer: customer ? customer.name : null,
       bill,
-      tender,
+      // One tender, because the sheet takes one. A list all the same, so the
+      // roll already draws a split bill the day the sheet can settle one.
+      tenders: [{ method: tender, amount: bill.total }],
       tendered: given,
       change,
     });

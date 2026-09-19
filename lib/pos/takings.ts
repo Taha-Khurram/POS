@@ -2,7 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-import { round2, type TenderId } from "@/lib/pos/counter";
+import { round2 } from "@/lib/pos/counter";
 import { createClient } from "@/utils/supabase/server";
 
 /**
@@ -47,22 +47,16 @@ export type DayTakings = {
   cash: number;
   card: number;
   total: number;
-  /** The whole day's receipts, newest first. Capped — a day-end screen is not
-   *  a searchable history, and that is what `/app/sales` grows into. */
-  receipts: Receipt[];
 };
 
-export type Receipt = {
-  id: string;
-  receiptNo: string;
-  counterId: string | null;
-  at: string;
-  tender: TenderId | null;
-  total: number;
-};
-
-const RECEIPT_LIMIT = 200;
-
+/**
+ * The day's drawer count, and nothing else.
+ *
+ * This reader used to carry the day's receipts too, and the screen drew them
+ * under the counter table. They belong to the Bills tab now — it searches,
+ * pages, opens one and reprints it — and two lists of the same rows on one
+ * screen is how they drift apart.
+ */
 export async function getDayTakings(
   tenantId: string,
   businessDay: string,
@@ -76,7 +70,7 @@ export async function getDayTakings(
   // screen that opens and one a shopkeeper stops using.
   const { data } = await supabase
     .from("sales")
-    .select("id, counter_id, receipt_number, total, created_at, sale_tenders(method, amount)")
+    .select("counter_id, receipt_number, total, sale_tenders(method, amount)")
     .eq("tenant_id", tenantId)
     .eq("business_day", businessDay)
     .eq("status", "completed")
@@ -104,7 +98,6 @@ export async function getDayTakings(
   );
 
   const ORPHAN = "__deleted__";
-  const receipts: Receipt[] = [];
 
   for (const row of rows) {
     const key = row.counter_id ?? ORPHAN;
@@ -141,17 +134,6 @@ export async function getDayTakings(
       if (tender.method === "cash") entry.cash = round2(entry.cash + amount);
       else if (tender.method === "card") entry.card = round2(entry.card + amount);
     }
-
-    if (receipts.length < RECEIPT_LIMIT) {
-      receipts.push({
-        id: row.id,
-        receiptNo: row.receipt_number,
-        counterId: row.counter_id,
-        at: row.created_at,
-        tender: tenderOf(tenders),
-        total,
-      });
-    }
   }
 
   const all = [...byCounter.values()];
@@ -165,14 +147,5 @@ export async function getDayTakings(
     cash: round2(all.reduce((sum, entry) => sum + entry.cash, 0)),
     card: round2(all.reduce((sum, entry) => sum + entry.card, 0)),
     total: round2(all.reduce((sum, entry) => sum + entry.total, 0)),
-    receipts,
   };
-}
-
-/** How a bill was settled, for the receipt list. A split bill has no single
- *  answer, so it gets none rather than the first half of one. */
-function tenderOf(tenders: { method: string }[]): TenderId | null {
-  if (tenders.length !== 1) return null;
-  const method = tenders[0].method;
-  return method === "cash" || method === "card" ? method : null;
 }

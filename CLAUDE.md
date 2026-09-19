@@ -71,7 +71,10 @@ and fonts only — chrome belongs to the group.
   the rest. `lib/pos/customer.ts` is the same split again — the shape, the field
   limits, the phone normalisation and the matcher, shared by the Customers
   screen and the till — with `lib/pos/customers.ts` as its `server-only`
-  reader.
+  reader. And once more for `lib/pos/history.ts`, which holds the sales
+  history's window presets, its search matcher and its CSV writer — the page
+  resolves the window on the server and the filter bar draws the same list in
+  the browser — with `lib/pos/bills.ts` as its `server-only` reader.
 - `utils/supabase/` — `client.ts` (browser), `server.ts` (takes an awaited
   `cookies()` store), `middleware.ts` (`updateSession`), `admin.ts` (service
   role, server only). `proxy.ts` at the root calls `updateSession` on every
@@ -410,8 +413,53 @@ marketing site's pages to 80 mm too.
 
 `sales.business_day` is stamped once by the register from the shop's own
 `day_ends_at`, so a dhaba that shuts at 1 am gets its last hour on the day it
-opened and no report re-derives that window. `/app/sales` reads it: each
-counter's cash, card and total, then all counters together.
+opened and no report re-derives that window. Everything on `/app/sales` windows
+on that column and never on a timestamp.
 
-Still not real: there is no offline outbox, no shift, and no reprint or returns
-— `sync_outbox` and `shifts` exist in the schema and nothing writes them.
+Still not real: there is no offline outbox, no shift, and no returns —
+`sync_outbox` and `shifts` exist in the schema and nothing writes them.
+
+## Sales history
+
+`/app/sales` is two tabs over one table, because they are two questions.
+`?tab=history` — the default — is asked with a customer at the counter holding a
+receipt: find it, see what was on it, print it again. `?tab=day` is asked at
+11 pm with a drawer of notes in one hand: what should be in counter 1.
+`lib/pos/takings.ts` answers the second and now carries no receipt list at all,
+because two lists of the same rows on one screen is how they drift apart.
+
+**One read, then everything is instant.** `listBills` fetches a whole window of
+trading days in one round trip (capped at `HISTORY_MAX`, 2,000) and the panel
+searches, narrows and pages in the browser — the same bargain the item and
+customer lists strike, for the same reason: a round trip per keystroke over shop
+3G is a search box a shopkeeper stops using. Only the *window* navigates, so it
+lives in the URL and last Tuesday can be sent to an accountant as a link. When
+the cap bites the screen says so with the real count beside it — `count: "exact"`
+rides along on the same query for exactly that.
+
+The figures above the table are the figures **of the rows under it**, and the
+caption says which rows those are every time it is not all of them. That is what
+makes "what did counter 2 take in cash last week" three taps rather than a
+report, and the one thing a shopkeeper could not catch is a total quietly added
+up from something other than what is on screen.
+
+Opening a row is a sheet, not a navigation — a list somebody searched their way
+to must survive looking at a bill. Only the lines are fetched, by `loadBill` in
+`actions.ts`: a read through a Server Action, so the gate is the same
+`requireSession` + module check as every other entry point. The arrows in its
+footer, and the arrow keys, walk the filtered list.
+
+**Reprints are marked.** The sheet renders the register's own `Receipt` with
+`reprint: true`, which stamps DUPLICATE on the roll — a copy that looks like an
+original is a bill a customer can present twice. What it cannot reprint is the
+sales-tax line: `sale_lines` stores the price and not the rate behind it, so the
+duplicate carries the lines, the subtotal and the total exactly and breaks out no
+tax it would have to guess. `Sale.tenders` is a list rather than one `TenderId`
+for the same honesty — `sale_tenders` is one-to-many, and a split bill must print
+both halves the day the payment sheet can settle one.
+
+Export is client-side CSV of the filtered rows, not of the window: what is on
+screen is what comes out, the same bargain printing strikes. Money leaves as bare
+numbers with the currency in the heading, because a spreadsheet cannot add up
+"Rs 1,250.00", and the file opens with a BOM so Excel reads a customer named in
+Urdu as UTF-8.

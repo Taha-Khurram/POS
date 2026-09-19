@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { IconCheck, IconChevron } from "./icons";
 import { useDismiss } from "./use-dismiss";
+
+/** Clear air between the open menu and the edge of the window. A list that
+ *  ends flush against the bottom of the screen reads as cut off. */
+const MENU_GUTTER = 12;
+
+/** The tallest a menu ever gets — `.pos-select-menu`'s 17rem, in pixels. */
+const MENU_MAX = 272;
 
 export type SelectOption = {
   id: string;
@@ -80,6 +87,47 @@ export function Select({
   // Arrowing past the bottom of a scrolled list has to move the list. `block:
   // "nearest"` so a row already on screen is left exactly where it is.
   const listRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Which way the popup hangs, and how tall it may be.
+   *
+   * It is absolutely positioned, so a list taller than the room under the
+   * trigger does not simply hang over the page — it lengthens the document and
+   * hands the console a scrollbar that was not there a moment ago, which on a
+   * filter bar near the foot of a screen is most of the time. So measure the
+   * room on both sides when it opens: drop upwards when that is where the
+   * space is, and cap the height at whatever is actually there.
+   */
+  const [drop, setDrop] = useState({ up: false, max: MENU_MAX });
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const place = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const below = window.innerHeight - rect.bottom - MENU_GUTTER;
+      const above = rect.top - MENU_GUTTER;
+      // Only flip when down genuinely cannot hold the list and up holds more
+      // of it — a menu that jumps sides for a few pixels is worse than a
+      // short one.
+      const up = below < Math.min(MENU_MAX, above);
+
+      setDrop({ up, max: Math.max(0, Math.min(MENU_MAX, up ? above : below)) });
+    };
+
+    place();
+    window.addEventListener("resize", place);
+    // Captured, because the thing that moved the trigger may be any scroller
+    // between it and the document — a sheet's body, the till's line list.
+    window.addEventListener("scroll", place, true);
+
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, ref]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,6 +245,8 @@ export function Select({
           aria-label={labelledBy ? undefined : label}
           aria-labelledby={labelledBy}
           className="pos-menu pos-select-menu"
+          data-drop={drop.up ? "up" : "down"}
+          style={{ maxHeight: drop.max }}
         >
           {options.map((option, index) => {
             const selected = option.id === value;

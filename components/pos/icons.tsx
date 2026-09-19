@@ -246,6 +246,23 @@ export const IconUpload = (props: IconProps) => (
   </Glyph>
 );
 
+/** The same arrow as `IconUpload`, turned round. Export, never import — the
+ *  two live side by side on the history's toolbar and a mirrored glyph is the
+ *  only thing that tells them apart at 16px. */
+export const IconDownload = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 15.5V19a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-3.5" />
+    <path d="M12 3.5v12M7.5 11 12 15.5 16.5 11" />
+  </Glyph>
+);
+
+export const IconCopy = (props: IconProps) => (
+  <Glyph {...props}>
+    <rect x="8.5" y="8.5" width="12" height="12" rx="2.2" />
+    <path d="M15.5 5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2" />
+  </Glyph>
+);
+
 export const IconTag = (props: IconProps) => (
   <Glyph {...props}>
     <path d="M11.6 3H5a2 2 0 0 0-2 2v6.6a2 2 0 0 0 .6 1.4l7.4 7.4a2 2 0 0 0 2.8 0l6.6-6.6a2 2 0 0 0 0-2.8L13 3.6a2 2 0 0 0-1.4-.6Z" />

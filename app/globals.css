@@ -1025,9 +1025,20 @@
     right: auto;
     width: 100%;
     min-width: 0;
+    /* A fallback only: the component measures the room actually left under
+       the trigger and overrides this inline. */
     max-height: min(17rem, 60dvh);
     overflow-y: auto;
     top: calc(100% + 6px);
+  }
+
+  /* Hung above the field, for a trigger sitting near the foot of the window.
+     An absolutely positioned list that runs off the bottom does not overhang
+     the page, it lengthens it — and a filter bar that grows a scrollbar every
+     time it is opened is a filter bar that moves under the finger. */
+  .pos-select-menu[data-drop="up"] {
+    top: auto;
+    bottom: calc(100% + 6px);
   }
 
   /* The count at the right edge of a row. Mixed out of the row's own colour
@@ -1661,6 +1672,27 @@
   }
 
   .pos-table tbody tr:last-child td { border-bottom: 0; }
+
+  /* A row that is itself the control. The cursor and the left edge are what
+     say so — a whole row of underlined text would be unreadable, and the
+     chevron at the end of it is too far from the eye scanning the first
+     column to read as the target. */
+  .pos-row-hit {
+    cursor: pointer;
+    box-shadow: inset 2px 0 0 0 transparent;
+  }
+
+  .pos-row-hit:hover,
+  .pos-row-hit:focus-visible {
+    box-shadow: inset 2px 0 0 0 var(--imperial);
+  }
+
+  /* The row a drawer is open on, so the place in the list survives looking
+     away from it. */
+  .pos-table tbody tr[aria-current="true"] {
+    background: var(--pale-lilac);
+    box-shadow: inset 2px 0 0 0 var(--imperial);
+  }
 
   /* Money and counts line up or they cannot be scanned down a column */
   .pos-num {

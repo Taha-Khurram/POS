@@ -153,10 +153,16 @@ async function Record({ tenantId, id }: { tenantId: string; id: string }) {
     {
       key: "receipt",
       header: "Bill",
+      // Into the sales history, narrowed to that trading day and with the bill
+      // number already in the search box — which is one tap from "what did they
+      // buy that day" to the lines themselves, and reprintable from there.
       cell: (receipt) => (
-        <span className="font-mono text-[0.8125rem] text-graphite-900">
+        <Link
+          href={`/app/sales?tab=history&range=custom&from=${receipt.businessDay}&to=${receipt.businessDay}&q=${encodeURIComponent(receipt.receiptNo)}`}
+          className="font-mono text-[0.8125rem] text-graphite-900 underline-offset-2 hover:underline"
+        >
           {receipt.receiptNo}
-        </span>
+        </Link>
       ),
     },
     {

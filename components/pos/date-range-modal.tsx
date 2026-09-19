@@ -80,10 +80,24 @@ export function DateRangeModal({
   initial,
   onClose,
   onApply,
+  daysOnly = false,
+  title = "Pick your own dates",
+  cta = "Show this range",
 }: {
   initial?: { from: string; to: string };
   onClose: () => void;
   onApply: (from: string, to: string) => void;
+  /**
+   * Hides the time-of-day row.
+   *
+   * The sales history windows on `sales.business_day`, which is a trading day
+   * and not a clock — a dhaba's 1 am sale is stamped to the day it opened. A
+   * time field over that would look like it narrowed something and would
+   * narrow nothing, which is worse than not offering it.
+   */
+  daysOnly?: boolean;
+  title?: string;
+  cta?: string;
 }) {
   // Pinned for the life of the dialog: a shop open past midnight should not
   // have the calendar change shape under the owner's finger.
@@ -101,7 +115,7 @@ export function DateRangeModal({
   const [hover, setHover] = useState("");
 
   const [timed, setTimed] = useState(
-    Boolean(opening.from.time || opening.to.time),
+    !daysOnly && Boolean(opening.from.time || opening.to.time),
   );
   const [fromTime, setFromTime] = useState(opening.from.time || "00:00");
   const [toTime, setToTime] = useState(opening.to.time || "23:59");
@@ -199,7 +213,7 @@ export function DateRangeModal({
 
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-[0.9375rem] font-bold text-graphite-900">
-              Pick your own dates
+              {title}
             </h2>
             {/* The caption is the instruction and the receipt in one line, so
                 the dialog never needs a second row of helper text. */}
@@ -316,7 +330,9 @@ export function DateRangeModal({
             screen is asked is a question about whole days; the shift question
             is the exception, so it costs one tap rather than two fields that
             are wrong most of the time. */}
-        <div className="border-t border-orchid-100 px-4 py-3 sm:px-5">
+        <div
+          className={`border-t border-orchid-100 px-4 py-3 sm:px-5 ${daysOnly ? "hidden" : ""}`}
+        >
           <label className="flex cursor-pointer items-center gap-2.5 text-[0.8125rem] text-graphite-700">
             <input
               type="checkbox"
@@ -369,7 +385,7 @@ export function DateRangeModal({
             disabled={!ready}
             className="pos-btn pos-btn-primary disabled:pointer-events-none disabled:opacity-45"
           >
-            Show this range
+            {cta}
           </button>
         </footer>
       </div>

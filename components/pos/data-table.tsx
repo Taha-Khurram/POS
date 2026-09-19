@@ -31,11 +31,29 @@ export function DataTable<Row>({
   rows,
   rowKey,
   empty = "Nothing here yet.",
+  onRowClick,
+  rowLabel,
+  isCurrent,
 }: {
   columns: Column<Row>[];
   rows: Row[];
   rowKey: (row: Row) => string;
   empty?: string;
+  /**
+   * Makes the whole row the control rather than one cell of it.
+   *
+   * A list somebody is scanning for one bill wants the target to be the row,
+   * not a chevron eight columns away — so the row takes focus, answers Enter
+   * and Space, and names itself to a screen reader through `rowLabel`. Callers
+   * that pass this must be client components; leaving it off keeps the table
+   * exactly as inert as it has always been, which is what the server-rendered
+   * ones want.
+   */
+  onRowClick?: (row: Row) => void;
+  rowLabel?: (row: Row) => string;
+  /** The row a drawer or sheet is currently open on, so it stays marked while
+   *  the eye is somewhere else. */
+  isCurrent?: (row: Row) => boolean;
 }) {
   if (rows.length === 0) {
     return (
@@ -69,7 +87,27 @@ export function DataTable<Row>({
 
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)}>
+            <tr
+              key={rowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      // Space scrolls the page otherwise, which on a tablet
+                      // moves the list out from under the finger that just
+                      // chose a row.
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  : undefined
+              }
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? "button" : undefined}
+              aria-label={onRowClick && rowLabel ? rowLabel(row) : undefined}
+              aria-current={isCurrent?.(row) ? "true" : undefined}
+              className={onRowClick ? "pos-row-hit" : undefined}
+            >
               {columns.map((column) => (
                 <td
                   key={column.key}
