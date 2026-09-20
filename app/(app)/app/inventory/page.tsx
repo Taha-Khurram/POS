@@ -10,7 +10,10 @@ import {
 import { requireModule } from "@/lib/pos/access";
 import { rupees } from "@/lib/format";
 import { stockState, type Product } from "@/lib/pos/catalog";
+import { currentBusinessDay } from "@/lib/pos/counter";
 import { listProducts } from "@/lib/pos/items";
+import { getShopSettings } from "@/lib/pos/shop";
+import { listActiveSuppliers } from "@/lib/pos/suppliers";
 import { listTree } from "@/lib/pos/tree";
 import { CatalogPanel } from "./catalog-panel";
 import { CategoriesPanel } from "./categories-panel";
@@ -59,6 +62,13 @@ export default async function InventoryPage({
   // The tree is counted off the list that was just read rather than by a second
   // round trip — every tab on this screen needs both anyway.
   const tree = await listTree(session.tenantId, items);
+  // Only the export's filename needs this, but it needs the shop's trading day
+  // and not the tablet's calendar date, which is the one thing the browser is
+  // never allowed to decide.
+  const settings = await getShopSettings(session.tenantId);
+  // Active only: a distributor who has shut down should not be offered on a new
+  // item, though an item already pointing at one keeps saying so.
+  const suppliers = await listActiveSuppliers(session.tenantId);
 
   return (
     <div className="space-y-4">
@@ -107,7 +117,13 @@ export default async function InventoryPage({
       {tab === "items" ? (
         <>
           <CatalogStats items={items} />
-          <CatalogPanel items={items} tree={tree} nextSerial={nextSerial(items)} />
+          <CatalogPanel
+            items={items}
+            tree={tree}
+            suppliers={suppliers.map((one) => ({ id: one.id, name: one.name }))}
+            nextSerial={nextSerial(items)}
+            today={currentBusinessDay(settings)}
+          />
         </>
       ) : tab === "tree" ? (
         <CategoriesPanel tree={tree} />

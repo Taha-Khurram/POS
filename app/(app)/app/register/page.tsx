@@ -137,8 +137,12 @@ export default async function RegisterPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+    // `data-fit` is the register saying it is the window and not a page on it:
+    // globals.css caps the shell at the viewport from `lg` up, so this column
+    // is exactly the room that is left and the till underneath fills it. Below
+    // that the page scrolls as before.
+    <div data-fit className="flex flex-col gap-4">
+      <header className="flex flex-none flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <h1 className="font-display text-[1.5rem] leading-tight font-bold">
             Register

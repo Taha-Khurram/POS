@@ -12,10 +12,11 @@ import type { RolePermission } from "@/lib/pos/settings-options";
  *
  * Two different things govern, and it is worth being honest that they are two:
  *
- *   - **Permissions** govern the working modules. Stock, customers and reports
- *     are switches an owner sets per access level on Settings → Roles &
- *     permissions, so the rail reads the same row the register does. A cashier
- *     who may not edit items has no reason to be shown the screen for it.
+ *   - **Permissions** govern the working modules. Stock, buying, customers and
+ *     reports are switches an owner sets per access level on Settings → Roles
+ *     & permissions, so the rail reads the same row the register does. A
+ *     cashier who may not edit items has no reason to be shown the screen for
+ *     it.
  *   - **Role** governs the two administration screens. Staff and Settings have
  *     no switch of their own and never should: a permission that could hide
  *     Settings is a permission an owner can hide Settings from themselves with.
@@ -30,6 +31,7 @@ export const MODULES = [
   "register",
   "sales",
   "inventory",
+  "purchasing",
   "customers",
   "staff",
   "reports",
@@ -46,6 +48,7 @@ const ALL: ModuleAccess = {
   register: true,
   sales: true,
   inventory: true,
+  purchasing: true,
   customers: true,
   staff: true,
   reports: true,
@@ -65,7 +68,15 @@ export function moduleAccess(
   // still reaches the dashboard, which says so; everything else would be a
   // screen with nothing in it.
   if (!role) {
-    return { ...ALL, inventory: false, customers: false, staff: false, reports: false, settings: false };
+    return {
+      ...ALL,
+      inventory: false,
+      purchasing: false,
+      customers: false,
+      staff: false,
+      reports: false,
+      settings: false,
+    };
   }
 
   const manager = role === "manager";
@@ -80,6 +91,11 @@ export function moduleAccess(
     // The profit and margin behind it live under Reports.
     sales: true,
     inventory: permission?.canEditItems ?? false,
+    // Its own switch rather than `can_edit_items`, because receiving a delivery
+    // writes what the shop paid — and a cost price is the number every margin
+    // on Reports is worked out from, which is not a thing to hand to everybody
+    // who may correct a shelf count.
+    purchasing: permission?.canManagePurchasing ?? false,
     customers: permission?.canManageCustomers ?? false,
     reports: permission?.canViewReports ?? false,
     // Read-only for a manager on both screens, and the actions refuse them

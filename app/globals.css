@@ -772,6 +772,45 @@
     }
   }
 
+  /* A route that is the window rather than a page on it. The register opts
+     in with `data-fit` on its root: the shell stops growing past the viewport,
+     the canvas stops scrolling, and the fitted root takes whatever height is
+     left — so the Charge bar stays under the thumb and the bill list is the
+     only thing that moves. Only from the rail's breakpoint up; on a phone the
+     chrome, the shift strip and the search box do not fit above a bill worth
+     reading, and a page that scrolls is the honest answer there. */
+
+  @media (width >= 64rem) {
+    .pos-shell:has([data-fit]) {
+      height: 100dvh;
+      min-height: 0;
+    }
+
+    .pos-shell:has([data-fit]) .pos-canvas {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .pos-canvas > [data-fit] {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* The rail is sized to its own grid area here rather than to
+       `100dvh - var(--pos-header)`. That subtraction is a guess at the
+       topbar's height, and a topbar one pixel taller than the token would
+       push the rail past the bottom of a shell that is no longer allowed to
+       grow — which is the page scrollbar coming back. Its nav already
+       scrolls inside itself. */
+    .pos-shell:has([data-fit]) .pos-rail {
+      align-self: stretch;
+      height: auto;
+      top: auto;
+    }
+  }
+
   /* ---------------- Rail ----------------
      Light, like the rest of the counter. A dark rail against white cards makes
      the navigation the loudest thing on a screen whose whole job is the

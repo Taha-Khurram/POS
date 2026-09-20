@@ -16,6 +16,7 @@ import {
   IconSales,
   IconSettings,
   IconSignOut,
+  IconTruck,
   type IconProps,
 } from "./icons";
 
@@ -51,6 +52,9 @@ const GROUPS: { label: string; items: Item[] }[] = [
     label: "Shop",
     items: [
       { id: "inventory", href: "/app/inventory", label: "Products & stock", icon: IconInventory },
+      // Directly under stock, because that is the order of the thought: the
+      // shelf is empty, so who do I ring.
+      { id: "purchasing", href: "/app/purchasing", label: "Buying", icon: IconTruck },
       { id: "customers", href: "/app/customers", label: "Customers", icon: IconCustomers },
       { id: "staff", href: "/app/employees", label: "Staff", icon: IconEmployees },
     ],

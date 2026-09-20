@@ -10,6 +10,7 @@ import {
   IconCheck,
   IconChevron,
   IconClose,
+  IconDownload,
   IconFilter,
   IconPlus,
   IconSearch,
@@ -17,10 +18,13 @@ import {
   IconUpload,
 } from "@/components/pos/icons";
 import { Select, type SelectOption } from "@/components/pos/select-field";
+import { useToast } from "@/components/pos/toaster";
 import { useDismiss } from "@/components/pos/use-dismiss";
 import {
+  catalogCsvFilename,
   marginOf,
   matchesProduct,
+  productsToCsv,
   stockState,
   unitShort,
   type Department,
@@ -240,14 +244,23 @@ const columnsFor = (onEdit: (item: Product) => void): Column<Product>[] => [
 export function CatalogPanel({
   items,
   tree,
+  suppliers,
   nextSerial,
+  today,
 }: {
   items: Product[];
   /** The shop's own departments — the filter's list and the sheet's. */
   tree: Department[];
+  /** The shop's own active suppliers, for the sheet's dropdown. */
+  suppliers: { id: string; name: string }[];
   /** What the next in-store barcode and suggested SKU are cut from. */
   nextSerial: number;
+  /** The shop's own trading day, for the export's filename. Resolved on the
+   *  server like every other date here — a counter tablet bought in Dubai and
+   *  shipped to Lahore keeps the wrong clock for months. */
+  today: string;
 }) {
+  const toast = useToast();
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("all");
   const [filter, setFilter] = useState<StockFilter>("all");
@@ -340,6 +353,42 @@ export function CatalogPanel({
     setFilter("all");
   };
 
+  /**
+   * The list, as a file.
+   *
+   * What is on screen is what comes out — the same bargain the bills export and
+   * printing both strike. An owner who has narrowed to "Running low in Grocery"
+   * and pressed Export wanted that, and a file of the whole catalog instead is
+   * one they have to re-filter in Excel.
+   *
+   * The unfiltered case is the one that matters most, though, and it is the
+   * reason this button exists at all: a shop's item list is the one thing in
+   * Flo the shopkeeper typed themselves, and a product that will not give it
+   * back is a product they are right to be wary of.
+   */
+  const exportCsv = () => {
+    if (rows.length === 0) return;
+
+    const url = URL.createObjectURL(
+      new Blob([productsToCsv(rows)], { type: "text/csv;charset=utf-8" }),
+    );
+
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = catalogCsvFilename(today);
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: `${rows.length.toLocaleString("en-PK")} items exported`,
+      detail:
+        rows.length === items.length
+          ? "Your whole list, in the same columns Bulk import reads."
+          : "The rows you have narrowed to, not the whole list.",
+      tone: "good",
+    });
+  };
+
   return (
     <>
       <ChartCard
@@ -352,6 +401,17 @@ export function CatalogPanel({
         bleed
         actions={
           <>
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={rows.length === 0}
+              className="pos-btn pos-btn-soft disabled:pointer-events-none disabled:opacity-45"
+              title="Download what is on screen as a spreadsheet"
+            >
+              <IconDownload className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+
             <Link href="/app/inventory?tab=import" className="pos-btn pos-btn-soft">
               <IconUpload className="h-4 w-4" />
               <span className="hidden sm:inline">Import</span> CSV
@@ -455,6 +515,7 @@ export function CatalogPanel({
         <ProductSheet
           item={open}
           tree={tree}
+          suppliers={suppliers}
           nextSerial={nextSerial}
           onClose={() => setEditing(null)}
         />

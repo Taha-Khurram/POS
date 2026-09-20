@@ -12,7 +12,6 @@ import {
   PRICE_MAX,
   SKU_MAX,
   STOCK_MAX,
-  SUPPLIER_MAX,
   TAX_RATES,
   URDU_MAX,
   isFractional,
@@ -28,6 +27,11 @@ import { listMovements } from "@/lib/pos/movements";
 import { listStaff } from "@/lib/pos/staff";
 import type { Movement } from "@/lib/pos/stock";
 import { createAdminClient } from "@/utils/supabase/admin";
+import {
+  foldName,
+  NAME_MAX as SUPPLIER_NAME_MAX,
+  NAME_MIN as SUPPLIER_NAME_MIN,
+} from "@/lib/pos/supplier";
 import { IDLE, type ImportResult, type ImportRow, type ProductState } from "./state";
 
 /**
@@ -113,7 +117,7 @@ type ItemRow = {
   selling_price: number;
   stock: number;
   low_at: number;
-  supplier: string | null;
+  supplier_id: string | null;
   tax_rate: number;
   variant_count: number | null;
   is_active: boolean;
@@ -123,13 +127,19 @@ type ItemRow = {
 /**
  * The row, or the sentence to put under the form.
  *
- * The tree is handed in rather than read here, because the import calls this
- * once per row and a query per row would be four hundred round trips to answer
- * one question. It is the shop's own, read on the service role by
- * `shopTree` below — never the browser's, which is what stops a crafted
- * department from filing an item under a tile the register cannot draw.
+ * The tree and the supplier ids are handed in rather than read here, because
+ * the import calls this once per row and a query per row would be four hundred
+ * round trips to answer one question. Both are the shop's own, read on the
+ * service role by `shopTree` and `shopSupplierIds` below — never the browser's,
+ * which is what stops a crafted department from filing an item under a tile the
+ * register cannot draw, or a crafted supplier id from pointing this shop's item
+ * at another shop's distributor.
  */
-function readProduct(formData: FormData, tree: Department[]): ItemRow | string {
+function readProduct(
+  formData: FormData,
+  tree: Department[],
+  supplierIds: Set<string>,
+): ItemRow | string {
   const name = text(formData.get("name"));
 
   if (name.length < NAME_MIN || name.length > NAME_MAX) {
@@ -145,8 +155,14 @@ function readProduct(formData: FormData, tree: Department[]): ItemRow | string {
   const barcode = text(formData.get("barcode")).replace(/\s+/g, "");
   if (barcode.length > BARCODE_MAX) return "That barcode is too long to be one.";
 
-  const supplier = text(formData.get("supplier"));
-  if (supplier.length > SUPPLIER_MAX) return "That supplier name is too long.";
+  // A name no longer reaches this function: `0027` made the supplier a row and
+  // the sheet a dropdown, so what arrives is an id or nothing. Blank is the
+  // common case and always allowed — most of a shop's list is entered long
+  // before anybody opens Purchasing.
+  const supplierId = text(formData.get("supplier_id"));
+  if (supplierId && !supplierIds.has(supplierId)) {
+    return "That supplier is not on your list. Add them under Buying first.";
+  }
 
   const tracking = text(formData.get("tracking"));
   if (!isTrackingMode(tracking)) return "Pick how this item is counted.";
@@ -217,7 +233,7 @@ function readProduct(formData: FormData, tree: Department[]): ItemRow | string {
     selling_price: price,
     stock,
     low_at: lowAt,
-    supplier: supplier || null,
+    supplier_id: supplierId || null,
     tax_rate: taxRate,
     variant_count:
       tracking === "variant" && Number.isInteger(variantCount) && variantCount > 0
@@ -272,6 +288,27 @@ async function shopTree(tenantId: string): Promise<Department[]> {
 }
 
 /**
+ * Every supplier id this shop has, for `readProduct` to check an id against.
+ *
+ * Ids only. The validator's whole question is "is this one of ours", which is
+ * what stops a crafted body pointing this shop's sugar at another shop's
+ * distributor — and a `Set` of ids answers it once for four hundred import rows
+ * rather than once per row.
+ *
+ * Service role, like `shopTree` and for the same reason: the tenant came off
+ * the verified token, and an action validating against a list RLS had quietly
+ * emptied would refuse every save that names a supplier.
+ */
+async function shopSupplierIds(tenantId: string): Promise<Set<string>> {
+  const { data } = await createAdminClient()
+    .from("suppliers")
+    .select("id")
+    .eq("tenant_id", tenantId);
+
+  return new Set((data ?? []).map((row) => row.id as string));
+}
+
+/**
  * A 23505 from one of the two unique indexes on `items`, in words.
  *
  * Both are worth catching by name rather than reporting "could not save": a
@@ -301,7 +338,7 @@ async function ownItem(tenantId: string, itemId: unknown) {
   const { data } = await supabase
     .from("items")
     .select(
-      "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active",
+      "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, tax_rate, variant_count, is_active",
     )
     .eq("tenant_id", tenantId)
     .eq("id", itemId)
@@ -394,7 +431,12 @@ export async function saveProduct(
   if (!gate.ok) return fail(gate.error);
   const { session } = gate;
 
-  const row = readProduct(formData, await shopTree(session.tenantId));
+  const [tree, supplierIds] = await Promise.all([
+    shopTree(session.tenantId),
+    shopSupplierIds(session.tenantId),
+  ]);
+
+  const row = readProduct(formData, tree, supplierIds);
   if (typeof row === "string") return fail(row);
 
   const itemId = formData.get("item_id");
@@ -608,7 +650,109 @@ const CHUNK = 100;
 const NEW_DEPARTMENTS_MAX = 40;
 const NEW_CATEGORIES_MAX = 400;
 
+/* A rate list names the handful of distributors a shop buys from. Past this
+   many and the Supplier column has been mapped to something else — an item name
+   or a brand — and the file is about to put four hundred parties on a list the
+   owner would then have to clear one at a time. */
+const NEW_SUPPLIERS_MAX = 60;
+
 const lower = (value: string) => value.toLowerCase();
+
+/**
+ * The shop's supplier list, grown to hold the parties the file names.
+ *
+ * The same bargain `growTree` strikes, and for the same reason: the sheet a
+ * shop already keeps is the truest description of who it buys from, and making
+ * an owner type six distributors into Buying before their first import is how a
+ * first import does not happen. Only additive — nothing here renames or retires
+ * a supplier — and bounded, so a mis-mapped column is refused with the column
+ * to look at rather than quietly landing four hundred parties.
+ *
+ * Returns the folded name → id map every row is then resolved through, which is
+ * the same folding `suppliers_tenant_name_idx` enforces. That is what makes
+ * "Shan Foods" on row 12 and "shan foods" on row 340 one supplier rather than
+ * one supplier and one refused insert.
+ */
+async function growSuppliers(
+  tenantId: string,
+  /** Every supplier name the mapped rows ask for, as typed. */
+  wanted: string[],
+): Promise<
+  | { ok: true; byName: Map<string, string>; added: string[] }
+  | { ok: false; error: string }
+> {
+  const supabase = createAdminClient();
+
+  const { data: existing } = await supabase
+    .from("suppliers")
+    .select("id, name")
+    .eq("tenant_id", tenantId);
+
+  const byName = new Map(
+    (existing ?? []).map((row) => [foldName(row.name as string), row.id as string]),
+  );
+
+  // De-duplicated by the database's own key and kept in the order the file
+  // reads, so a shop's list comes out in the order of their own sheet.
+  const fresh = new Map<string, string>();
+
+  for (const raw of wanted) {
+    const name = raw.trim().replace(/\s+/g, " ");
+    // The table's own check constraint. A one-character cell was never a
+    // supplier, and an eighty-one-character one is an address in the wrong
+    // column — both are dropped rather than truncated into a party the owner
+    // then has to recognise.
+    if (name.length < SUPPLIER_NAME_MIN || name.length > SUPPLIER_NAME_MAX) continue;
+
+    const key = foldName(name);
+    if (byName.has(key) || fresh.has(key)) continue;
+    fresh.set(key, name);
+  }
+
+  if (fresh.size > NEW_SUPPLIERS_MAX) {
+    return {
+      ok: false,
+      error: `That file names ${fresh.size} suppliers you do not have yet. Check the Supplier column on the previous step — a column of brands or item names matched there would add a party for nearly every row.`,
+    };
+  }
+
+  const added: string[] = [];
+
+  if (fresh.size > 0) {
+    const rows = [...fresh.values()].map((name) => ({ tenant_id: tenantId, name }));
+    const { error } = await supabase.from("suppliers").insert(rows);
+
+    // One refused name — a race with the Suppliers panel open in another
+    // window, or a spelling the folded index reads as one the shop already has
+    // — must not cost the other fifty-nine. Retried singly, exactly as
+    // `growTree` retries a department.
+    if (error) {
+      for (const row of rows) {
+        await supabase.from("suppliers").insert(row);
+      }
+    }
+
+    // Re-read rather than trust the insert: what matters downstream is the id,
+    // and a name that quietly did not go in has to be absent from the map so
+    // the rows naming it are filed with no supplier rather than with somebody
+    // else's.
+    const { data: now } = await supabase
+      .from("suppliers")
+      .select("id, name")
+      .eq("tenant_id", tenantId);
+
+    byName.clear();
+    for (const row of now ?? []) {
+      byName.set(foldName(row.name as string), row.id as string);
+    }
+
+    for (const name of fresh.values()) {
+      if (byName.has(foldName(name))) added.push(name);
+    }
+  }
+
+  return { ok: true, byName, added };
+}
 
 /**
  * The shop's tree, grown to hold what the file names.
@@ -834,6 +978,19 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   const { tree, added } = grown;
   const byName = new Map(tree.map((item) => [lower(item.name), item]));
 
+  // The same growing, one column over. A supplier the file names and the shop
+  // does not have yet becomes a row before any item is written, so a first
+  // import brings the distributors in with the stock rather than leaving four
+  // hundred items with nobody to reorder them from.
+  const parties = await growSuppliers(
+    session.tenantId,
+    rows.map((row) => row.supplier ?? "").filter(Boolean),
+  );
+
+  if (!parties.ok) return { ok: false, error: parties.error };
+
+  const supplierIds = new Set(parties.byName.values());
+
   const skipped: { row: number; reason: string }[] = [];
   // Each accepted row keeps the line it came from. `ready` is shorter than the
   // file the moment anything is skipped, so its own index would report row 98
@@ -876,7 +1033,11 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     // under the department alone is honest about that. The register grids on
     // the department either way.
     form.set("category", category?.name ?? "");
-    form.set("supplier", row.supplier ?? "");
+    // By id, because that is what `readProduct` takes since `0027`. A name the
+    // list could not take — too short, too long, or refused by the index — maps
+    // to nothing and the item is filed with no supplier, which is honest: the
+    // alternative is pointing it at whoever happened to be first.
+    form.set("supplier_id", parties.byName.get(foldName(row.supplier ?? "")) ?? "");
     form.set("cost", row.cost ?? "");
     form.set("price", row.price ?? "");
     form.set("stock", row.stock ?? "");
@@ -904,7 +1065,7 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       form.set("unit", "piece");
     }
 
-    const parsed = readProduct(form, tree);
+    const parsed = readProduct(form, tree, supplierIds);
 
     if (typeof parsed === "string") {
       skipped.push({ row: index + 1, reason: parsed });
@@ -942,7 +1103,8 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
     // The tree may have grown for a file that then imported nothing. Redrawn
     // and said plainly, because the owner is about to open the Categories tab
     // and find branches nobody typed.
-    const grew = added.departments.length + added.categories.length > 0;
+    const grew =
+      added.departments.length + added.categories.length + parties.added.length > 0;
     if (grew) revalidateCatalog();
 
     return {
@@ -1038,6 +1200,7 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       skipped: skipped.length,
       departments: added.departments,
       categories: added.categories,
+      suppliers: parties.added,
     },
   });
 
@@ -1047,5 +1210,5 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
   // skipped row 12 can be listed under row 300 and look like a different file.
   skipped.sort((a, b) => a.row - b.row);
 
-  return { ok: true, inserted, skipped, added };
+  return { ok: true, inserted, skipped, added, addedSuppliers: parties.added };
 }

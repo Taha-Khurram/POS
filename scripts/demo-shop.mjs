@@ -462,6 +462,38 @@ async function seed() {
 
   await db.from("items").delete().eq("tenant_id", TENANT);
 
+  /* -- the suppliers ------------------------------------------------------
+     Rows since 0027, not a text column on the item. Seeded off the distinct
+     names in ITEMS so the two cannot drift: adding a distributor to a row up
+     there is the whole of adding one to the shop. Folded the way
+     `suppliers_tenant_name_idx` folds, so a stray double space in the table
+     does not become a second party. */
+
+  await db.from("suppliers").delete().eq("tenant_id", TENANT);
+
+  const fold = (value) => value.trim().replace(/\s+/g, " ");
+
+  const supplierNames = [
+    ...new Map(
+      ITEMS.map((row) => fold(row[9] ?? ""))
+        .filter((name) => name.length >= 2 && name.length <= 80)
+        .map((name) => [name.toLowerCase(), name]),
+    ).values(),
+  ];
+
+  const { data: suppliers, error: supplierError } = await db
+    .from("suppliers")
+    .insert(
+      supplierNames.map((name) => ({ tenant_id: TENANT, name, is_active: true })),
+    )
+    .select("id, name");
+
+  if (supplierError) die(`suppliers: ${supplierError.message}`);
+
+  const supplierId = new Map(
+    (suppliers ?? []).map((row) => [fold(row.name).toLowerCase(), row.id]),
+  );
+
   const terms = ({ name, urdu, sku, barcode }) => [
     ...new Set(
       [name, urdu ?? "", sku ?? "", barcode ?? "", ...name.split(/\s+/)]
@@ -490,7 +522,7 @@ async function seed() {
       tax_rate: taxRate,
       stock,
       low_at: lowAt,
-      supplier,
+      supplier_id: supplierId.get(fold(supplier ?? "").toLowerCase()) ?? null,
       barcode,
       is_active: !RETIRED.has(name),
     };

@@ -64,7 +64,7 @@ export function ShiftBar({
   if (!shift) {
     return (
       <>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-signal-warn/40 bg-signal-warn/5 px-3.5 py-2.5">
+        <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-signal-warn/40 bg-signal-warn/5 px-3.5 py-2.5">
           <IconDrawer className="h-4 w-4 flex-none text-signal-warn" />
 
           <p className="min-w-0 flex-1 text-[0.8125rem] leading-snug text-graphite-900">
@@ -98,7 +98,7 @@ export function ShiftBar({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-orchid-100 bg-paper-50 px-3.5 py-2.5">
+      <div className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-orchid-100 bg-paper-50 px-3.5 py-2.5">
         <span className="grid h-7 w-7 flex-none place-items-center rounded-lg bg-orchid-100 text-orchid-800">
           <IconDrawer className="h-4 w-4" />
         </span>

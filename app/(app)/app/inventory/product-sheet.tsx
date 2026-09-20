@@ -109,6 +109,7 @@ function matrixOf(options: Option[]) {
 export function ProductSheet({
   item,
   tree,
+  suppliers,
   nextSerial,
   onClose,
 }: {
@@ -117,6 +118,10 @@ export function ProductSheet({
   /** The shop's own departments and categories. Never a constant — a hardware
    *  store's tree is not a kiryana's. */
   tree: Department[];
+  /** The shop's own suppliers, active ones only — a distributor who has shut
+   *  down should not be offered on a new item. Name and id, because `0027`
+   *  made this a row and the form posts the id. */
+  suppliers: { id: string; name: string }[];
   nextSerial: number;
   onClose: () => void;
 }) {
@@ -153,7 +158,7 @@ export function ProductSheet({
   const [category, setCategory] = useState(
     item?.category || "",
   );
-  const [supplier, setSupplier] = useState(item?.supplier ?? "");
+  const [supplierId, setSupplierId] = useState(item?.supplierId ?? "");
 
   const [cost, setCost] = useState(item ? String(item.cost) : "");
   const [price, setPrice] = useState(item ? String(item.price) : "");
@@ -365,6 +370,7 @@ export function ProductSheet({
           <input type="hidden" name="tracking" value={tracking} />
           <input type="hidden" name="department" value={department} />
           <input type="hidden" name="category" value={category} />
+          <input type="hidden" name="supplier_id" value={supplierId} />
           {/* The tax rate and the unit joined these when their dropdowns
               stopped being `<select name=…>`. They sit above the fieldset
               rather than inside it on purpose: a disabled fieldset posts
@@ -613,16 +619,38 @@ export function ProductSheet({
                   }
                 />
 
-                <label className="block">
-                  <span className="pos-label">Supplier — optional</span>
-                  <input
-                    name="supplier"
-                    className="pos-field"
-                    value={supplier}
-                    onChange={(event) => setSupplier(event.target.value)}
-                    placeholder="Ravi Trading — Akbari Mandi"
-                  />
-                </label>
+                {/* A dropdown since `0027`, not a text box. The box was four
+                    hundred independently typed spellings of the same six
+                    distributors, which is exactly why a supplier is a row now:
+                    "what do I owe Ravi Trading" cannot be asked of a column
+                    where the answer is spelled five ways. A shop with nobody on
+                    the list yet is told where to add one rather than shown an
+                    empty menu. */}
+                <SelectRow
+                  label="Supplier — optional"
+                  value={supplierId}
+                  onChange={setSupplierId}
+                  disabled={suppliers.length === 0}
+                  placeholder={
+                    suppliers.length === 0 ? "No suppliers yet" : "Not set"
+                  }
+                  options={
+                    suppliers.length === 0
+                      ? []
+                      : [
+                          { id: "", label: "Not set" },
+                          ...suppliers.map((entry) => ({
+                            id: entry.id,
+                            label: entry.name,
+                          })),
+                        ]
+                  }
+                  hint={
+                    suppliers.length === 0
+                      ? "Add one under Buying — or let a CSV import bring them in with the stock."
+                      : undefined
+                  }
+                />
 
                 <label className="block sm:col-span-2">
                   <span className="pos-label">SKU</span>
@@ -1112,9 +1140,14 @@ function StockHistory({ item }: { item: Product }) {
                       <span className="text-graphite-900">
                         {reasonLabel(row.reason)}
                       </span>
-                      {row.receiptNo ? (
+                      {/* Whichever document moved it. A sale names its
+                          receipt, a delivery names its GRN — both so the row
+                          can be read back to a piece of paper rather than
+                          taken on trust. Never both: a movement has one
+                          cause. */}
+                      {row.receiptNo || row.grnNumber ? (
                         <span className="ml-1.5 font-mono text-[0.75rem] text-graphite-500">
-                          {row.receiptNo}
+                          {row.receiptNo ?? row.grnNumber}
                         </span>
                       ) : null}
                       {row.note ? (

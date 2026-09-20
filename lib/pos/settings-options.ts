@@ -161,6 +161,11 @@ export const PERMISSION_TOGGLES = [
     hint: null,
   },
   {
+    column: "can_manage_purchasing",
+    label: "Buy stock — suppliers, orders and deliveries",
+    hint: "Also sets what the shop paid, which is what margin is worked out from.",
+  },
+  {
     column: "can_view_reports",
     label: "See profit, margins, and full reports",
     hint: "Today's sales total is visible to everyone.",
@@ -179,6 +184,7 @@ export type RolePermission = {
   canCloseShift: boolean;
   canEditItems: boolean;
   canChangePrice: boolean;
+  canManagePurchasing: boolean;
   canViewReports: boolean;
 };
 
@@ -195,6 +201,11 @@ export const DEFAULT_PERMISSIONS: Record<AccessLevel, RolePermission> = {
     canCloseShift: false,
     canEditItems: false,
     canChangePrice: false,
+    // Off. Buying is the owner's side of the shop — a cashier trusted to
+    // correct a shelf count at the counter is not thereby trusted to say what
+    // the shop paid for it, which is the number every margin is worked out
+    // from.
+    canManagePurchasing: false,
     canViewReports: false,
   },
   manager: {
@@ -207,6 +218,7 @@ export const DEFAULT_PERMISSIONS: Record<AccessLevel, RolePermission> = {
     canCloseShift: true,
     canEditItems: true,
     canChangePrice: false,
+    canManagePurchasing: true,
     canViewReports: true,
   },
 };
@@ -220,6 +232,7 @@ export const TOGGLE_FIELD = {
   can_close_shift: "canCloseShift",
   can_edit_items: "canEditItems",
   can_change_price: "canChangePrice",
+  can_manage_purchasing: "canManagePurchasing",
   can_view_reports: "canViewReports",
 } as const satisfies Record<PermissionColumn, keyof RolePermission>;
 

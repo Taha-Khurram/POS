@@ -306,6 +306,15 @@ Two unique indexes carry the weight: `(tenant_id, barcode)` and
 either into the sentence the owner needs — a duplicate barcode almost always
 means the shop already stocks the thing being added.
 
+**The item list exports.** `productsToCsv` in `lib/pos/catalog.ts` writes the
+filtered rows — what is on screen is what comes out, the same bargain
+`/app/sales` strikes. Its headings are the *import's* own spellings, which is
+why it breaks `billsToCsv`'s rule and puts no currency in the `cost` and `price`
+headings: there a heading is a label a human reads, here it is a key
+`import-panel.tsx` matches aliases against, and `cost (Rs)` normalises to
+`costrs`, which matches nothing. Nothing derived is written — a `margin` column
+is right when exported and wrong the moment somebody edits the cost beside it.
+
 The **tree is the shop's own** (`0016`): `departments` and `categories`, two
 levels and no third. `lib/pos/catalog.ts` used to hold six hard-coded
 departments every shop was stuck inside — a hardware store filed its whole list
@@ -363,6 +372,131 @@ its `revalidatePath` triggers are one request — so a memoised read hands that
 re-render the row as it was before the write and the form redraws itself with
 the values the owner just changed away from. `getShopName` is the exception and
 is only read by the layout.
+
+## Buying
+
+`public.suppliers` (`0027`) is who the shop buys from. **The name is the
+identity, not the phone** — the opposite of `customers`, and deliberate: a
+customer is a person and two of them are called Bilal, but a supplier is a
+business you know by the name on its invoice, and the man who answers its phone
+changes twice a year. Two rows called Ravi Trading is two ledgers for one party
+and neither balances, so `suppliers_tenant_name_idx` is unique on the folded
+name — trimmed, single-spaced, lower-cased. `foldName` in `lib/pos/supplier.ts`
+is those same three things written for the browser, and the two have to stay
+identical: the sheet warns on a clash before the save and the index is the
+control, but a browser that folds harder than the index refuses a name the
+database would take.
+
+**`items.supplier` is gone.** It was a text column since `0015`, which for a
+four-hundred-item list meant four hundred independently typed spellings of six
+distributors, and no way to ask what any of them cost or supplied.
+`0027` lifts the distinct spellings into rows, points `items.supplier_id` at
+them and drops the column — not both, because a text column and a foreign key
+holding one fact is exactly the drift `0018`'s header complains about.
+`Product.supplier` is still a plain name in TypeScript, read through a PostgREST
+embed, so the screens that only ever wanted the word did not change.
+`lib/pos/items.ts` normalises that embed through `embedded()`: with no generated
+database types, supabase-js infers an array for a many-to-one embed and
+PostgREST returns an object.
+
+**The import grows the supplier list**, the way it grows the tree and for the
+same reason — the sheet a shop already keeps is the truest description of who it
+buys from, and making an owner type six distributors in before their first
+import is how a first import does not happen. `growSuppliers` in
+`app/(app)/app/inventory/actions.ts` is additive only and bounded at 60, because
+a Supplier column mis-mapped to a brand would otherwise add a party per row.
+
+`lib/pos/suppliers.ts` reads the rows through the shop's own JWT and — like
+`items.ts`, `customers.ts` and the readers in `shop.ts` — **none of them may be
+wrapped in React `cache()`**. Writes are
+`app/(app)/app/purchasing/supplier-actions.ts` on the service role, gated by
+`can_manage_purchasing` (`0027`). That is deliberately not `can_edit_items`:
+receiving a delivery writes what the shop paid, and a cost price is the number
+every margin on Reports is worked out from, which is not a thing to hand to
+everybody who may correct a shelf count.
+
+### Orders and deliveries
+
+`/app/purchasing` is three tabs over one route, because they are three
+questions. `?tab=orders` — the default — is asked with a distributor on the
+phone: what am I still owed. `?tab=deliveries` is asked when a margin looks
+wrong: what did this actually cost me, carriage and all. `?tab=suppliers` is
+asked when the shelf is empty on a Friday: who do I ring.
+
+**An order is an intention and a delivery is a fact.** `purchase_orders`
+(`0028`) moves no stock and no money. `goods_receipts` is the one that does —
+and its `purchase_order_id` is **nullable**, deliberately: most kiryana buying
+is a van that turns up with no paperwork in front of it, and a screen that
+demands an order first is a screen the shop works around.
+
+**Nothing stores how much of an order has arrived.** No status column, no
+`received_quantity` — it is counted off the receipt lines pointing at the order
+lines, the same call `0024` made for `returned`. A stored counter is a second
+copy of the truth, and the copy that drifts is the one saying a shop is owed
+forty bottles it took last week. The cost of that decision is real and lands in
+`listPurchaseOrders`, which pays a second read to tally it.
+`purchase_orders.status` is the *human* lifecycle only: draft, placed, closed,
+cancelled.
+
+**An order with goods against it cannot have its lines changed.**
+`save_purchase_order` refuses, and the sheet says so before anybody types.
+Deleting a line a delivery points at would leave goods that physically arrived
+against an order that no longer asks for them. Closing it is the move.
+
+**Landed cost is the point of the whole migration.** `record_receipt`
+apportions freight and other costs across the lines pro rata and puts the
+rounding remainder on the last one — the identical arithmetic `record_sale`
+uses for a bill discount, and for the identical reason: `sum(landed_unit_cost ×
+quantity)` has to equal the receipt total exactly, or stock valuation and the
+purchase ledger differ by a rupee nobody can find. `receiptTotals` in
+`lib/pos/purchase.ts` is that arithmetic restated for the browser, so the
+receiving sheet can show what a Rs 500 bhaara does to a carton *before* anybody
+saves. The figure that lands is always the function's.
+
+`goods_receipt_lines.landed_unit_cost` is **stored**, for the reason
+`cost_snapshot` is stored: correcting the freight next week must not rewrite
+what last month's stock cost, and with it every margin already reported off it.
+
+**Receiving sets `items.cost_price` to the last landed cost, not a moving
+average.** A deliberate product call: a shopkeeper quotes the rate off the last
+invoice they were handed, and a weighted average is a number they cannot check
+against any piece of paper in the shop. Past sales are untouched —
+`sale_lines.cost_snapshot` is exactly why that column exists.
+
+Stock moves inside the receipt's own transaction through `private.move_stock`,
+which `0028` widened by a `p_receipt` argument and whose reason list gained
+`'purchase'` — the first reason in the ledger that is positive by design.
+A line with no catalog item behind it is allowed and moves no shelf, which is
+how a shop orders something it does not stock yet.
+
+Numbering is `public.document_series`, one running number per shop per kind,
+claimed by `private.next_number` in one `on conflict do update` so two tablets
+cannot both read 14. Its own table rather than columns on `tenant_settings`,
+because a counter is not a preference and has no business queueing behind
+somebody changing the timezone. **It has no read policy at all** — nothing draws
+it, and a running count of a shop's orders tells a competitor how much it buys.
+
+`lib/pos/purchase.ts` carries no `server-only` (the sheets are client
+components); `lib/pos/purchases.ts` is its `server-only` reader, and like every
+other reader in `lib/pos/` **may not be wrapped in React `cache()`**. Writes are
+`order-actions.ts` and `receipt-actions.ts` on the service role; `load-actions.ts`
+reads one order or delivery behind the same gate, the call `loadBill` makes on
+`/app/sales`.
+
+A goods-received note is **read-only once written**. Editing one would have to
+unwind a stock movement and guess what the cost should go back to. A delivery
+entered wrongly is corrected the way a shop corrects one on paper — by counting
+the shelf on Products & stock, which writes its own movement and says why.
+
+`0028` flipped `plans.features.purchase_orders` true on both plans, per `0020`'s
+rule. The marketing site still says purchase orders are not built (`/pricing`,
+`/products`, `/roadmap`) — that copy is now the wrong way round, and like the
+Reports copy it is a product-announcement decision rather than a code one.
+
+**Still not built here:** the supplier ledger. There is no opening balance, no
+supplier payment, and no "what do I owe him" — `goods_receipts.total` is what a
+delivery came to and nothing yet totals it against anything paid. No tile on
+the Buying screen claims otherwise.
 
 ## Customers
 

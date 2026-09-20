@@ -31,10 +31,12 @@ type Row = {
   quantity: number | string;
   stock_after: number | string;
   sale_id: string | null;
+  goods_receipt_id: string | null;
   note: string | null;
   created_by: string | null;
   created_at: string;
   sales: { receipt_number: string } | null;
+  goods_receipts: { grn_number: string } | null;
 };
 
 /**
@@ -43,7 +45,9 @@ type Row = {
  * The receipt number is embedded on `sales` rather than looked up afterwards,
  * because it is the one thing that makes a "Sold −2" row actionable: it is what
  * the owner searches the sales history for when the count and the shelf
- * disagree.
+ * disagree. The GRN number is embedded beside it for the mirror reason, since
+ * `0028`: a "Delivered +24" row is only worth reading if it names the invoice
+ * that brought them in.
  *
  * The staff roster is handed in rather than re-read. It is already in hand
  * wherever this is called from, and resolving the name here is what keeps the
@@ -60,7 +64,7 @@ export async function listMovements(
   const { data } = await supabase
     .from("stock_movements")
     .select(
-      "id, reason, quantity, stock_after, sale_id, note, created_by, created_at, sales ( receipt_number )",
+      "id, reason, quantity, stock_after, sale_id, goods_receipt_id, note, created_by, created_at, sales ( receipt_number ), goods_receipts ( grn_number )",
     )
     .eq("tenant_id", tenantId)
     .eq("item_id", itemId)
@@ -74,6 +78,7 @@ export async function listMovements(
     stockAfter: Number(row.stock_after) || 0,
     receiptNo: row.sales?.receipt_number ?? null,
     saleId: row.sale_id,
+    grnNumber: row.goods_receipts?.grn_number ?? null,
     note: row.note ?? "",
     // A movement whose author has left keeps the movement. `created_by` is
     // `on delete set null`, so this is the honest answer and not a bug — the

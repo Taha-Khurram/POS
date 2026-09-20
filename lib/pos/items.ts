@@ -27,8 +27,25 @@ import { createClient } from "@/utils/supabase/server";
  * fail to appear.
  */
 
+/**
+ * `supplier:suppliers(name)` is an embedded read, not a second round trip.
+ *
+ * `0027` dropped `items.supplier` — the text column that held four hundred
+ * spellings of six distributors — and put a foreign key in its place. The
+ * screens only ever wanted the word, so the word is what `toProduct` hands
+ * them; PostgREST resolves the embed through the foreign key in the same
+ * request, and RLS on `suppliers` scopes it to this shop exactly as it scopes
+ * `items`.
+ *
+ * One gotcha, and it is why `embedded()` below exists: with no generated
+ * database types in this project, supabase-js cannot tell a many-to-one embed
+ * from a one-to-many one and infers an array for both. PostgREST returns a
+ * single object here, because the foreign key is on `items`. So the row type
+ * admits either shape and the reader normalises once — an `as unknown as Row[]`
+ * would compile just as well and would be a lie about what comes back.
+ */
 const COLUMNS =
-  "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier, tax_rate, variant_count, is_active";
+  "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, supplier:suppliers(name), tax_rate, variant_count, is_active";
 
 type Row = {
   id: string;
@@ -44,7 +61,10 @@ type Row = {
   selling_price: number | string;
   stock: number | string;
   low_at: number | string;
-  supplier: string | null;
+  supplier_id: string | null;
+  /** The embed. Null for an item nobody has said where they buy from, which is
+   *  most of a shop's list before it ever opens Purchasing. */
+  supplier: { name: string } | { name: string }[] | null;
   tax_rate: number | string;
   variant_count: number | null;
   is_active: boolean;
@@ -52,6 +72,10 @@ type Row = {
 
 /** `numeric` comes back as a string from PostgREST on some column widths. */
 const money = (value: number | string | null) => Number(value ?? 0) || 0;
+
+/** The one row of a to-one embed, whichever shape the client typed it as. */
+const embedded = <T,>(value: T | T[] | null): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : value;
 
 function toProduct(row: Row): Product {
   return {
@@ -74,7 +98,8 @@ function toProduct(row: Row): Product {
     price: money(row.selling_price),
     stock: money(row.stock),
     lowAt: money(row.low_at),
-    supplier: row.supplier ?? "",
+    supplierId: row.supplier_id,
+    supplier: embedded(row.supplier)?.name ?? "",
     taxRate: money(row.tax_rate),
     isActive: row.is_active,
   };

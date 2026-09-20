@@ -903,7 +903,8 @@ function Destination({
       </div>
 
       <p className="pos-hint">
-        Departments your sheet names that you do not have yet are added for you.
+        Departments and suppliers your sheet names that you do not have yet are
+        added for you.
       </p>
     </section>
   );
@@ -1053,6 +1054,17 @@ function Landed({
                 } under them`
               : ""}
             .
+          </span>
+        </p>
+      ) : null}
+
+      {result.addedSuppliers.length > 0 ? (
+        <p className="pos-note mb-3">
+          <IconTag className="mt-0.5 h-4 w-4 flex-none text-orchid-700" />
+          <span>
+            Added to your suppliers: {list(result.addedSuppliers)}. Their phone
+            numbers and payment terms are blank until you fill them in under
+            Buying.
           </span>
         </p>
       ) : null}

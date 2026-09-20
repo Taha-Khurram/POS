@@ -7,7 +7,9 @@
  * and a word one side would accept and the other would not is a movement
  * nobody can read. One list, read from both sides — and every id below is also
  * a check constraint on `public.stock_movements` in `0022_stock_moves.sql`, so
- * a value that slips past this file still cannot reach the table.
+ * a value that slips past this file still cannot reach the table — widened by
+ * one in `0028_purchasing.sql`, which added the first reason that is positive
+ * by design.
  *
  * `items.stock` is a running total and this is what it is running over. The
  * table is the evidence and the number is the summary: the first time an owner
@@ -45,6 +47,11 @@ export const STOCK_REASONS = [
     label: "From a spreadsheet",
     blurb: "Arrived through Bulk import.",
   },
+  {
+    id: "purchase",
+    label: "Delivered",
+    blurb: "Came in on a delivery and went on the shelf.",
+  },
 ] as const;
 
 export type StockReason = (typeof STOCK_REASONS)[number]["id"];
@@ -70,9 +77,13 @@ export type Movement = {
   quantity: number;
   stockAfter: number;
   /** The bill that moved it, for a sale or a return. Null for everything an
-   *  owner did on the Products screen. */
+   *  owner did on the Products screen, and for a delivery — which names a
+   *  goods receipt instead. */
   receiptNo: string | null;
   saleId: string | null;
+  /** The delivery that brought it in, for a `purchase`. Its GRN number, so the
+   *  movements list can be read back to an invoice without a second query. */
+  grnNumber: string | null;
   /** What the owner typed when they corrected a count. */
   note: string;
   /** Who did it, already resolved to a name — the browser never sees the

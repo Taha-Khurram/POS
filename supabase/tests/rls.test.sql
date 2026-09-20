@@ -213,6 +213,91 @@ select lives_ok(
   'two shops may each hold the same customer phone number'
 );
 
+-- The supplier list, added in 0027. Tenant A buys from two distributors and
+-- tenant B from one. Who a shop buys from — and at what terms — is as saleable
+-- as its customer list: it is the whole of a competitor's sourcing.
+insert into public.suppliers (id, tenant_id, name, phone, is_active)
+values
+  ('f5555551-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Ravi Trading', '03004445555', true),
+  ('f5555552-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'Shan Foods', null, false),
+  ('f5555553-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'Karachi Wholesale', '03211112222', true);
+
+-- The name is the identity, folded for case and spacing — which is the whole
+-- point of the table. "Ravi Trading" and "ravi  trading" were always one party,
+-- and an index that let both in would rebuild, one row at a time, the mess of
+-- spellings 0027 existed to undo.
+select throws_ok(
+  $$ insert into public.suppliers (tenant_id, name)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'ravi  trading') $$,
+  '23505', null,
+  'two suppliers in one shop cannot share a name, whatever the case or spacing'
+);
+
+-- ...and two shops can. Two kiryanas on one street buy from the same
+-- distributor and always will.
+select lives_ok(
+  $$ insert into public.suppliers (tenant_id, name)
+     values ('bbbbbbbb-0000-4000-8000-000000000001', 'Ravi Trading') $$,
+  'two shops may each buy from a supplier of the same name'
+);
+
+-- One order and one delivery each, so the buying read tests have something to
+-- leak. Written directly here because the fixtures run before the role switch;
+-- in the product both only ever arrive through `save_purchase_order` and
+-- `record_receipt`, which is what the write tests further down prove.
+insert into public.purchase_orders (id, tenant_id, branch_id, supplier_id, order_number, status, subtotal, total)
+select v.id, v.tenant_id, b.id, v.supplier_id, v.order_number, 'placed', v.total, v.total
+  from (values
+    ('f6666661-0000-4000-8000-000000000001'::uuid,
+     'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+     'f5555551-0000-4000-8000-000000000001'::uuid, 'PO-00001', 6240.00),
+    ('f6666662-0000-4000-8000-000000000001'::uuid,
+     'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
+     'f5555553-0000-4000-8000-000000000001'::uuid, 'PO-00001', 990.00)
+  ) as v (id, tenant_id, supplier_id, order_number, total)
+  join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+insert into public.purchase_order_lines (id, tenant_id, purchase_order_id, name_snapshot, unit, quantity, unit_cost, line_total)
+values
+  ('f7777771-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001',
+   'f6666661-0000-4000-8000-000000000001', 'Coca-Cola 1.5 L', 'piece', 24, 260, 6240),
+  ('f7777772-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001',
+   'f6666662-0000-4000-8000-000000000001', 'Chai patti 1 kg', 'packet', 3, 330, 990);
+
+insert into public.goods_receipts (id, tenant_id, branch_id, supplier_id, purchase_order_id, grn_number, received_on, subtotal, freight, total)
+select v.id, v.tenant_id, b.id, v.supplier_id, v.order_id, v.grn_number, current_date,
+       v.subtotal, v.freight, v.subtotal + v.freight
+  from (values
+    ('f8888881-0000-4000-8000-000000000001'::uuid,
+     'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+     'f5555551-0000-4000-8000-000000000001'::uuid,
+     'f6666661-0000-4000-8000-000000000001'::uuid, 'GRN-00001', 3120.00, 200.00),
+    ('f8888882-0000-4000-8000-000000000001'::uuid,
+     'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
+     'f5555553-0000-4000-8000-000000000001'::uuid,
+     'f6666662-0000-4000-8000-000000000001'::uuid, 'GRN-00001', 990.00, 0.00)
+  ) as v (id, tenant_id, supplier_id, order_id, grn_number, subtotal, freight)
+  join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+-- The landed cost carries the freight: 3120 of goods plus 200 of bhaara over 12
+-- units is 276.6667 each, and 276.6667 x 12 is 3320 — the receipt total to the
+-- paisa. That identity is what `record_receipt`'s apportionment exists to hold,
+-- and the fixture states it so a future change to the arithmetic has something
+-- concrete to be wrong against.
+insert into public.goods_receipt_lines (tenant_id, goods_receipt_id, purchase_order_line_id, name_snapshot, unit, quantity, unit_cost, line_total, landed_unit_cost)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001',
+   'f8888881-0000-4000-8000-000000000001',
+   'f7777771-0000-4000-8000-000000000001', 'Coca-Cola 1.5 L', 'piece', 12, 260, 3120, 276.6667),
+  ('bbbbbbbb-0000-4000-8000-000000000001',
+   'f8888882-0000-4000-8000-000000000001',
+   'f7777772-0000-4000-8000-000000000001', 'Chai patti 1 kg', 'packet', 3, 330, 990, 330.0000);
+
 -- One recorded sale each, so the read tests have something to leak.
 insert into public.sales (id, tenant_id, branch_id, counter_id, customer_id, receipt_number, business_day, subtotal, total)
 select
@@ -559,6 +644,151 @@ select throws_ok(
   $$ delete from public.customers $$,
   '42501', null,
   'tenant user cannot delete its own customers directly'
+);
+
+-- The supplier list, added in 0027. Reading another shop's suppliers is reading
+-- where they source and what they pay — which is the one thing a competitor
+-- wants more than the customer list.
+select is(
+  (select count(*) from public.suppliers), 2::bigint,
+  'tenant A sees its own two suppliers and neither of tenant B''s'
+);
+
+select is_empty(
+  $$ select 1 from public.suppliers
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B suppliers'
+);
+
+-- A switched-off supplier is still tenant A's own row: `is_active` is what the
+-- pickers filter on, never a policy, so the editor can still reach them.
+select is(
+  (select count(*) from public.suppliers where not is_active), 1::bigint,
+  'a switched-off supplier is still readable by their own shop'
+);
+
+-- Rule 3 again: every write is a Server Action on the service role.
+select throws_ok(
+  $$ insert into public.suppliers (tenant_id, name)
+     values ('aaaaaaaa-0000-4000-8000-000000000001', 'Forged Distributors') $$,
+  '42501', null,
+  'tenant user cannot add a supplier directly'
+);
+
+select throws_ok(
+  $$ update public.suppliers set payment_terms_days = 365 $$,
+  '42501', null,
+  'tenant user cannot edit a supplier directly'
+);
+
+select throws_ok(
+  $$ delete from public.suppliers $$,
+  '42501', null,
+  'tenant user cannot delete its own suppliers directly'
+);
+
+-- Buying, added in 0028. An order and a delivery are the two documents that say
+-- what a shop pays for its stock — which is its margin, its sourcing and its
+-- negotiating position in three tables. One shop reading another's is worse
+-- than reading its sales: a competitor learns what to undercut and by how much.
+select is(
+  (select count(*) from public.purchase_orders), 1::bigint,
+  'tenant A sees only its own purchase orders'
+);
+
+select is_empty(
+  $$ select 1 from public.purchase_orders
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B purchase orders'
+);
+
+select is(
+  (select count(*) from public.purchase_order_lines), 1::bigint,
+  'tenant A sees only its own order lines'
+);
+
+select is(
+  (select count(*) from public.goods_receipts), 1::bigint,
+  'tenant A sees only its own deliveries'
+);
+
+select is_empty(
+  $$ select 1 from public.goods_receipts
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B deliveries'
+);
+
+-- `landed_unit_cost` is the single most sensitive number in this schema: it is
+-- what a shop really pays once carriage is in, which is the floor under every
+-- price it can quote.
+select is(
+  (select count(*) from public.goods_receipt_lines), 1::bigint,
+  'tenant A sees only its own delivery lines, landed cost and all'
+);
+
+-- The document series is the one table in 0028 with no read policy at all.
+-- Nothing in the console draws it, and a running count of a shop's orders tells
+-- a competitor how much it buys.
+select is_empty(
+  $$ select 1 from public.document_series $$,
+  'no tenant user can read the document series, not even its own'
+);
+
+-- Rule 3, five more times. Every write is a security-definer function granted
+-- to the service role, so a tenant JWT has no insert path at all — which is
+-- what stops somebody writing themselves a delivery and moving their own cost
+-- price to whatever makes the margin look right.
+select throws_ok(
+  $$ insert into public.purchase_orders (id, tenant_id, branch_id, supplier_id, order_number)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'f5555551-0000-4000-8000-000000000001', 'PO-FORGED'
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' and b.is_primary $$,
+  '42501', null,
+  'tenant user cannot raise a purchase order directly'
+);
+
+select throws_ok(
+  $$ insert into public.goods_receipts (id, tenant_id, branch_id, supplier_id, grn_number, received_on)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'f5555551-0000-4000-8000-000000000001', 'GRN-FORGED', current_date
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' and b.is_primary $$,
+  '42501', null,
+  'tenant user cannot record a delivery directly'
+);
+
+select throws_ok(
+  $$ update public.goods_receipt_lines set landed_unit_cost = 1 $$,
+  '42501', null,
+  'tenant user cannot rewrite what a delivery cost'
+);
+
+select throws_ok(
+  $$ delete from public.purchase_orders $$,
+  '42501', null,
+  'tenant user cannot delete its own purchase orders directly'
+);
+
+-- Neither of the two purchasing functions is reachable from a tenant JWT. They
+-- are `security definer` and granted to `service_role` alone, so a caller who
+-- found the names could otherwise stock their own shelf and move their own
+-- costs without a Server Action in the way.
+select throws_ok(
+  $$ select public.record_receipt(
+       'aaaaaaaa-0000-4000-8000-000000000001', gen_random_uuid(),
+       'f5555551-0000-4000-8000-000000000001', null, current_date,
+       null, null, 0, 0, '[]'::jsonb, null) $$,
+  '42501', null,
+  'tenant user cannot call record_receipt'
+);
+
+select throws_ok(
+  $$ select public.save_purchase_order(
+       'aaaaaaaa-0000-4000-8000-000000000001', gen_random_uuid(),
+       'f5555551-0000-4000-8000-000000000001', null, null, 'draft', '[]'::jsonb, null) $$,
+  '42501', null,
+  'tenant user cannot call save_purchase_order'
 );
 
 -- Takings, added in 0011. The commercially expensive leak: one shop reading

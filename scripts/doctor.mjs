@@ -53,6 +53,12 @@ const TABLES = [
   "departments",
   "categories",
   "customers",
+  "suppliers",
+  "purchase_orders",
+  "purchase_order_lines",
+  "goods_receipts",
+  "goods_receipt_lines",
+  "document_series",
 ];
 
 const CLAIMS = ["tenant_id", "tenant_role", "branch_id", "platform_role"];

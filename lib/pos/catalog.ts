@@ -50,6 +50,12 @@ export type Product = {
   stock: number;
   /** Alert below this. Per item, never one number for the whole shop. */
   lowAt: number;
+  /** Which `suppliers` row this item is bought from, or null for one nobody has
+   *  said yet. `0027` turned the old free-text column into this. */
+  supplierId: string | null;
+  /** That supplier's name, read through the join. Kept as a plain string on
+   *  this type because every screen that ever touched it — the search, the
+   *  export, the sheet's label — only ever wanted the word. */
   supplier: string;
   taxRate: number;
 };
@@ -428,3 +434,87 @@ export const GLOBAL_SAMPLE: Record<string, Lookup> = {
     category: "Detergents & soap",
   },
 };
+
+/* ---------------- Off the shelf and into a spreadsheet ---------------- */
+
+const escapeCell = (value: string) =>
+  /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+
+/**
+ * The item list as a CSV.
+ *
+ * A shop that cannot get its own price list back out is a shop that feels
+ * locked in, and the list is the one thing in Flo a shopkeeper typed
+ * themselves — four hundred rows of it, in some cases off a sheet they kept
+ * for years before this. It leaves the way it came in.
+ *
+ * **The headings are the import's own spellings, deliberately**, which is why
+ * this file breaks the rule `billsToCsv` follows and puts no currency in the
+ * `cost` and `price` headings. There a heading is a label a human reads; here
+ * it is a key `import-panel.tsx` matches its aliases against, and `cost (Rs)`
+ * normalises to `costrs`, which matches nothing. So the money columns are bare
+ * numbers under bare names, and the currency is the shop's own — the same one
+ * every figure in the console is in.
+ *
+ * `tax_rate` and `status` ride at the end because the export's first duty is to
+ * be complete: they are on the item, so they are in the file. The import has no
+ * alias for either and will ignore both, which is honest rather than clever —
+ * a round trip returns the list, not the tax treatment.
+ *
+ * Nothing derived is written. A `margin` column is right the moment it is
+ * exported and wrong the moment somebody edits the cost beside it in Excel, and
+ * a stale figure in a file an accountant is reading is worse than a figure they
+ * have to work out. The spreadsheet is where derivation belongs.
+ *
+ * The leading BOM is what makes Excel on a Windows machine read the Urdu column
+ * as UTF-8 rather than as mojibake — the same reason the bills export carries
+ * one.
+ */
+export function productsToCsv(items: Product[]): string {
+  const header = [
+    "name",
+    "urdu",
+    "barcode",
+    "sku",
+    "department",
+    "category",
+    "unit",
+    "cost",
+    "price",
+    "stock",
+    "low_stock",
+    "supplier",
+    "tax_rate",
+    "status",
+  ];
+
+  const lines = items.map((item) =>
+    [
+      item.name,
+      item.urdu,
+      item.barcode ?? "",
+      item.sku,
+      item.department,
+      item.category,
+      item.unit,
+      item.cost.toFixed(2),
+      item.price.toFixed(2),
+      String(item.stock),
+      String(item.lowAt),
+      item.supplier,
+      String(item.taxRate),
+      // Words rather than true/false: this column is read by a person, and the
+      // import ignores it either way.
+      item.isActive ? "on sale" : "hidden",
+    ]
+      .map((cell) => escapeCell(String(cell)))
+      .join(","),
+  );
+
+  return `﻿${[header.join(","), ...lines].join("\r\n")}\r\n`;
+}
+
+/** `flo-items-2026-09-20.csv` — the day is in the name, so a folder of exports
+ *  taken while prices were being corrected can be told apart without opening
+ *  them. */
+export const catalogCsvFilename = (day: string) => `flo-items-${day}.csv`;

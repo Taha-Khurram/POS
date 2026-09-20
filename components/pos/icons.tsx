@@ -355,6 +355,17 @@ export const IconBox = (props: IconProps) => (
   </Glyph>
 );
 
+/** Buying — a delivery van. Not a second box: the rail already has one for
+ *  Products & stock, and two boxes side by side is a rail nobody reads. */
+export const IconTruck = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h8a1.5 1.5 0 0 1 1.5 1.5V16H3Z" />
+    <path d="M14 10h3.1a1.5 1.5 0 0 1 1.27.7L20.8 14.5a1.5 1.5 0 0 1 .2.75V16h-7Z" />
+    <circle cx="7" cy="18" r="1.9" />
+    <circle cx="17" cy="18" r="1.9" />
+  </Glyph>
+);
+
 export const IconLayers = (props: IconProps) => (
   <Glyph {...props}>
     <path d="M12 2.8 2.8 7.5 12 12.2l9.2-4.7L12 2.8Z" />

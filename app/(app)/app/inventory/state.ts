@@ -52,6 +52,11 @@ export type ImportResult =
        *  imported a sheet with a typo'd department wants to see "Bevrages" on
        *  this screen, not the number 1. */
       added: { departments: string[]; categories: string[] };
+      /** Suppliers the file named that the shop did not have yet. Named for the
+       *  same reason the branches are: a party that appeared on the Buying list
+       *  without anybody pressing a button is the one thing on this screen an
+       *  owner has to be told about by name. */
+      addedSuppliers: string[];
     }
   | { ok: false; error: string };
 

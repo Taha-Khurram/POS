@@ -674,13 +674,16 @@ export function Till({
 
   return (
     <>
-      {/* The till is the screen, not a panel on it: it takes the window's
-          whole height so the bill grows downwards into room that is already
-          there and the Charge bar stays where the hand expects it, rather
-          than sliding down the page as lines are added. */}
-      <section className="pos-card flex min-h-[30rem] w-full flex-col lg:h-[calc(100dvh-11.25rem)]">
+      {/* The till is the screen, not a panel on it: it takes whatever height
+          the fitted page has left, so the bill grows downwards into room that
+          is already there and the Charge bar stays where the hand expects it,
+          rather than sliding down the page as lines are added. It is measured
+          rather than calculated — the old `100dvh` minus a guess at the chrome
+          was a number that went wrong the moment the shift strip appeared
+          above it and put the Charge bar under the fold. */}
+      <section className="pos-card flex min-h-[30rem] w-full flex-col lg:min-h-0 lg:flex-1">
         {/* ================= Finding things ================= */}
-        <div className="border-b border-orchid-100 p-3" ref={finder}>
+        <div className="flex-none border-b border-orchid-100 p-3" ref={finder}>
           <div className="relative flex items-center gap-2">
             <label className="relative min-w-0 flex-1">
               <span className="sr-only">Scan or search an item</span>
@@ -828,7 +831,7 @@ export function Till({
             off it. Each of those was a band across the card of its own, and
             three bands above an empty table is a screen that looks busier than
             the job it is doing. */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-orchid-100 px-3 py-2">
+        <div className="flex flex-none flex-wrap items-center gap-2 border-b border-orchid-100 px-3 py-2">
           <IconCart className="h-4 w-4 flex-none text-orchid-700" />
           <h2 className="font-display text-[0.9375rem] leading-tight font-semibold">
             This bill
@@ -992,7 +995,7 @@ export function Till({
             The total and the button that takes the money are the two things a
             cashier looks at without looking away from the customer, so they
             sit at the same height, at the end of the line, every time. */}
-        <footer className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-orchid-100 px-4 py-3">
+        <footer className="flex flex-none flex-wrap items-center gap-x-6 gap-y-3 border-t border-orchid-100 px-4 py-3">
           <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.8125rem]">
             <Figure label="Subtotal" value={money(bill.subtotal)} />
 
@@ -1048,7 +1051,7 @@ export function Till({
           <p
             id="charge-blocked"
             role="status"
-            className="flex items-start gap-2 border-t border-orchid-100 bg-signal-warn/5 px-4 py-2.5 text-[0.8125rem] leading-relaxed text-graphite-700"
+            className="flex flex-none items-start gap-2 border-t border-orchid-100 bg-signal-warn/5 px-4 py-2.5 text-[0.8125rem] leading-relaxed text-graphite-700"
           >
             <IconAlert className="mt-0.5 h-4 w-4 flex-none text-signal-warn" />
             {blocked}

@@ -163,6 +163,7 @@ export async function getRolePermissions(
         can_close_shift,
         can_edit_items,
         can_change_price,
+        can_manage_purchasing,
         can_view_reports
       `,
     )
@@ -186,6 +187,7 @@ export async function getRolePermissions(
       canCloseShift: row.can_close_shift,
       canEditItems: row.can_edit_items,
       canChangePrice: row.can_change_price,
+      canManagePurchasing: row.can_manage_purchasing,
       canViewReports: row.can_view_reports,
     };
   }
