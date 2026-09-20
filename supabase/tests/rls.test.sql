@@ -253,6 +253,47 @@ values
    '0b0b0b0b-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
    1, 1200.00, 1200.00, 900.00);
 
+-- The stock ledger, added in 0022. One movement each, so the read tests have
+-- something to leak and the sign convention has something to assert against.
+insert into public.stock_movements
+  (id, tenant_id, item_id, reason, quantity, stock_after, sale_id)
+values
+  ('5a5a5a5a-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', '0a0a0a0a-0000-4000-8000-000000000001',
+   'sale', -1, 47, 'dddddddd-0000-4000-8000-000000000001'),
+  ('5b5b5b5b-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', '0b0b0b0b-0000-4000-8000-000000000001',
+   'sale', -1, 12, 'dddddddd-0000-4000-8000-000000000002');
+
+-- A bill parked at each shop's counter, added in 0025. Deliberately not on
+-- `sales`: a held bill has no receipt number, and the whole point of the
+-- separate table is that it never claims one.
+insert into public.held_bills (id, tenant_id, counter_id, label, lines)
+values
+  ('6a6a6a6a-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001', 'ccccccc1-0000-4000-8000-000000000001',
+   'Blue shirt',
+   '[{"item_id":"0a0a0a0a-0000-4000-8000-000000000001","quantity":2}]'::jsonb),
+  ('6b6b6b6b-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'ccccccc3-0000-4000-8000-000000000001',
+   'Table 4',
+   '[{"item_id":"0b0b0b0b-0000-4000-8000-000000000001","quantity":1}]'::jsonb);
+
+-- A drawer open at each shop, added in 0026.
+insert into public.shifts
+  (id, tenant_id, branch_id, counter_id, opened_by, opening_float, status)
+select
+  v.id, v.tenant_id, b.id, v.counter_id, v.opened_by, v.opening_float, 'open'
+from (values
+  ('7a7a7a7a-0000-4000-8000-000000000001'::uuid, 'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+   'ccccccc1-0000-4000-8000-000000000001'::uuid,
+   '44444444-0000-4000-8000-000000000001'::uuid, 2000.00),
+  ('7b7b7b7b-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
+   'ccccccc3-0000-4000-8000-000000000001'::uuid,
+   null::uuid, 500.00)
+) as v (id, tenant_id, counter_id, opened_by, opening_float)
+join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
 -- =============================================================================
 -- Tenant A's owner
 -- =============================================================================
@@ -707,6 +748,152 @@ select throws_ok(
 );
 
 -- =============================================================================
+-- The stock ledger, returns, held bills and shifts — 0022 through 0026
+--
+-- Everything here is still tenant A's owner. Four tables and three functions
+-- landed together, and each of them is one more surface that could hand one
+-- shop another's numbers: what is on somebody's shelf, what came back over
+-- their counter, what is sitting parked at their till, and what their drawer
+-- was short by. The last of those is the most sensitive thing in the schema
+-- after the payment history.
+-- =============================================================================
+set local request.jwt.claims = '{"sub":"11111111-0000-4000-8000-000000000001","role":"authenticated","tenant_id":"aaaaaaaa-0000-4000-8000-000000000001","tenant_role":"owner","platform_role":null}';
+
+select is(
+  (select count(*) from public.stock_movements), 1::bigint,
+  'tenant A sees only its own stock movements'
+);
+
+select is_empty(
+  $$ select 1 from public.stock_movements
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read what moved on tenant B''s shelves'
+);
+
+select is(
+  (select count(*) from public.held_bills), 1::bigint,
+  'tenant A sees only its own parked bills'
+);
+
+select is_empty(
+  $$ select 1 from public.held_bills
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read what is parked at tenant B''s counter'
+);
+
+select is(
+  (select count(*) from public.shifts), 1::bigint,
+  'tenant A sees only its own shifts'
+);
+
+select is_empty(
+  $$ select 1 from public.shifts
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B''s drawer counts'
+);
+
+-- Rule 3 from 0001: select policies only. The ledger is the one that matters
+-- most here — a shelf count a tenant could edit is a stocktake that can be made
+-- to agree with anything, which is the whole reason the movements exist.
+select throws_ok(
+  $$ insert into public.stock_movements (tenant_id, item_id, reason, quantity, stock_after)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '0a0a0a0a-0000-4000-8000-000000000001', 'count', 100, 100) $$,
+  '42501', null,
+  'tenant user cannot write its own stock movement'
+);
+
+select throws_ok(
+  $$ update public.stock_movements set quantity = 0 $$,
+  '42501', null,
+  'tenant user cannot rewrite a stock movement'
+);
+
+select throws_ok(
+  $$ update public.items set stock = 9999 $$,
+  '42501', null,
+  'tenant user cannot set a shelf count directly — private.move_stock is the only writer'
+);
+
+select throws_ok(
+  $$ insert into public.held_bills (id, tenant_id, counter_id, lines)
+     values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001',
+             'ccccccc1-0000-4000-8000-000000000001', '[]'::jsonb) $$,
+  '42501', null,
+  'tenant user cannot park a bill directly'
+);
+
+-- The over-or-short is the figure the whole shift mechanism exists to produce.
+-- A cashier who could write it could close a short drawer as balanced.
+select throws_ok(
+  $$ update public.shifts set over_short = 0, closing_cash = 0 $$,
+  '42501', null,
+  'tenant user cannot write its own drawer count'
+);
+
+select throws_ok(
+  $$ insert into public.shifts (tenant_id, branch_id, counter_id, opening_float)
+     select 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'ccccccc2-0000-4000-8000-000000000001', 0
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '42501', null,
+  'tenant user cannot open a shift directly'
+);
+
+-- The three write functions all belong to the service role, for the reason
+-- `record_sale` does: each of them claims something the shop cannot take back.
+-- `record_return` takes money out of a drawer, `close_shift` stamps a variance
+-- somebody will be asked about, and `set_stock` rewrites a shelf count.
+select throws_ok(
+  $$ select public.record_return(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       'ccccccc1-0000-4000-8000-000000000001'::uuid,
+       gen_random_uuid(), current_date, null,
+       'dddddddd-0000-4000-8000-000000000001'::uuid,
+       '[]'::jsonb, 'cash', true, null) $$,
+  '42501', null,
+  'tenant user cannot call record_return'
+);
+
+select throws_ok(
+  $$ select public.set_stock(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       '0a0a0a0a-0000-4000-8000-000000000001'::uuid,
+       9999, 'count', null, null) $$,
+  '42501', null,
+  'tenant user cannot call set_stock'
+);
+
+select throws_ok(
+  $$ select public.open_shift(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       'ccccccc2-0000-4000-8000-000000000001'::uuid, null, 0, null) $$,
+  '42501', null,
+  'tenant user cannot call open_shift'
+);
+
+select throws_ok(
+  $$ select public.close_shift(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       '7a7a7a7a-0000-4000-8000-000000000001'::uuid, null, 0, null) $$,
+  '42501', null,
+  'tenant user cannot call close_shift'
+);
+
+-- `private.move_stock` is the only writer of `items.stock` and is revoked from
+-- everybody — it is reachable only from inside a security-definer function
+-- above it. A tenant that could call it could move any shelf it could name.
+select throws_ok(
+  $$ select private.move_stock(
+       'aaaaaaaa-0000-4000-8000-000000000001'::uuid,
+       '0a0a0a0a-0000-4000-8000-000000000001'::uuid,
+       1000, 'count', null, null, null) $$,
+  '42501', null,
+  'tenant user cannot call private.move_stock'
+);
+
+-- =============================================================================
 -- A cashier at tenant A — the account the shop hands out most, and therefore
 -- the one whose JWT is most likely to end up somewhere it should not. Nothing
 -- below is gated on being the owner: the role checks that stop a cashier
@@ -753,6 +940,18 @@ select throws_ok(
   'a cashier cannot rewrite what a sale was worth'
 );
 
+select throws_ok(
+  $$ update public.shifts set over_short = 0 $$,
+  '42501', null,
+  'a cashier cannot close their own drawer as balanced'
+);
+
+select throws_ok(
+  $$ update public.items set stock = 0 $$,
+  '42501', null,
+  'a cashier cannot make the shelf count agree with the shelf'
+);
+
 -- =============================================================================
 -- A signed-up-but-never-activated user. §3.3 layer 5: inert, not dangerous.
 -- =============================================================================
@@ -776,6 +975,12 @@ select is_empty($$ select 1 from public.departments $$,
   'a user with no tenant sees no departments');
 select is_empty($$ select 1 from public.categories $$,
   'a user with no tenant sees no categories');
+select is_empty($$ select 1 from public.stock_movements $$,
+  'a user with no tenant sees no stock movements');
+select is_empty($$ select 1 from public.held_bills $$,
+  'a user with no tenant sees no parked bills');
+select is_empty($$ select 1 from public.shifts $$,
+  'a user with no tenant sees no shifts');
 select is(
   (select count(*) from public.profiles), 1::bigint,
   'a user with no tenant still sees its own profile row, and only that'
@@ -856,6 +1061,12 @@ select throws_ok($$ select 1 from public.departments $$, '42501', null,
   'anon cannot read a shop''s departments');
 select throws_ok($$ select 1 from public.categories $$, '42501', null,
   'anon cannot read a shop''s categories');
+select throws_ok($$ select 1 from public.stock_movements $$, '42501', null,
+  'anon cannot read what is on a shop''s shelves or how it got there');
+select throws_ok($$ select 1 from public.held_bills $$, '42501', null,
+  'anon cannot read what is parked at a shop''s counter');
+select throws_ok($$ select 1 from public.shifts $$, '42501', null,
+  'anon cannot read a shop''s drawer counts');
 
 -- =============================================================================
 -- audit_log is append-only for everyone, including the role that writes it
@@ -926,6 +1137,101 @@ select isnt_empty(
       where actor_id = '66666666-0000-4000-8000-000000000001'
         and action = 'staff.created' $$,
   'the audit entry keeps its actor after the account is gone'
+);
+
+-- =============================================================================
+-- The sign of the money — 0024
+--
+-- A refund is a negative sale, which is what lets every total in the console
+-- net by arithmetic rather than by each reader remembering to subtract. That
+-- only holds if the sign and the status cannot disagree: a completed sale with
+-- a negative total would take money off the takings that was never taken, and a
+-- refund with a positive one would add money to them that was given back.
+--
+-- Asserted with the migration role, because the check constraint is the floor
+-- under `record_sale` and `record_return` rather than a policy — it has to hold
+-- against the service role too, which is the only thing that can write here.
+-- =============================================================================
+select throws_ok(
+  $$ insert into public.sales (id, tenant_id, branch_id, receipt_number,
+                               business_day, status, subtotal, total)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'NEG-1', current_date, 'completed', -100, -100
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '23514', null,
+  'a completed sale cannot have a negative total'
+);
+
+select throws_ok(
+  $$ insert into public.sales (id, tenant_id, branch_id, receipt_number,
+                               business_day, status, subtotal, total)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'POS-1', current_date, 'refund', 100, 100
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '23514', null,
+  'a refund cannot add to the takings'
+);
+
+-- The line carries the same statement one level down. `sale_lines` has no
+-- status of its own and does not need one: the sign of the quantity says which
+-- way the goods went, and the money has to agree with it or the line nets the
+-- wrong way in every sum in the product.
+select throws_ok(
+  $$ insert into public.sale_lines
+       (tenant_id, sale_id, name_snapshot, unit, quantity, unit_price, line_total)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             'dddddddd-0000-4000-8000-000000000001', 'Forged', 'piece',
+             -1, 100, 100) $$,
+  '23514', null,
+  'a line that went back cannot have come to a positive amount'
+);
+
+select throws_ok(
+  $$ insert into public.sale_lines
+       (tenant_id, sale_id, name_snapshot, unit, quantity, unit_price, line_total)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             'dddddddd-0000-4000-8000-000000000001', 'Forged', 'piece',
+             0, 100, 0) $$,
+  '23514', null,
+  'a line for nothing at all is not a line'
+);
+
+-- =============================================================================
+-- One open drawer per counter — 0026
+--
+-- Two open shifts on one till is two people each counting the other's takings,
+-- and neither variance means anything afterwards. The unique index is the whole
+-- guarantee; `open_shift` returning the existing row rather than raising is the
+-- courtesy on top of it.
+-- =============================================================================
+select throws_ok(
+  $$ insert into public.shifts (tenant_id, branch_id, counter_id, opening_float, status)
+     select 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'ccccccc1-0000-4000-8000-000000000001', 0, 'open'
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '23505', null,
+  'a counter cannot have two drawers open at once'
+);
+
+-- =============================================================================
+-- A parked bill never claims a receipt number — 0025
+--
+-- The reason `held_bills` is its own table rather than a status on `sales`. A
+-- number claimed before anybody pays is a hole in the shop's series, and
+-- 'held' is no longer a status a sale can be in at all.
+-- =============================================================================
+select throws_ok(
+  $$ insert into public.sales (id, tenant_id, branch_id, receipt_number,
+                               business_day, status, subtotal, total)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'HELD-1', current_date, 'held', 0, 0
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' limit 1 $$,
+  '23514', null,
+  'a sale cannot be held — a parked bill lives on held_bills and claims no number'
 );
 
 select * from finish();

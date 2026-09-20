@@ -18,6 +18,7 @@ import {
   TENDER_FILTERS,
   billsToCsv,
   csvFilename,
+  isRefund,
   matchesBill,
   matchesTender,
   summarise,
@@ -65,6 +66,7 @@ export function HistoryPanel({
   settings,
   shop,
   canSeeCustomers,
+  refundCounter,
 }: {
   page: BillPage;
   range: RangeId;
@@ -85,6 +87,11 @@ export function HistoryPanel({
   settings: ShopSettings;
   shop: ShopProfile | null;
   canSeeCustomers: boolean;
+  /** The open counter this device would hand a refund out of, or null when
+   *  this session may not take returns or the tablet has no counter. Resolved
+   *  on the server and passed straight through — the panel makes no decision
+   *  about it, the drawer draws the button and the action checks it again. */
+  refundCounter: Counter | null;
 }) {
   const [query, setQuery] = useState(openingQuery);
   const [counterId, setCounterId] = useState<string>(ALL);
@@ -136,8 +143,19 @@ export function HistoryPanel({
         header: "Bill",
         cell: (bill) => (
           <span className="block">
-            <span className="block font-mono text-[0.8125rem] font-medium text-graphite-900">
-              {bill.receiptNo}
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono text-[0.8125rem] font-medium text-graphite-900">
+                {bill.receiptNo}
+              </span>
+
+              {/* A refund is a negative sale, so the minus in the total column
+                  is already the arithmetic. This is the label — a row that
+                  reads as money going back should say so in the first column
+                  the eye lands on, not be inferred from a sign at the far end
+                  of the line. */}
+              {isRefund(bill) ? (
+                <span className="pos-badge pos-badge-bad">Refund</span>
+              ) : null}
             </span>
             <span className="block text-[0.6875rem] text-graphite-500">
               {writeClock(bill.at, settings.timezone)}
@@ -188,11 +206,16 @@ export function HistoryPanel({
         cell: (bill) => (
           <span
             className={`pos-badge ${
-              bill.tenders.length !== 1
-                ? "pos-badge-warn"
-                : bill.tenders[0].method === "cash"
-                  ? "pos-badge-good"
-                  : "pos-badge-info"
+              // Red on a refund whatever it was settled by: the badge answers
+              // "did money come in or go out", and green for cash on a row
+              // that emptied the drawer is the one reading that matters.
+              isRefund(bill)
+                ? "pos-badge-bad"
+                : bill.tenders.length !== 1
+                  ? "pos-badge-warn"
+                  : bill.tenders[0].method === "cash"
+                    ? "pos-badge-good"
+                    : "pos-badge-info"
             }`}
           >
             {writeTender(bill.tenders)}
@@ -204,7 +227,11 @@ export function HistoryPanel({
         header: "Total",
         align: "end",
         cell: (bill) => (
-          <span className="font-medium text-graphite-900">{money(bill.total)}</span>
+          <span
+            className={`font-medium ${isRefund(bill) ? "text-signal-bad" : "text-graphite-900"}`}
+          >
+            {money(bill.total)}
+          </span>
         ),
       },
       {
@@ -453,6 +480,7 @@ export function HistoryPanel({
           shop={shop}
           settings={settings}
           canSeeCustomers={canSeeCustomers}
+          refundCounter={refundCounter}
           position={{ index: openIndex, of: rows.length }}
           onStep={(delta) => {
             const next = rows[openIndex + delta];

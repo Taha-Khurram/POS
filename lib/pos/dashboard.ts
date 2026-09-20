@@ -55,7 +55,7 @@ export type TenderMethod =
   | "easypaisa"
   | "jazzcash";
 
-export type SaleStatus = "completed" | "held" | "returned";
+export type SaleStatus = "completed" | "held" | "refund";
 
 export type TrendPoint = {
   /** Axis label, already in the shop's own words. */
@@ -226,7 +226,7 @@ type SummaryRow = {
 const num = (value: number | string | null | undefined) => Number(value) || 0;
 
 const TENDERS: TenderMethod[] = ["cash", "card", "raast", "easypaisa", "jazzcash"];
-const STATUSES: SaleStatus[] = ["completed", "held", "returned"];
+const STATUSES: SaleStatus[] = ["completed", "held", "refund"];
 
 const EMPTY_TOTALS: PeriodTotals = {
   sales: 0,

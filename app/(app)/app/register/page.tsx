@@ -5,12 +5,16 @@ import { cookies } from "next/headers";
 import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
 import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { getTillAccess } from "@/lib/pos/access";
 import { listActiveCustomers } from "@/lib/pos/customers";
+import { listHeldBills } from "@/lib/pos/held-bills";
 import { listSellableProducts } from "@/lib/pos/items";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
-import { getAssignedCounterId } from "@/lib/pos/staff";
+import { getOpenShift } from "@/lib/pos/shifts";
+import { getAssignedCounterId, listStaff } from "@/lib/pos/staff";
 import { CounterPicker } from "./counter-picker";
 import { CounterSelect } from "./counter-select";
+import { ShiftBar } from "./shift-bar";
 import { Till } from "./till";
 
 export const metadata: Metadata = {
@@ -59,7 +63,7 @@ export default async function RegisterPage() {
 
   if (!session.tenantId) return <NotAttached />;
 
-  const [counters, shop, settings, assigned, items, customers, jar] =
+  const [counters, shop, settings, assigned, items, customers, access, jar] =
     await Promise.all([
       listCounters(session.tenantId),
       getShopProfile(session.tenantId),
@@ -67,6 +71,12 @@ export default async function RegisterPage() {
       getAssignedCounterId(session.userId),
       listSellableProducts(session.tenantId),
       listActiveCustomers(session.tenantId),
+      // What this cashier may do at the counter — discount, refund, close the
+      // drawer. Resolved here so what crosses to the till is the answer and
+      // never the permissions row behind it, and re-checked by every Server
+      // Action it unlocks, because a control the browser does not draw is not
+      // a control nobody can call.
+      getTillAccess(session),
       cookies(),
     ]);
 
@@ -102,6 +112,30 @@ export default async function RegisterPage() {
 
   const counter = chosen ?? open[0];
 
+  // What is already parked at this till. Read after the counter is settled,
+  // because a parked bill belongs to one counter — the shopping is sitting
+  // beside that till, and offering it at the one by the door would be offering
+  // to settle a bill whose goods are across the shop.
+  //
+  // Two reads in sequence rather than one, and only on the branch that reaches
+  // the till: the picker and the two gates above all return before this costs
+  // anything. The roster comes first because the reader resolves "who put this
+  // down" against it — the browser is handed a name and never the list of
+  // everybody who could have parked a bill.
+  const staff = await listStaff(session.tenantId);
+  const names = staff.map((person) => ({ id: person.id, name: person.name }));
+
+  const [held, shift] = await Promise.all([
+    listHeldBills(session.tenantId, counter.id, names),
+    // Whichever shift this till is in, or null — which is the ordinary case for
+    // a shop that does not use them and is never an error. The strip says so
+    // and the till underneath works either way.
+    getOpenShift(session.tenantId, counter.id, {
+      counters: open.map((entry) => ({ id: entry.id, name: entry.name })),
+      staff: names,
+    }),
+  ]);
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
@@ -119,12 +153,25 @@ export default async function RegisterPage() {
         ) : null}
       </header>
 
+      {/* Above the till, because it is the first and last thing of the day and
+          nothing in between. It never gates the register — a shop that cannot
+          sell until somebody has done paperwork stops using the paperwork. */}
+      <ShiftBar
+        counter={counter}
+        shift={shift}
+        settings={settings}
+        canSeeVariance={access.canCloseShift}
+      />
+
       <Till
         items={items}
         customers={customers}
         counter={counter}
         shop={shop}
         settings={settings}
+        access={access}
+        held={held}
+        drawerOpen={Boolean(shift)}
       />
     </div>
   );

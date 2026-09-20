@@ -24,7 +24,9 @@ const METHOD_LABEL: Record<TenderMethod, string> = {
 const STATUS: Record<SaleStatus, { label: string; className: string }> = {
   completed: { label: "Paid", className: "pos-badge-good" },
   held: { label: "Held", className: "pos-badge-warn" },
-  returned: { label: "Returned", className: "pos-badge-bad" },
+  // Money going back, not a sale that failed. The total beside it is already
+  // negative, which is the louder signal — this only names it.
+  refund: { label: "Refund", className: "pos-badge-bad" },
 };
 
 const COLUMNS: Column<RecentSale>[] = [

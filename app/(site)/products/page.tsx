@@ -27,6 +27,8 @@ const MODULES = [
     points: [
       "Loose goods by weight, packets and cartons by the piece",
       "Cash with change worked out, or card",
+      "Rs 20 off or ten per cent, up to the ceiling you set",
+      "Put a bill down and pick it up when they come back",
       "A regular attached to the bill — always optional",
     ],
   },
@@ -37,6 +39,8 @@ const MODULES = [
     points: [
       "Narrow by counter, by cashier, by cash or card",
       "Open a bill, look at its lines, print it again marked DUPLICATE",
+      "Take a return against it, line by line, and print the slip",
+      "An opening float, a counted drawer and the over-or-short",
       "Export what is on screen to CSV",
     ],
   },
@@ -45,6 +49,8 @@ const MODULES = [
     tag: "In the store",
     copy: "Your own item list: barcode, SKU, Urdu name, unit, supplier, tax rate, what it costs you and what you sell it for — with the margin worked out beside them.",
     points: [
+      "The count goes down with every sale and back up with a return",
+      "Every change written down with its reason and its receipt",
       "A low-stock alert set per item, not one number for the shop",
       "Departments and categories you name yourself",
       "Bring a rate list in as CSV, checked row by row",
@@ -155,10 +161,10 @@ export default function ProductsPage() {
                   What is not here yet
                 </h2>
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-white/85">
-                  Returns, discounts at the till, held bills, shift close, the
-                  reports module, and billing while the internet is down. They
-                  are being built in that order, and none of them are on this
-                  page pretending otherwise.
+                  The reports module, billing while the internet is down, and
+                  purchase orders against your suppliers. They are being built
+                  in that order, and none of them are on this page pretending
+                  otherwise.
                 </p>
               </div>
               <Link

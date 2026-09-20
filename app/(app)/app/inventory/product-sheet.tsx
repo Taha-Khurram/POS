@@ -8,7 +8,9 @@ import {
   IconBarcode,
   IconCamera,
   IconCheck,
+  IconChevron,
   IconClose,
+  IconHistory,
   IconPlus,
   IconSearch,
   IconTag,
@@ -32,8 +34,14 @@ import {
   type TrackingMode,
   type UnitId,
 } from "@/lib/pos/catalog";
+import {
+  MOVEMENTS_MAX,
+  reasonLabel,
+  writeMovement,
+  type Movement,
+} from "@/lib/pos/stock";
 import { rupees } from "@/lib/format";
-import { deleteProduct, saveProduct } from "./actions";
+import { deleteProduct, loadMovements, saveProduct } from "./actions";
 import { IDLE } from "./state";
 
 /**
@@ -809,9 +817,15 @@ export function ProductSheet({
                     placeholder={fractional ? "84.5" : "24"}
                   />
                   <p className="pos-hint">
-                    {fractional
-                      ? "Decimals allowed — 84.5 kg is a legitimate count."
-                      : "Whole units. Leave it empty to start at nothing."}
+                    {item
+                      ? // Said here because it changes what the box means. It
+                        // is not a figure to keep up to date by hand any more
+                        // — the till moves it — so typing in it is a
+                        // stocktake, and it is recorded as one.
+                        "The till takes this down with every sale. Change it only when you have counted the shelf."
+                      : fractional
+                        ? "Decimals allowed — 84.5 kg is a legitimate count."
+                        : "Whole units. Leave it empty to start at nothing."}
                   </p>
                 </label>
 
@@ -830,6 +844,8 @@ export function ProductSheet({
                   </p>
                 </label>
               </div>
+
+              {item ? <StockHistory item={item} /> : null}
 
               {tracking === "variant" ? (
                 <VariantMatrix
@@ -1012,6 +1028,140 @@ function Step({ n, title, hint }: { n: number; title: string; hint: string }) {
     </header>
   );
 }
+
+/**
+ * Where the shelf count went.
+ *
+ * `items.stock` is a running total, and a running total nobody can take apart
+ * is a number an owner stops believing the first time it disagrees with the
+ * shelf. This is the taking-apart: what moved, by how much, why, and what the
+ * count read afterwards — so "it says nine and there are seven" becomes a list
+ * to read instead of an argument to have.
+ *
+ * Folded shut and fetched on the tap, not with the catalog. A shop with four
+ * hundred items has tens of thousands of movements and nobody opens more than
+ * one item at a time, so shipping them with the list would be paying for every
+ * item to look at one. The same call `/app/sales` makes to open a bill.
+ *
+ * The cap is stated rather than papered over, for the reason the history's is:
+ * a fast-moving line is fifty rows in a Saturday, and a list that quietly stops
+ * at fifty is a list that has hidden the movement being looked for.
+ */
+function StockHistory({ item }: { item: Product }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Movement[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const show = async () => {
+    setOpen((was) => !was);
+    if (rows || loading) return;
+
+    setLoading(true);
+    setRows(await loadMovements(item.id).catch(() => []));
+    setLoading(false);
+  };
+
+  return (
+    <div className="mt-4 rounded-2xl border border-orchid-100">
+      <button
+        type="button"
+        onClick={() => void show()}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3.5 py-3 text-left"
+      >
+        <IconHistory className="h-4 w-4 flex-none text-orchid-700" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[0.875rem] font-semibold text-graphite-900">
+            Where this count came from
+          </span>
+          <span className="mt-0.5 block text-[0.75rem] text-graphite-500">
+            Every sale, return and count against {item.name}.
+          </span>
+        </span>
+        <IconChevron
+          className={`h-4 w-4 flex-none text-graphite-500 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open ? (
+        <div className="border-t border-orchid-100 px-3.5 py-3">
+          {loading ? (
+            <p className="text-[0.8125rem] text-graphite-500">Reading the ledger…</p>
+          ) : !rows || rows.length === 0 ? (
+            <p className="text-[0.8125rem] leading-relaxed text-graphite-500">
+              Nothing has moved this item yet. The count above is what it was
+              added with, and the till will take it down from there.
+            </p>
+          ) : (
+            <>
+              <ul className="space-y-1.5">
+                {rows.map((row) => (
+                  <li
+                    key={row.id}
+                    className="flex items-baseline gap-2 text-[0.8125rem]"
+                  >
+                    <span
+                      className={`w-16 flex-none text-right font-display font-semibold tabular-nums ${
+                        row.quantity > 0 ? "text-signal-good" : "text-graphite-900"
+                      }`}
+                    >
+                      {writeMovement(row.quantity)}
+                    </span>
+
+                    <span className="min-w-0 flex-1">
+                      <span className="text-graphite-900">
+                        {reasonLabel(row.reason)}
+                      </span>
+                      {row.receiptNo ? (
+                        <span className="ml-1.5 font-mono text-[0.75rem] text-graphite-500">
+                          {row.receiptNo}
+                        </span>
+                      ) : null}
+                      {row.note ? (
+                        <span className="ml-1.5 text-graphite-500">
+                          — {row.note}
+                        </span>
+                      ) : null}
+                      <span className="block text-[0.6875rem] text-graphite-500">
+                        {row.by} · {writeMoment(row.at)}
+                      </span>
+                    </span>
+
+                    {/* What the shelf read straight after. The one column that
+                        makes a wrong count findable without adding the others
+                        up by hand. */}
+                    <span className="flex-none text-right text-[0.75rem] tabular-nums text-graphite-500">
+                      {row.stockAfter.toLocaleString("en-PK", {
+                        maximumFractionDigits: 3,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {rows.length >= MOVEMENTS_MAX ? (
+                <p className="mt-2.5 border-t border-orchid-100 pt-2.5 text-[0.75rem] text-graphite-500">
+                  The last {MOVEMENTS_MAX}. Anything older is in the sales
+                  history.
+                </p>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** "16 Sep, 4:20 pm" — enough to find the sale, short enough for one line. */
+const writeMoment = (at: string) =>
+  new Intl.DateTimeFormat("en-PK", {
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(at));
 
 function Figure({
   label,

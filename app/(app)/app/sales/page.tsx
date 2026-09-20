@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 
-import { IconCash, IconSales } from "@/components/pos/icons";
-import { getModuleAccess, requireModule } from "@/lib/pos/access";
+import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
+
+import { IconCash, IconDrawer, IconSales } from "@/components/pos/icons";
+import { getModuleAccess, getTillAccess, requireModule } from "@/lib/pos/access";
 import { listBills } from "@/lib/pos/bills";
 import { currentBusinessDay } from "@/lib/pos/counter";
 import {
@@ -13,9 +16,11 @@ import {
 } from "@/lib/pos/history";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
 import { listStaff } from "@/lib/pos/staff";
+import { listShifts } from "@/lib/pos/shifts";
 import { getDayTakings } from "@/lib/pos/takings";
 import { DayClose } from "./day-close";
 import { HistoryPanel } from "./history-panel";
+import { ShiftsPanel } from "./shifts-panel";
 
 export const metadata: Metadata = {
   title: "Sales",
@@ -25,6 +30,12 @@ export const metadata: Metadata = {
 const TABS = [
   { id: "history", label: "Bills", icon: IconSales },
   { id: "day", label: "Day close", icon: IconCash },
+  // Third rather than second, because it is the one asked weekly and the other
+  // two are asked daily. It is also a different question from Day close: that
+  // one is what a counter took between opening and midnight, this one is what
+  // a person's drawer came to over four hours — which is the one that makes a
+  // Rs 300 gap visible at all.
+  { id: "shifts", label: "Shifts", icon: IconDrawer },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -63,16 +74,40 @@ export default async function SalesPage({
   const params = await searchParams;
   const tab: TabId = isTab(params.tab) ? params.tab : "history";
 
-  const [settings, counters, access] = await Promise.all([
+  const [settings, counters, access, till, jar] = await Promise.all([
     getShopSettings(session.tenantId),
     listCounters(session.tenantId),
     // Whether the bill sheet may link a customer's name into their record. The
     // name shows either way — it was on the bill — but a cashier without the
     // module gets no link into a screen that would 404 on them.
     getModuleAccess(session),
+    // And whether they may take a return, which is a different question with a
+    // different switch behind it: `can_refund`, not a module.
+    getTillAccess(session),
+    cookies(),
   ]);
 
   const today = currentBusinessDay(settings);
+
+  // Which drawer a refund would come out of. The device's own counter, the
+  // same `flo_counter` cookie the register bills from — money going back
+  // belongs to the till it is handed out of, and that till is a property of
+  // the tablet by the door rather than of whoever is standing at it.
+  //
+  // Re-checked against the shop's open counters here, and again by
+  // `recordReturn`. Null means the button is not drawn at all: no permission,
+  // no open counter, or a tablet nobody has pointed anywhere yet — and there
+  // is no sensible default, because guessing which drawer the money left from
+  // is how a day-end count stops balancing.
+  const open = counters.filter((counter) => counter.isActive);
+  const device = jar.get(COUNTER_COOKIE)?.value ?? null;
+
+  const refundCounter = till.canRefund
+    ? (open.find((counter) => counter.id === device) ??
+      // One open till is not a guess. A shop with a single counter has exactly
+      // one drawer the money can come out of.
+      (open.length === 1 ? open[0] : null))
+    : null;
 
   return (
     <div className="space-y-4">
@@ -98,7 +133,14 @@ export default async function SalesPage({
         ))}
       </nav>
 
-      {tab === "day" ? (
+      {tab === "shifts" ? (
+        <ShiftsTab
+          tenantId={session.tenantId}
+          counters={counters}
+          settings={settings}
+          canSeeVariance={till.canCloseShift}
+        />
+      ) : tab === "day" ? (
         <DayCloseTab
           tenantId={session.tenantId}
           day={isDay(params.day) ? params.day : today}
@@ -118,6 +160,7 @@ export default async function SalesPage({
           counters={counters}
           settings={settings}
           canSeeCustomers={access.customers}
+          refundCounter={refundCounter}
         />
       )}
     </div>
@@ -143,6 +186,7 @@ async function BillsTab({
   counters,
   settings,
   canSeeCustomers,
+  refundCounter,
 }: {
   tenantId: string;
   today: string;
@@ -152,6 +196,7 @@ async function BillsTab({
   counters: Awaited<ReturnType<typeof listCounters>>;
   settings: Awaited<ReturnType<typeof getShopSettings>>;
   canSeeCustomers: boolean;
+  refundCounter: Awaited<ReturnType<typeof listCounters>>[number] | null;
 }) {
   const window = resolveWindow(range, today, custom);
 
@@ -176,6 +221,42 @@ async function BillsTab({
       settings={settings}
       shop={shop}
       canSeeCustomers={canSeeCustomers}
+      refundCounter={refundCounter}
+    />
+  );
+}
+
+/**
+ * Every drawer the shop has counted.
+ *
+ * The variance columns are behind `can_close_shift`, the same switch the
+ * closing sheet on the register honours — and for a stronger reason here, since
+ * this is every shift the shop has ever run: a cashier who could read it would
+ * know what the last four counts came to before doing their own.
+ */
+async function ShiftsTab({
+  tenantId,
+  counters,
+  settings,
+  canSeeVariance,
+}: {
+  tenantId: string;
+  counters: Awaited<ReturnType<typeof listCounters>>;
+  settings: Awaited<ReturnType<typeof getShopSettings>>;
+  canSeeVariance: boolean;
+}) {
+  const staff = await listStaff(tenantId);
+
+  const shifts = await listShifts(tenantId, {
+    counters: counters.map((counter) => ({ id: counter.id, name: counter.name })),
+    staff: staff.map((person) => ({ id: person.id, name: person.name })),
+  });
+
+  return (
+    <ShiftsPanel
+      shifts={shifts}
+      settings={settings}
+      canSeeVariance={canSeeVariance}
     />
   );
 }

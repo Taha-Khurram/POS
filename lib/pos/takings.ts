@@ -32,6 +32,14 @@ export type CounterTakings = {
    *  the money was still taken, so it is counted rather than quietly dropped. */
   name: string;
   bills: number;
+  /** How many of the day's receipts were money going back. Counted, never
+   *  subtracted from `bills`: the shop served that customer too, and the
+   *  refund shows up in the takings that fell. */
+  refunds: number;
+  /** What went back over the counter, as a positive figure. `cash` and `card`
+   *  are already net of it — this is here so the day-end screen can say why
+   *  the drawer is lighter than the receipts suggest. */
+  refunded: number;
   cash: number;
   card: number;
   total: number;
@@ -44,6 +52,8 @@ export type DayTakings = {
   businessDay: string;
   counters: CounterTakings[];
   bills: number;
+  refunds: number;
+  refunded: number;
   cash: number;
   card: number;
   total: number;
@@ -70,10 +80,14 @@ export async function getDayTakings(
   // screen that opens and one a shopkeeper stops using.
   const { data } = await supabase
     .from("sales")
-    .select("counter_id, receipt_number, total, sale_tenders(method, amount)")
+    .select("counter_id, receipt_number, total, status, sale_tenders(method, amount)")
     .eq("tenant_id", tenantId)
     .eq("business_day", businessDay)
-    .eq("status", "completed")
+    // Sales and the refunds against them. A refund is a negative sale since
+    // `0024`, so cash and card below net by arithmetic — which is the whole
+    // point of the shape: the drawer at 11 pm holds the takings minus what
+    // went back, and this screen is what it is counted against.
+    .in("status", ["completed", "refund"])
     .order("created_at", { ascending: false })
     .limit(2000);
 
@@ -89,6 +103,8 @@ export async function getDayTakings(
         counterId: counter.id,
         name: counter.name,
         bills: 0,
+        refunds: 0,
+        refunded: 0,
         cash: 0,
         card: 0,
         total: 0,
@@ -108,6 +124,8 @@ export async function getDayTakings(
         counterId: row.counter_id,
         name: row.counter_id ? "Deleted counter" : "No counter recorded",
         bills: 0,
+        refunds: 0,
+        refunded: 0,
         cash: 0,
         card: 0,
         total: 0,
@@ -117,7 +135,17 @@ export async function getDayTakings(
     }
 
     const total = Number(row.total);
-    entry.bills += 1;
+
+    // A refund is not minus one bill. The shop served that customer as well —
+    // it counted them once on the way in and once on the way back — so the two
+    // are counted apart and only the money nets.
+    if (row.status === "refund") {
+      entry.refunds += 1;
+      entry.refunded = round2(entry.refunded + Math.abs(total));
+    } else {
+      entry.bills += 1;
+    }
+
     entry.total = round2(entry.total + total);
 
     // Rows arrive newest first, so the first one seen per counter is the last
@@ -144,6 +172,8 @@ export async function getDayTakings(
     // bottom because it is an exception and not a till.
     counters: all,
     bills: all.reduce((sum, entry) => sum + entry.bills, 0),
+    refunds: all.reduce((sum, entry) => sum + entry.refunds, 0),
+    refunded: round2(all.reduce((sum, entry) => sum + entry.refunded, 0)),
     cash: round2(all.reduce((sum, entry) => sum + entry.cash, 0)),
     card: round2(all.reduce((sum, entry) => sum + entry.card, 0)),
     total: round2(all.reduce((sum, entry) => sum + entry.total, 0)),

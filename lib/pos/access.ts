@@ -3,7 +3,13 @@ import "server-only";
 import { notFound } from "next/navigation";
 
 import { requireSession, type SessionContext } from "@/lib/auth";
-import { moduleAccess, type ModuleAccess, type ModuleKey } from "@/lib/pos/modules";
+import {
+  moduleAccess,
+  tillAccess,
+  type ModuleAccess,
+  type ModuleKey,
+  type TillAccess,
+} from "@/lib/pos/modules";
 import { getRolePermissions } from "@/lib/pos/shop";
 
 /**
@@ -53,4 +59,28 @@ export async function requireModule(
   if (!access[module]) notFound();
 
   return session;
+}
+
+/**
+ * What this session may do at the counter.
+ *
+ * The same read `getModuleAccess` makes, resolved into the other shape — and
+ * deliberately not memoised either, for the same reason: a Server Action plus
+ * the re-render its `revalidatePath` triggers are one request, and an owner who
+ * just switched a cashier's discount off would watch the control go on being
+ * offered until they navigated away.
+ *
+ * The owner costs no read at all, because the answer does not depend on the
+ * table for them.
+ */
+export async function getTillAccess(
+  session: SessionContext,
+): Promise<TillAccess> {
+  if (session.tenantRole === "owner" || !session.tenantId || !session.tenantRole) {
+    return tillAccess(session.tenantRole, null);
+  }
+
+  const permissions = await getRolePermissions(session.tenantId);
+
+  return tillAccess(session.tenantRole, permissions[session.tenantRole]);
 }

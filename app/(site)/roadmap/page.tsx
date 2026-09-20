@@ -51,48 +51,48 @@ const NOW = [
     title: "The dashboard",
     copy: "Sales, profit, cost of goods and margin for any window you pick, against the window before it, with the trend by day, the split by department and the top sellers.",
   },
+  {
+    title: "Stock that moves when you sell",
+    copy: "Every sale takes the count down and every return puts it back, inside the same transaction that records the bill. Each change is written down with its reason, its receipt and what the count read afterwards — so a shelf that disagrees with the screen is a list to read, not an argument.",
+  },
+  {
+    title: "Returns",
+    copy: "Against the original receipt, line by line, refunded at what was actually paid after any discount. The slip prints marked REFUND. You choose whether the goods go back on the shelf, because a burst bag of atta does not.",
+  },
+  {
+    title: "Discounts at the till",
+    copy: "Rupees off, a percentage, or “make it 470” in one tap. Capped by the ceiling you set per role, checked again on the server, and spread across the lines so your reports still add up.",
+  },
+  {
+    title: "Held bills",
+    copy: "Put a bill down, name it something you will recognise, and pick it up again. Nothing is sold and no stock moves; the prices come off your list again when it is settled.",
+  },
+  {
+    title: "Shift open and close",
+    copy: "An opening float, a counted drawer and the over-or-short — per person, not per day. The cashier counts and only the owner sees the difference, because a cashier shown the expected figure can count to it.",
+  },
 ];
 
 const NEXT = [
   {
-    title: "Stock that moves when you sell",
-    why: "Today the count on an item is a number somebody typed. Selling should take it down, a return should put it back, and every change should say where it came from.",
-    order: 1,
-  },
-  {
-    title: "Returns",
-    why: "Against the original receipt, line by line, printed and marked — so the money and the count both go back.",
-    order: 2,
-  },
-  {
-    title: "Discounts at the till",
-    why: "The ceiling is already set per role on the permissions screen. The button at the counter is what is missing.",
-    order: 3,
-  },
-  {
-    title: "Shift open and close",
-    why: "An opening float, a counted drawer, and the over-or-short — per person, not per day.",
-    order: 4,
-  },
-  {
-    title: "Held bills",
-    why: "One customer goes back for dahi. The queue should not wait for them.",
-    order: 5,
-  },
-  {
     title: "The reports module",
     why: "Sales by item, by category, by cashier, by hour. Profit by line. The dashboard answers the owner's first question; this answers the accountant's.",
-    order: 6,
+    order: 1,
   },
   {
     title: "Offline billing",
     why: "The register queues the sale on the tablet and posts it when the line comes back. Hard to do correctly, which is why it is not being claimed before it works.",
-    order: 7,
+    order: 2,
   },
   {
     title: "Purchasing",
     why: "An order to a supplier, goods received against it, and the cost updated from what you actually paid — which is what turns the margin column from a guess into a fact.",
-    order: 8,
+    order: 3,
+  },
+  {
+    title: "Stock by batch",
+    why: "The ledger records every movement today, and what it cannot yet do is tell one delivery of the same item from another. That is the gate for anything with a date on it.",
+    order: 4,
   },
 ];
 

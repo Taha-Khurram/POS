@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -11,6 +12,7 @@ import {
   IconClose,
   IconCopy,
   IconPrinter,
+  IconReturn,
   IconUser,
 } from "@/components/pos/icons";
 import { useToast } from "@/components/pos/toaster";
@@ -24,6 +26,8 @@ import {
   type Counter,
 } from "@/lib/pos/counter";
 import {
+  isRefund,
+  returnable,
   writeDayLong,
   writeTender,
   type BillDetail,
@@ -33,6 +37,7 @@ import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
 import { Receipt, type Sale } from "../register/receipt";
 import { loadBill } from "./actions";
+import { ReturnSheet, type RefundLine } from "./return-sheet";
 
 /**
  * One bill, opened off the history.
@@ -62,6 +67,7 @@ export function BillDrawer({
   shop,
   settings,
   canSeeCustomers,
+  refundCounter,
   position,
   onStep,
   onClose,
@@ -70,6 +76,12 @@ export function BillDrawer({
   counters: Counter[];
   shop: ShopProfile | null;
   settings: ShopSettings;
+  /** The open counter this device would hand a refund out of, or null when
+   *  this session may not take returns, or no counter is open, or the tablet
+   *  has not been pointed at one. The button is drawn only when there is a
+   *  real drawer for the money to leave from — and `recordReturn` checks the
+   *  permission and the counter again for itself. */
+  refundCounter: Counter | null;
   /** Whether this session may reach the customer's record. The name shows
    *  either way — it was on the bill — but a cashier without the module gets
    *  no link into a screen that would 404 on them. */
@@ -95,7 +107,18 @@ export function BillDrawer({
   } | null>(null);
 
   const [attempt, setAttempt] = useState(0);
+  const [returning, setReturning] = useState(false);
+  /** The refund just taken, held only so its roll can be printed. Cleared when
+   *  the drawer moves on, because a refund slip left on screen is a slip that
+   *  gets printed twice. */
+  const [refund, setRefund] = useState<{
+    receiptNo: string;
+    refunded: number;
+    lines: RefundLine[];
+  } | null>(null);
+
   const toast = useToast();
+  const router = useRouter();
 
   const money = moneyFormatter(settings);
 
@@ -177,6 +200,13 @@ export function BillDrawer({
       });
     }
   };
+
+  const canReturn = Boolean(
+    refundCounter &&
+      detail &&
+      !isRefund(bill) &&
+      detail.lines.some((line) => returnable(line) > 0),
+  );
 
   return (
     <div
@@ -273,6 +303,43 @@ export function BillDrawer({
             />
 
             <Totals bill={bill} money={money} />
+
+            {/* What has already gone back against this bill. Under the totals
+                rather than beside them, because it is the answer to "has this
+                one been dealt with" and that question is asked after reading
+                what the bill came to, not before. */}
+            {detail && detail.refunds.length > 0 ? (
+              <div className="rounded-xl border border-signal-warn/40 bg-signal-warn/5 px-3.5 py-3">
+                <h3 className="font-display text-[0.8125rem] font-semibold text-graphite-900">
+                  {detail.refunds.length === 1
+                    ? "One return against this bill"
+                    : `${detail.refunds.length} returns against this bill`}
+                </h3>
+
+                <ul className="mt-1.5 space-y-1 text-[0.8125rem]">
+                  {detail.refunds.map((given) => (
+                    <li
+                      key={given.id}
+                      className="flex items-baseline justify-between gap-3"
+                    >
+                      <span className="min-w-0">
+                        <span className="font-mono text-[0.75rem] text-graphite-500">
+                          {given.receiptNo}
+                        </span>
+                        {given.note ? (
+                          <span className="ml-1.5 text-graphite-700">
+                            — {given.note}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="flex-none tabular-nums text-graphite-900">
+                        −{money(given.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
 
           {/* The roll's own width on screen too, so nothing lines up here that
@@ -337,6 +404,23 @@ export function BillDrawer({
               Close
             </button>
 
+            {/* Only where there is something to give back and a drawer to give
+                it out of. A refund against a refund is nonsense, a bill whose
+                every line has already come back has nothing left, and a session
+                that may not refund never sees the button — though the action
+                behind it checks all three again, because a button nobody drew
+                is not an endpoint nobody can call. */}
+            {canReturn ? (
+              <button
+                type="button"
+                onClick={() => setReturning(true)}
+                className="pos-btn pos-btn-soft"
+              >
+                <IconReturn className="h-4 w-4" />
+                Take a return
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={() => window.print()}
@@ -349,6 +433,37 @@ export function BillDrawer({
           </div>
         </footer>
       </div>
+
+      {returning && detail && refundCounter ? (
+        <ReturnSheet
+          detail={detail}
+          counter={refundCounter}
+          settings={settings}
+          onClose={() => setReturning(false)}
+          onDone={(result) => {
+            setReturning(false);
+            setRefund(result);
+            // The history's totals, the day close and the shelf all moved. The
+            // refresh re-reads them; the sheet above stays open over the
+            // result so the cashier can print the slip before anything else.
+            router.refresh();
+            // And the bill itself, so the lines redraw with what has now gone
+            // back and the button stops offering it twice.
+            setAttempt((count) => count + 1);
+          }}
+        />
+      ) : null}
+
+      {refund && detail ? (
+        <RefundSlip
+          refund={refund}
+          detail={detail}
+          shop={shop}
+          counter={refundCounter ?? counter}
+          settings={settings}
+          onClose={() => setRefund(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -380,6 +495,10 @@ function asSale(detail: BillDetail): Sale {
       price: line.unitPrice,
       taxRate: 0,
       fractional: isFractional(unit),
+      // Not stored on the line either, and a duplicate has no business
+      // guessing what the shelf held on the day. Nothing the receipt draws
+      // reads it.
+      stock: 0,
     };
   });
 
@@ -387,6 +506,9 @@ function asSale(detail: BillDetail): Sale {
     lines: lines.length,
     units: round2(lines.reduce((sum, line) => sum + line.quantity, 0)),
     subtotal: detail.subtotal,
+    // Stored on the sale, so a duplicate prints the discount the customer
+    // actually got rather than a total that is mysteriously below its lines.
+    discount: detail.discount,
     // Not reprinted: `sale_lines` keeps the price and not the rate behind it.
     // A zero here is what keeps the tax line off the duplicate rather than
     // printing a figure worked out from today's rates.
@@ -556,6 +678,172 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex gap-2">
       <dt className="w-[5.5rem] flex-none text-graphite-500">{label}</dt>
       <dd className="min-w-0 truncate text-graphite-900">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * The slip that goes to the customer.
+ *
+ * The register's own `Receipt`, not a second rendering of it, for the reason
+ * the duplicate in the drawer behind uses it: printing goes through the one
+ * `@media print` block in `globals.css`, so what is on screen is what comes off
+ * the roll, and a preview drawn separately is a preview that eventually
+ * disagrees with the paper.
+ *
+ * `refundOf` is what stamps REFUND across the top and names the bill it
+ * reverses. That stamp matters more than the DUPLICATE one: a slip that reads
+ * like a receipt is a slip that can be brought back for a second refund, and
+ * the pile of them in the drawer at 11 pm has to be tellable apart from the
+ * sales without reading the totals.
+ *
+ * The quantities print positive. The rows are stored negative because that is
+ * what makes every total in the console net by arithmetic, but "−2 pc" on a
+ * piece of paper handed to a customer is a line that makes them do the double
+ * negative while a queue waits.
+ */
+function RefundSlip({
+  refund,
+  detail,
+  shop,
+  counter,
+  settings,
+  onClose,
+}: {
+  refund: { receiptNo: string; refunded: number; lines: RefundLine[] };
+  detail: BillDetail;
+  shop: ShopProfile | null;
+  counter: Pick<Counter, "name" | "receiptFooter">;
+  settings: ShopSettings;
+  onClose: () => void;
+}) {
+  const money = moneyFormatter(settings);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const lines: CartLine[] = refund.lines.map((line, index) => {
+    const unit = (line.unit === "kilo" ? "kg" : line.unit) as UnitId;
+
+    return {
+      // The slip has no catalog behind it and needs none. The id is only a
+      // React key here, and nothing downstream reads it.
+      id: `refund-${index}`,
+      name: line.name,
+      urdu: "",
+      unit,
+      quantity: line.quantity,
+      // What the customer actually paid for one of them, which on a haggled
+      // bill is not the shelf price. It is the figure the money was worked out
+      // from, so it is the figure that prints.
+      price: line.quantity === 0 ? 0 : round2(line.amount / line.quantity),
+      taxRate: 0,
+      fractional: isFractional(unit),
+      stock: 0,
+    };
+  });
+
+  const sale: Sale = {
+    receiptNo: refund.receiptNo,
+    recorded: true,
+    at: new Date(),
+    lines,
+    customer: detail.customerName || null,
+    bill: {
+      lines: lines.length,
+      units: round2(lines.reduce((sum, line) => sum + line.quantity, 0)),
+      subtotal: refund.refunded,
+      // The discount is already inside the per-unit figure above. Printing it
+      // again as a line would take it off twice on the paper.
+      discount: 0,
+      taxIncluded: 0,
+      total: refund.refunded,
+    },
+    tenders: detail.tenders.map((tender) => ({
+      method: tender.method,
+      amount: refund.refunded,
+    })),
+    tendered: null,
+    change: 0,
+    refundOf: detail.receiptNo,
+  };
+
+  return (
+    <div className="pos-modal">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Refund slip ${refund.receiptNo}`}
+        className="pos-sheet outline-none"
+      >
+        <header className="print-hide flex items-center gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
+          <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-signal-good/15 text-signal-good">
+            <IconReturn className="h-[18px] w-[18px]" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[1rem] leading-tight font-bold">
+              {money(refund.refunded)} given back
+            </h2>
+            <p className="mt-0.5 font-mono text-[0.75rem] text-graphite-500">
+              {refund.receiptNo}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="pos-icon-btn"
+            aria-label="Close"
+          >
+            <IconClose className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="px-4 py-5 sm:px-5">
+          <div className="mx-auto max-w-[19rem] rounded-xl border border-orchid-100 bg-paper-50 p-4 font-mono text-[0.75rem] leading-relaxed text-graphite-900">
+            <Receipt
+              sale={sale}
+              shop={
+                shop ?? {
+                  id: "",
+                  shopName: "Your shop",
+                  ownerName: "",
+                  phone: "",
+                  email: null,
+                  city: "",
+                  shopType: "",
+                  ntn: null,
+                  strn: null,
+                }
+              }
+              counter={counter}
+              settings={settings}
+            />
+          </div>
+        </div>
+
+        <footer className="print-hide flex flex-wrap items-center justify-end gap-2 border-t border-orchid-100 px-4 py-3 sm:px-5">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="pos-btn pos-btn-soft"
+          >
+            <IconPrinter className="h-4 w-4" />
+            Print the slip
+          </button>
+
+          <button type="button" onClick={onClose} className="pos-btn pos-btn-primary">
+            Done
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

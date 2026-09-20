@@ -62,6 +62,20 @@ export type Sale = {
    * is a bill that can be presented twice for the same return.
    */
   reprint?: boolean;
+  /**
+   * The money going back rather than coming in.
+   *
+   * Stamped at the top, in the same box the other two exceptions use, and
+   * carrying the bill it reverses — a customer holding a refund slip that looks
+   * like a receipt can present it for a second refund, and a shop counting its
+   * drawer needs to be able to tell the two piles apart without reading the
+   * totals.
+   *
+   * `bill.total` on a refund is the amount given back, written positive,
+   * because "TOTAL −Rs 300" is a line that makes the reader do a double
+   * negative while a customer waits.
+   */
+  refundOf?: string;
 };
 
 /** The tender as the roll spells it. Upper case, because the customer checks
@@ -126,6 +140,19 @@ export function Receipt({
         </p>
       ) : null}
 
+      {/* A refund is stamped in the same place and for a stronger version of
+          the same reason: a slip that reads like a receipt is a slip that can
+          be brought back for a second refund, and the pile of them in the
+          drawer at 11 pm has to be tellable from the sales. */}
+      {sale.refundOf ? (
+        <p className="mt-2 border-2 border-black px-1.5 py-1 text-center font-display text-[0.8125rem] font-bold uppercase">
+          Refund
+          <span className="mt-0.5 block text-[0.6875rem] leading-snug font-normal normal-case">
+            Money returned against bill {sale.refundOf}. This is not a sale.
+          </span>
+        </p>
+      ) : null}
+
       {/* A duplicate is stamped, and stamped where the "not recorded" box goes
           — the place a cashier's eye already lands. A reprint that looks like
           an original is a bill a customer can present twice. */}
@@ -139,8 +166,8 @@ export function Receipt({
       ) : null}
 
       {/* ---- Which bill ---- */}
-      <dl className={sale.recorded && !sale.reprint ? undefined : "mt-2"}>
-        <Row label="Bill" value={sale.receiptNo} mono />
+      <dl className={sale.recorded && !sale.reprint && !sale.refundOf ? undefined : "mt-2"}>
+        <Row label={sale.refundOf ? "Refund" : "Bill"} value={sale.receiptNo} mono />
         <Row label="Date" value={receiptStamp(sale.at, settings.timezone)} />
         <Row label="Counter" value={counter.name} />
         {sale.customer ? <Row label="Customer" value={sale.customer} /> : null}
@@ -183,6 +210,18 @@ export function Receipt({
         />
         <Row label="Subtotal" value={money(sale.bill.subtotal)} money />
 
+        {/* Printed whenever there is one, and printed as a negative, because
+            the customer agreed to it out loud and the receipt is where they
+            check that what was agreed is what was charged. A bill whose total
+            is simply lower than its lines is a bill somebody queries. */}
+        {sale.bill.discount > 0 ? (
+          <Row
+            label="Discount"
+            value={`−${money(sale.bill.discount)}`}
+            money
+          />
+        ) : null}
+
         {/* Only when something on the bill is actually taxed. A kiryana that
             sells nothing but loose atta should not print a zero it has to
             explain to a customer. */}
@@ -198,7 +237,7 @@ export function Receipt({
       <Rule />
 
       <p className="flex items-baseline justify-between gap-2 font-display text-[1rem] font-bold tabular-nums">
-        <span>TOTAL</span>
+        <span>{sale.refundOf ? "GIVEN BACK" : "TOTAL"}</span>
         <span>{money(sale.bill.total)}</span>
       </p>
 

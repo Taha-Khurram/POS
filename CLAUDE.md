@@ -188,7 +188,9 @@ limit or a reminder about money owed.
 `offline_register`, `staff_pins`, `restaurant_mode`, `advanced_reports` and the
 multi-branch flags back to false, because a flag is a promise the console can be
 held to. Flip one back in the same migration that lands the feature — `0021`
-did exactly that for `advanced_reports` on Premium. Standard's stays false and
+did exactly that for `advanced_reports` on Premium, `0022` for `stock_ledger`
+and `0026` for `shift_close`, both on both plans, because a shelf that never
+moves and a drawer that is never counted are not a tier. Standard's stays false and
 now understates what it gets, because nothing gates Reports by plan: the module
 is reached through `can_view_reports` alone. Either gate it or raise the flag,
 but deliberately.
@@ -228,6 +230,18 @@ to stay green.
 
 ## Gating a route
 
+**Two different shapes of permission, and they are enforced in two places.**
+`ModuleAccess` is which *screens* a session may reach — checked once by
+`requireModule` before anything renders, and it is what the rail draws.
+`TillAccess` (`tillAccess` in `modules.ts`, `getTillAccess` in `access.ts`) is
+what a session may *do* on a screen everybody is allowed on: discount, refund,
+open or close a drawer. Each of those is re-checked by the Server Action behind
+it, because a control the browser does not draw is not an endpoint nobody can
+call. Both cross to the client as the resolved answer and never as the
+`role_permissions` row behind them — the till needs to know it may give 5% away;
+it has no business knowing what the manager's ceiling is. Neither is `cache()`d,
+for the reason the readers in `shop.ts` are not.
+
 `getSessionContext()` is wrapped in React `cache()`, so repeated gates in one
 request verify the token once.
 
@@ -247,7 +261,12 @@ evidence that anybody was sacked.
 
 `public.items` is real (`0008`, widened into a shop's item list by `0015`):
 barcode, the tree, cost, tax, stock, the per-item low-stock cut, and
-`is_active`. `lib/pos/items.ts` reads it through the shop's own JWT — and, like
+`is_active`. **`items.stock` is a running total with a ledger under it since
+`0022`** — `private.move_stock` is its only writer anywhere, and
+`public.stock_movements` records every change with its reason, its receipt and
+what the count read afterwards. The stock box on the product sheet is therefore
+a stocktake rather than a column: `saveProduct` strips it out of the `update`
+and sends it to `set_stock`, which works the difference out under a lock. `lib/pos/items.ts` reads it through the shop's own JWT — and, like
 the readers in `shop.ts`, **none of them may be wrapped in React `cache()`**, or
 the re-render a `revalidatePath` triggers redraws the list as it stood before
 the save.
@@ -445,17 +464,102 @@ marketing site's pages to 80 mm too.
 opened and no report re-derives that window. Everything on `/app/sales` windows
 on that column and never on a timestamp.
 
-Still not real: there is no offline outbox, no shift, and no returns —
-`sync_outbox` and `shifts` exist in the schema and nothing writes them.
+**The discount is a first-class control on the bill, not a setting on the
+payment sheet** (`0023`). Haggling is Tuesday in a Pakistani shop, and a till
+that cannot take Rs 20 off is a till the cashier works around — out of the
+drawer, or by ringing up one item fewer. So `DiscountBar` sits beside the
+subtotal, where the haggling actually happens, and the payment sheet stays two
+questions. `discountOf` in `counter.ts` resolves per cent or rupees against the
+cashier's own `discount_ceiling_pct`, the action resolves it again from
+`getTillAccess`, and `record_sale` raises if it is over — the action is the gate
+and the function is the floor, because a discount is the one field on a bill
+where the person typing it benefits from the number being wrong. Over the
+ceiling clamps and says so; it never refuses.
+
+`record_sale` **apportions the discount across the lines** pro rata and writes
+the remainder onto the last one, so `sum(line_total)` still equals
+`sales.total`. That is not tidiness: every share on a report is worked out over
+the sum of line totals, and a bill-level discount left off the lines would make
+departments add up to something other than a hundred and leave a discounted item
+showing its full margin for ever.
+
+**Stock moves inside the sale's own transaction** (`0022`). `private.move_stock`
+is the only writer of `items.stock` anywhere, and it writes
+`public.stock_movements` beside every change — what moved, why, which bill, and
+what the count read afterwards.
+
+**The count is a gate at the till.** An item at zero cannot go on a bill at
+all, the plus button will not step a line past what is counted, and the Charge
+button refuses a bill that is over — naming the item and both numbers, because
+the fix is a stocktake on Products & stock and the cashier needs to know which
+row to open. `recordSale` enforces the same rule on the server with its own
+fresher read, since a control the browser draws is not a control nobody can
+call. The cost is real and lands at the counter: `items` is read once at page
+load, the till by the door is selling from the same shelf, and a cashier
+holding stock the console has not caught up with has to count it in before they
+can sell it. That was a deliberate product call, not a default — the till used
+to warn and sell anyway.
+
+`set_stock` is the absolute-to-relative adapter for the Products screen: it
+locks the row, works the difference out there, and hands `move_stock` a delta.
+The obvious implementation — read, subtract, write in the Server Action — reads
+the count before counter 2 sells two and writes a number that silently un-sells
+them. `saveProduct` therefore never puts `stock` in its `update`.
+
+**A parked bill is not a sale** (`0025`). `public.held_bills` holds item ids,
+quantities, who it was for and what was agreed off it — and no prices, because
+resuming re-prices from the catalog and a stored price is a quiet way to sell at
+yesterday's cost. It is a separate table rather than `sales.status = 'held'`
+precisely so it never claims a receipt number: a number claimed before anybody
+pays is a hole in the series that `record_sale`'s single transaction exists to
+prevent. `0025` dropped 'held' from the status check outright. Nothing moves
+stock; a parked bill is shopping on a counter.
+
+**A shift is required before a counter can charge anything** (`0026`).
+`public.shifts` is keyed on a counter now, not on the `register_devices` row
+nothing ever wrote. `record_sale` and `record_return` look the open shift up
+from the counter rather than taking one from the browser, so a tablet cannot
+put a sale in somebody else's drawer.
+
+The gate itself is in the Server Actions, not in SQL — the same placement as
+the stock gate, and for the same reason: a refusal there can be a sentence a
+cashier acts on, where a raise from a function is a failed write. `shift_id`
+stays nullable, because it has to hold every sale rung up before the gate
+existed and a null is still the honest record of a sale that belonged to no
+drawer. What the gate buys is that no new ones are created. The shut strip at
+the top of the register is therefore the way through rather than a note beside
+it, and it clears in one tap and a float.
+
+`close_shift` works the expected figure out from the shift's own sales and then
+**stores it**, for the reason `cost_snapshot` is stored: a bill refunded next
+Tuesday is a negative tender on next Tuesday's shift, and re-deriving the figure
+afterwards would rewrite what somebody's drawer was short by last week. Cash
+only — the card machine never went into the drawer.
+
+**The cashier counts and `can_close_shift` decides who sees the variance.**
+Anybody may close their own drawer; only somebody with the permission is handed
+back the over-or-short, on the register and in the Shifts tab. The closing sheet
+shows no expected figure at all before the count is typed, whoever is looking,
+because a cashier who can see what should be there is a cashier who can count to
+it. The row records both figures whoever pressed the button — withholding a
+figure from a screen is not the same as not writing it down.
+
+Still not real: there is no offline outbox — `sync_outbox` exists in the schema
+and nothing writes it.
 
 ## Sales history
 
-`/app/sales` is two tabs over one table, because they are two questions.
+`/app/sales` is three tabs over one table, because they are three questions.
 `?tab=history` — the default — is asked with a customer at the counter holding a
-receipt: find it, see what was on it, print it again. `?tab=day` is asked at
-11 pm with a drawer of notes in one hand: what should be in counter 1.
-`lib/pos/takings.ts` answers the second and now carries no receipt list at all,
-because two lists of the same rows on one screen is how they drift apart.
+receipt: find it, see what was on it, print it again, take part of it back.
+`?tab=day` is asked at 11 pm with a drawer of notes in one hand: what should be
+in counter 1. `?tab=shifts` is asked on Sunday: whose drawer was short, and by
+how much. `lib/pos/takings.ts` answers the second and now carries no receipt
+list at all, because two lists of the same rows on one screen is how they drift
+apart; `lib/pos/shifts.ts` answers the third. Day close is what a *counter* took
+between opening and midnight; the Shifts tab is what a *person's* drawer came to
+over four hours, which is the one that makes a Rs 300 gap visible at all — the
+same Rs 300 against forty thousand is noise.
 
 **One read, then everything is instant.** `listBills` fetches a whole window of
 trading days in one round trip (capped at `HISTORY_MAX`, 2,000) and the panel
@@ -486,6 +590,46 @@ duplicate carries the lines, the subtotal and the total exactly and breaks out n
 tax it would have to guess. `Sale.tenders` is a list rather than one `TenderId`
 for the same honesty — `sale_tenders` is one-to-many, and a split bill must print
 both halves the day the payment sheet can settle one.
+
+**A refund is a sale with a minus in front of it** (`0024`). Not a second table
+and not a flag on the original: `public.sales` gains a row with
+`status = 'refund'`, a negative subtotal and total, negative line quantities and
+a negative tender, pointing at the bill it reverses through `refunds_sale_id`.
+Every reader in the console already sums those columns, so a refund nets out of
+the takings, the dashboard, all five report tabs and this screen's own totals by
+arithmetic rather than by each of them remembering to subtract it. The
+alternative needs every sum in the product to grow a second half, and the one
+that gets forgotten is the one that overstates what the shop earned. Money nets;
+counts do not — `bills` is filtered to the positive rows everywhere, because the
+shop served that customer twice and did not un-serve them.
+
+**The original bill is never edited.** It keeps its status, its total and its
+lines exactly as they were rung up. Rewriting it is how a receipt in a
+customer's hand stops matching the shop's own record, and how a total gets
+subtracted twice.
+
+A refund needs an open drawer on the counter handing the money back, the same
+gate the register charges under and for a stronger reason: a refund is notes
+leaving a till, and a till nobody has counted into has no count for them to
+leave. Refund rows are drawn red in the history — a badge in the first column,
+the tender badge and the total — because the minus sign at the far end of a
+line is not where the eye lands.
+
+`record_return` refunds a line at `line_total / quantity` — what was actually
+paid after any discount, never `unit_price` — copies `cost_snapshot` off the
+original rather than re-reading `items`, and counts what is still returnable
+from `sale_lines.refunds_line_id` with the original's lines locked. Two tablets
+refunding the last unsold unit at the same moment is exactly how a shop refunds
+three of two. **Stock only goes back if the shopkeeper says so**: a sealed
+packet goes on the shelf and a burst bag of atta does not, and restocking
+everything builds a count that is wrong in exactly the cases somebody would
+notice. The slip prints stamped REFUND naming the bill it reverses, for a
+stronger version of the reason a duplicate is stamped DUPLICATE.
+
+Which counter a refund leaves from is the device's own `flo_counter` cookie, or
+the single open till in a one-counter shop, and null otherwise — the button is
+not drawn at all rather than guessing a drawer, because guessing is how a
+day-end count stops balancing.
 
 Export is client-side CSV of the filtered rows, not of the window: what is on
 screen is what comes out, the same bargain printing strikes. Money leaves as bare

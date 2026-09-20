@@ -58,7 +58,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
   {
     label: "Business",
     items: [
-      { id: "reports", href: "/app/reports", label: "Reports", icon: IconReports, soon: true },
+      { id: "reports", href: "/app/reports", label: "Reports", icon: IconReports },
       { id: "settings", href: "/app/settings", label: "Settings", icon: IconSettings },
     ],
   },

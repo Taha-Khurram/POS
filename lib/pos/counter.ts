@@ -118,7 +118,23 @@ export type CartLine = {
   taxRate: number;
   /** Loose items take 0.25 kg; a bottle does not take a quarter of a bottle. */
   fractional: boolean;
+  /**
+   * What the shelf holds, as the till last read it.
+   *
+   * A limit, not a hint: the till will not put an item at zero on a bill and
+   * will not step one past this, and `recordSale` refuses on the server with
+   * its own fresher read. The cost of that is worth stating, because it is
+   * paid at the counter — the count goes stale the moment the till by the door
+   * sells one, so a cashier holding stock the console has not caught up with
+   * has to count it in on Products & stock before they can sell it.
+   */
+  stock: number;
 };
+
+/** What is left on the shelf once this line is rung up. Negative is a bill the
+ *  Charge button refuses — it means the count and the shelf disagree, and the
+ *  screen names the item and both numbers rather than failing silently. */
+export const stockLeft = (line: CartLine) => round3(line.stock - line.quantity);
 
 export const lineTotal = (line: CartLine) => round2(line.price * line.quantity);
 
@@ -127,17 +143,29 @@ export type Bill = {
   lines: number;
   /** Units, which is not the same number and is what the customer counts. */
   units: number;
+  /** The bill before haggling — what the shelf labels add up to. */
   subtotal: number;
+  /** What came off it, in rupees. Zero on the overwhelming majority of bills. */
+  discount: number;
   /**
    * Sales tax already inside the total, not added to it. Retail prices in
    * Pakistan are what the customer hands over — printing an exclusive tax line
    * under them would overstate every bill in the shop by 18 per cent.
    */
   taxIncluded: number;
+  /** What the customer hands over. */
   total: number;
 };
 
-export function billOf(lines: CartLine[]): Bill {
+/**
+ * What the bill comes to.
+ *
+ * `discount` is rupees, already resolved and already checked against the
+ * cashier's ceiling by `discountOf`. Never a percentage: a percentage stored or
+ * passed around is a figure every reader has to re-multiply, and two readers
+ * rounding differently is two answers to what the shop was paid.
+ */
+export function billOf(lines: CartLine[], discount = 0): Bill {
   let subtotal = 0;
   let taxIncluded = 0;
   let units = 0;
@@ -150,13 +178,115 @@ export function billOf(lines: CartLine[]): Bill {
     taxIncluded += money - money / (1 + line.taxRate / 100);
   }
 
+  subtotal = round2(subtotal);
+
+  // Never below nothing. A discount larger than the bill is the shop paying
+  // the customer, which is a typo every time.
+  const off = Math.min(round2(Math.max(0, discount)), subtotal);
+  const total = round2(subtotal - off);
+
   return {
     lines: lines.length,
     units: round2(units),
-    subtotal: round2(subtotal),
-    taxIncluded: round2(taxIncluded),
-    total: round2(subtotal),
+    subtotal,
+    discount: off,
+    // Scaled with the bill. The tax was inside the shelf price, so giving away
+    // a tenth of the bill gives away a tenth of the tax that was inside it —
+    // printing the undiscounted figure would have the receipt claim more tax
+    // was collected than the customer paid.
+    taxIncluded: subtotal > 0 ? round2((taxIncluded * total) / subtotal) : 0,
+    total,
   };
+}
+
+/* ---------------- Taking something off ---------------- */
+
+/**
+ * How the cashier said it.
+ *
+ * Both, because both are how it is actually said across a counter. "Ten per
+ * cent for you" is a percentage; "make it 450" is an amount; and rounding the
+ * paisa off a weighed bill is neither, which is why the till offers it as a
+ * button rather than as a third kind.
+ */
+export type Discount = {
+  kind: "amount" | "percent";
+  /** Rupees for `amount`, per cent for `percent`. */
+  value: number;
+};
+
+export const NO_DISCOUNT: Discount = { kind: "amount", value: 0 };
+
+/**
+ * The rupees that actually come off, clamped to the bill and to what this
+ * cashier is allowed.
+ *
+ * One function, called by the till and again by the Server Action, because a
+ * ceiling the browser applies and the server does not is not a ceiling. The
+ * server also hands the figure to `record_sale`, which checks it a third time
+ * — the action is the gate and the function is the floor, and a discount is the
+ * one field on a bill where the person typing it benefits from the number being
+ * wrong.
+ *
+ * The ceiling is rounded up to the paisa in the shop's favour, matching
+ * `record_sale`: 5% of Rs 478 is Rs 23.90, and a cashier refused for one paisa
+ * would rightly conclude the limit is broken rather than that it is exact.
+ */
+export function discountOf(
+  subtotal: number,
+  discount: Discount,
+  ceilingPct: number,
+): number {
+  if (!(subtotal > 0)) return 0;
+
+  const raw =
+    discount.kind === "percent"
+      ? (subtotal * discount.value) / 100
+      : discount.value;
+
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+
+  const ceiling = Math.ceil(subtotal * Math.max(0, ceilingPct)) / 100;
+
+  return round2(Math.min(raw, ceiling, subtotal));
+}
+
+/**
+ * A discount typed into a box. Blank is none rather than zero-as-an-error, the
+ * same reading `parseTendered` gives an empty tendered box.
+ */
+export function parseDiscount(value: string, kind: Discount["kind"]): number | null {
+  const trimmed = value.trim().replace(/[,\s]/g, "").replace(/%$/, "");
+  if (trimmed === "") return 0;
+
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  if (kind === "percent" && amount > 100) return null;
+  if (kind === "amount" && amount > 9_999_999) return null;
+
+  return round2(amount);
+}
+
+/**
+ * "Make it 470" — the commonest discount in a Pakistani shop, and the one a
+ * cashier would otherwise do in their head and get wrong on a queue.
+ *
+ * Rounds the bill down to the next ten, then the next fifty, then the next
+ * hundred, offering only the ones that are inside the ceiling and actually
+ * take something off. A bill already at a round figure offers nothing, which
+ * is right: there is nothing to round.
+ */
+export function roundOffs(subtotal: number, ceilingPct: number): number[] {
+  if (!(subtotal > 0)) return [];
+
+  const ceiling = Math.ceil(subtotal * Math.max(0, ceilingPct)) / 100;
+
+  return [10, 50, 100]
+    .map((step) => round2(subtotal - Math.floor(subtotal / step) * step))
+    .filter((off) => off > 0 && off <= ceiling)
+    // Two steps can land on the same figure — Rs 478 rounds to 470 by ten and
+    // 450 by fifty, but Rs 500 rounds to 500 by both.
+    .filter((off, index, all) => all.indexOf(off) === index);
 }
 
 /** Change owed on a cash sale. Never negative — short is not change. */

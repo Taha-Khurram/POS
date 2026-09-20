@@ -6,6 +6,7 @@ import type {
   BillDetail,
   BillLine,
   BillPage,
+  BillRefund,
   BillRow,
   BillTender,
   Window,
@@ -25,8 +26,9 @@ import { createClient } from "@/utils/supabase/server";
  * and hide the one failure that breaks everything else.
  *
  * Nothing here writes. There is no update path for a recorded sale and there
- * should not be one: a bill is what happened, and correcting it is a return,
- * which needs stock movements this build does not have yet.
+ * should not be one: a bill is what happened. Correcting it is a return, which
+ * since `0024` is a second row — a negative sale pointing at the original —
+ * written by `record_return` and never by an edit to the bill it reverses.
  *
  * Deliberately NOT wrapped in React `cache()`, for the reason none of the
  * readers in `shop.ts`, `items.ts` or `customers.ts` are — a Server Action plus
@@ -140,9 +142,9 @@ function toBill(row: Row, books: NameBooks): BillRow {
  * thousand and says "2,000 of 4,812" is honest; one that stops and says nothing
  * is a screen that has quietly lost half the month.
  *
- * Held bills are excluded with the same `status = 'completed'` filter the
- * takings use, so the history and the day-close total can never disagree about
- * what the shop sold.
+ * Held bills are excluded — they are not on `sales` at all since `0025` — and
+ * refunds are included, because a refund is a negative sale and the totals
+ * above the table are the totals of the rows under it.
  */
 export async function listBills(
   tenantId: string,
@@ -155,7 +157,11 @@ export async function listBills(
     .from("sales")
     .select(COLUMNS, { count: "exact" })
     .eq("tenant_id", tenantId)
-    .eq("status", "completed")
+    // Sales and the refunds against them. Since `0024` a refund is a negative
+    // sale, so including it here is what makes the figures above the table net
+    // — the screen totals the rows it is showing, and a day that took Rs 40,000
+    // and gave Rs 900 back took Rs 39,100.
+    .in("status", ["completed", "refund"])
     .gte("business_day", window.from)
     .lte("business_day", window.to)
     .order("business_day", { ascending: false })
@@ -193,7 +199,7 @@ export async function getBill(
 ): Promise<BillDetail | null> {
   const supabase = createClient(await cookies());
 
-  const [bill, lines] = await Promise.all([
+  const [bill, lines, refunds] = await Promise.all([
     supabase
       .from("sales")
       .select(COLUMNS)
@@ -211,9 +217,54 @@ export async function getBill(
       // `sale_lines` keeps no position column to fall back on.
       .order("created_at")
       .order("id"),
+    // Every refund already taken against this bill, with the lines they
+    // reversed. Fetched with the bill rather than on demand because the answer
+    // is needed the moment the sheet opens: a line that is fully returned must
+    // not offer to be returned again, and the cap the return sheet draws is
+    // this number.
+    //
+    // Embedded rather than a second query keyed on the ids of the first, for
+    // the reason `sale_tenders` is embedded above: two sequential round trips
+    // on shop 3G is the difference between a drawer that opens and one nobody
+    // uses.
+    supabase
+      .from("sales")
+      .select(
+        "id, receipt_number, created_at, total, note, sale_lines ( refunds_line_id, quantity )",
+      )
+      .eq("tenant_id", tenantId)
+      .eq("refunds_sale_id", saleId)
+      .order("created_at"),
   ]);
 
   if (!bill.data) return null;
+
+  type RefundRow = {
+    id: string;
+    receipt_number: string;
+    created_at: string;
+    total: number | string;
+    note: string | null;
+    sale_lines: { refunds_line_id: string | null; quantity: number | string }[] | null;
+  };
+
+  const taken = (refunds.data ?? []) as unknown as RefundRow[];
+
+  // How much has gone back per original line. Summed as a positive quantity —
+  // the rows are stored negative, and every caller wants "2 of the 3 are
+  // back", not "−2".
+  const back = new Map<string, number>();
+
+  for (const refund of taken) {
+    for (const line of refund.sale_lines ?? []) {
+      if (!line.refunds_line_id) continue;
+      const already = back.get(line.refunds_line_id) ?? 0;
+      back.set(
+        line.refunds_line_id,
+        Math.round((already - (Number(line.quantity) || 0)) * 1000) / 1000,
+      );
+    }
+  }
 
   const rows: BillLine[] = (lines.data ?? []).map((line) => ({
     id: line.id,
@@ -223,7 +274,23 @@ export async function getBill(
     quantity: Number(line.quantity) || 0,
     unitPrice: Number(line.unit_price) || 0,
     lineTotal: Number(line.line_total) || 0,
+    returned: back.get(line.id) ?? 0,
   }));
 
-  return { ...toBill(bill.data as unknown as Row, books), lines: rows };
+  const given: BillRefund[] = taken.map((refund) => ({
+    id: refund.id,
+    receiptNo: refund.receipt_number,
+    at: refund.created_at,
+    // Positive on the way out. The row is stored negative because that is what
+    // makes every total in the console net; a screen saying "Rs −300 refunded"
+    // is a screen making the reader do the double negative.
+    amount: Math.abs(Number(refund.total) || 0),
+    note: refund.note ?? "",
+  }));
+
+  return {
+    ...toBill(bill.data as unknown as Row, books),
+    lines: rows,
+    refunds: given,
+  };
 }

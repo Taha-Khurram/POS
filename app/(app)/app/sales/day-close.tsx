@@ -149,6 +149,13 @@ function ShopTotal({
     {
       label: "Bills rung up",
       value: takings.bills.toLocaleString("en-PK"),
+      // Only where there were any. A shop that took no returns today should
+      // not have to read a zero and work out that it means nothing happened —
+      // and the note is what explains a drawer lighter than the receipts in it.
+      note:
+        takings.refunds > 0
+          ? `${takings.refunds} ${takings.refunds === 1 ? "return" : "returns"}, ${money(takings.refunded)} back`
+          : undefined,
     },
   ];
 
@@ -173,6 +180,10 @@ function ShopTotal({
           >
             {tile.value}
           </p>
+
+          {tile.note ? (
+            <p className="mt-1.5 text-[0.75rem] text-signal-warn">{tile.note}</p>
+          ) : null}
         </article>
       ))}
     </section>

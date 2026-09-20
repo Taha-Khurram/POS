@@ -361,3 +361,45 @@ export const IconLayers = (props: IconProps) => (
     <path d="M2.8 12.4 12 17.1l9.2-4.7M2.8 16.9 12 21.6l9.2-4.7" />
   </Glyph>
 );
+
+/** A clock with the hand running backwards — the ledger behind a figure. */
+export const IconHistory = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+    <path d="M3.2 3.6v4.2h4.2" />
+    <path d="M12 7.6V12l3 1.8" />
+  </Glyph>
+);
+
+/** An arrow turning back on itself: money or goods coming the other way. */
+export const IconReturn = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M9 5.5 3.8 10.7 9 15.9" />
+    <path d="M3.8 10.7h10.4a6 6 0 0 1 0 12H9" />
+  </Glyph>
+);
+
+/** Per cent — the discount. */
+export const IconPercent = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M19 5 5 19" />
+    <circle cx="7.6" cy="7.6" r="2.6" />
+    <circle cx="16.4" cy="16.4" r="2.6" />
+  </Glyph>
+);
+
+/** Two bars: a bill set down on the counter, to be picked up again. */
+export const IconPause = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M9.5 5v14M14.5 5v14" />
+  </Glyph>
+);
+
+/** The cash drawer, open. What a shift begins and ends with. */
+export const IconDrawer = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M3 10.5 5.6 4.4A2 2 0 0 1 7.4 3.2h9.2a2 2 0 0 1 1.8 1.2L21 10.5" />
+    <rect x="3" y="10.5" width="18" height="9.8" rx="2" />
+    <path d="M9.6 14.8h4.8" />
+  </Glyph>
+);

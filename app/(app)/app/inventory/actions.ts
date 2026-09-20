@@ -24,6 +24,9 @@ import {
   type Department,
 } from "@/lib/pos/catalog";
 import { getModuleAccess } from "@/lib/pos/access";
+import { listMovements } from "@/lib/pos/movements";
+import { listStaff } from "@/lib/pos/staff";
+import type { Movement } from "@/lib/pos/stock";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type ImportResult, type ImportRow, type ProductState } from "./state";
 
@@ -313,6 +316,64 @@ function revalidateCatalog() {
   revalidatePath("/app/register");
 }
 
+/**
+ * The opening count on a row that has just been created.
+ *
+ * The one place outside `private.move_stock` that writes the ledger, and it is
+ * allowed to be because the thing that function protects does not apply: it
+ * locks an item so a read and a write cannot be split by a sale landing between
+ * them, and an item created a millisecond ago has no sales and no other reader.
+ * `stock_after` is therefore exactly the figure it was inserted with.
+ *
+ * A failure is logged and swallowed. The item is already in the list and the
+ * count is already right; what is missing is the line in the ledger explaining
+ * where the count came from, and refusing the whole save over that would lose
+ * the owner's typing for a footnote.
+ */
+async function openingMovement(
+  session: SessionContext & { tenantId: string },
+  itemId: string,
+  quantity: number,
+  reason: "opening" | "import",
+) {
+  const { error } = await createAdminClient().from("stock_movements").insert({
+    tenant_id: session.tenantId,
+    item_id: itemId,
+    reason,
+    quantity,
+    stock_after: quantity,
+    created_by: session.userId,
+  });
+
+  if (error) console.error("[inventory] opening movement failed", error);
+}
+
+/**
+ * One item's stock ledger, for the panel at the foot of the product sheet.
+ *
+ * A read through a Server Action rather than data shipped with the catalog, the
+ * same call `loadBill` makes on `/app/sales`: a shop with four hundred items
+ * has tens of thousands of movements and nobody opens more than one item at a
+ * time. The gate is the same `requireCatalog` as every write on this screen,
+ * because a screen that draws a link is not a screen that stops anybody calling
+ * the action behind it.
+ *
+ * The roster is read here rather than handed in from the browser — a client
+ * that could name the staff it wants movements attributed to is a client that
+ * can rename them.
+ */
+export async function loadMovements(itemId: string): Promise<Movement[]> {
+  const gate = await requireCatalog();
+  if (!gate.ok) return [];
+
+  const item = await ownItem(gate.session.tenantId, itemId);
+  if (!item) return [];
+
+  const staff = await listStaff(gate.session.tenantId);
+
+  return listMovements(gate.session.tenantId, item.id, staff);
+}
+
 // -----------------------------------------------------------------------------
 // Add and edit
 // -----------------------------------------------------------------------------
@@ -339,6 +400,18 @@ export async function saveProduct(
   const itemId = formData.get("item_id");
   const supabase = createAdminClient();
 
+  // The stock box is not a column this form may write. Since `0022` the shelf
+  // count is a running total with a ledger under it, and an `update` that set
+  // it would silently un-sell whatever counter 2 rang up while the sheet was
+  // open — the owner typed 9 because the shelf said 9 when they opened the
+  // form, not because they want the two bottles sold since then put back.
+  //
+  // So it comes out of the row here and goes through `set_stock`, which works
+  // the difference out against the count as it is at that instant and records
+  // it as a movement. Everything else on the item is a value, not a running
+  // total, and last write wins on those is the right answer.
+  const { stock: counted, ...fields } = row;
+
   if (itemId) {
     const before = await ownItem(session.tenantId, itemId);
     if (!before) {
@@ -347,7 +420,7 @@ export async function saveProduct(
 
     const { error } = await supabase
       .from("items")
-      .update(row)
+      .update(fields)
       .eq("id", before.id)
       .eq("tenant_id", session.tenantId);
 
@@ -355,6 +428,32 @@ export async function saveProduct(
       return fail(
         conflict(error.message) ?? "We could not save those changes. Please try again.",
       );
+    }
+
+    // Only when the number actually moved. An owner who opened an item to fix
+    // its price has not counted the shelf, and a ledger full of "counted: no
+    // change" rows is a ledger nobody reads.
+    if (counted !== Number(before.stock)) {
+      const { error: moved } = await supabase.rpc("set_stock", {
+        p_tenant: session.tenantId,
+        p_item: before.id,
+        p_to: counted,
+        // Typed into a box labelled "Stock on hand" is a count, not an
+        // adjustment: the owner is saying what is there, not how much moved.
+        p_reason: "count",
+        p_note: null,
+        p_by: session.userId,
+      });
+
+      // The item saved and the count did not. Said rather than swallowed —
+      // a screen that reports success and leaves the shelf figure behind is
+      // how an owner stops believing the number.
+      if (moved) {
+        console.error("[inventory] set_stock failed", moved);
+        return fail(
+          "The item saved, but the stock count did not. Open it again and re-enter the count.",
+        );
+      }
     }
 
     await recordAudit(session, {
@@ -384,6 +483,16 @@ export async function saveProduct(
     return fail(
       conflict(error?.message ?? "") ?? "We could not add that item. Please try again.",
     );
+  }
+
+  // The figure the item was added with, written straight rather than through
+  // `set_stock`. `move_stock` exists to make a read-modify-write safe against a
+  // sale landing between the two halves, and an insert has no read: nothing
+  // else in the shop can see this row yet, so there is nothing to lock and no
+  // delta to lose. Zero writes nothing — an item added with an empty stock box
+  // has no opening count to record.
+  if (counted !== 0) {
+    await openingMovement(session, created.id, counted, "opening");
   }
 
   await recordAudit(session, {
@@ -846,21 +955,42 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
 
   let inserted = 0;
 
+  // Every row's opening count, collected as the ids come back and written in
+  // one go at the end. A spreadsheet is five thousand rows and a round trip per
+  // row would be a progress bar an owner walks away from; the ledger entry for
+  // a row that has just been created cannot race anything, for the reason
+  // `openingMovement` explains.
+  const opened: { item_id: string; quantity: number }[] = [];
+
+  const remember = (
+    created: { id: string; stock: number | string }[] | null,
+  ) => {
+    for (const row of created ?? []) {
+      const quantity = Number(row.stock) || 0;
+      if (quantity !== 0) opened.push({ item_id: row.id, quantity });
+    }
+  };
+
   for (let at = 0; at < ready.length; at += CHUNK) {
     const chunk = ready.slice(at, at + CHUNK);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("items")
-      .insert(chunk.map((entry) => entry.values));
+      .insert(chunk.map((entry) => entry.values))
+      .select("id, stock");
 
     if (!error) {
       inserted += chunk.length;
+      remember(data);
       continue;
     }
 
     // One row in this chunk was refused and took the other ninety-nine with it.
     // Retried singly, so only the guilty row is lost.
     for (const entry of chunk) {
-      const { error: single } = await supabase.from("items").insert(entry.values);
+      const { data: one, error: single } = await supabase
+        .from("items")
+        .insert(entry.values)
+        .select("id, stock");
 
       if (single) {
         skipped.push({
@@ -871,7 +1001,28 @@ export async function importProducts(rows: ImportRow[]): Promise<ImportResult> {
       }
 
       inserted += 1;
+      remember(one);
     }
+  }
+
+  // Chunked for the same reason the items were: one statement carrying five
+  // thousand rows is a statement that times out on shop 3G.
+  for (let at = 0; at < opened.length; at += CHUNK) {
+    const { error } = await supabase.from("stock_movements").insert(
+      opened.slice(at, at + CHUNK).map((entry) => ({
+        tenant_id: session.tenantId,
+        item_id: entry.item_id,
+        reason: "import",
+        quantity: entry.quantity,
+        stock_after: entry.quantity,
+        created_by: session.userId,
+      })),
+    );
+
+    // Logged, not reported. The items are in and their counts are right; what
+    // is missing is the line saying the count came off a spreadsheet, and an
+    // import that reports failure over that is an import the owner runs twice.
+    if (error) console.error("[inventory] import movements failed", error);
   }
 
   await recordAudit(session, {

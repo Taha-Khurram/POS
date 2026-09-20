@@ -62,9 +62,46 @@ export type BillLine = {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  /**
+   * How much of this line has already gone back, counted off the refund lines
+   * that point at it rather than off a column somebody has to maintain.
+   * Positive: it is a quantity, not a signed movement.
+   */
+  returned: number;
 };
 
-export type BillDetail = BillRow & { lines: BillLine[] };
+/** What one line still has left to give back. The return sheet caps on this
+ *  and the Server Action re-derives it inside the transaction, because a
+ *  number the browser worked out is a number the browser can change. */
+export const returnable = (line: BillLine) =>
+  Math.max(0, round3(line.quantity - line.returned));
+
+/** A refund already taken off a bill, for the panel that lists them under it. */
+export type BillRefund = {
+  id: string;
+  receiptNo: string;
+  at: string;
+  /** Positive rupees — what went back. The row itself is stored negative; the
+   *  screen says "Rs 300 refunded" and not "Rs −300 refunded". */
+  amount: number;
+  note: string;
+};
+
+export type BillDetail = BillRow & {
+  lines: BillLine[];
+  /** Every refund taken against this bill, oldest first. Empty on the
+   *  overwhelming majority. */
+  refunds: BillRefund[];
+};
+
+/** Whether a row is the money going back rather than a sale. One predicate, so
+ *  no screen has to remember which word `sales.status` uses. */
+export const isRefund = (bill: { status: string }) => bill.status === "refund";
+
+/** Three decimals, matching `sale_lines.quantity numeric(12, 3)`. Its own copy
+ *  rather than an import from `counter.ts`, which would drag the register's
+ *  whole module into the history's. */
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
 
 /** What came back for one window, and whether it is all of it. */
 export type BillPage = {

@@ -8,11 +8,14 @@ import { UNITS } from "@/lib/pos/catalog";
 import {
   billOf,
   businessDayOf,
+  discountOf,
   isTender,
   round3,
   type CartLine,
+  type Discount,
   type TenderId,
 } from "@/lib/pos/counter";
+import { getTillAccess } from "@/lib/pos/access";
 import { getShopSettings } from "@/lib/pos/shop";
 import { createAdminClient } from "@/utils/supabase/admin";
 
@@ -45,10 +48,17 @@ export type SaleInput = {
   lines: { id: string; quantity: number }[];
   /** Who the bill is for. Null is a walk-in, which is most bills. */
   customerId: string | null;
+  /**
+   * What the cashier agreed to take off, as they said it — per cent or rupees.
+   * Resolved to rupees on this side against this session's own ceiling, never
+   * against one the browser sent: the ceiling is the whole control, and a
+   * client that could name it would not be limited by it.
+   */
+  discount?: Discount;
 };
 
 export type SaleResult =
-  | { ok: true; receiptNo: string; total: number }
+  | { ok: true; receiptNo: string; total: number; discount: number }
   | { ok: false; error: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -89,7 +99,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
   // a tab left open since an item was withdrawn must not be able to sell it.
   const { data: catalog } = await supabase
     .from("items")
-    .select("id, name, name_urdu, unit, selling_price, tax_rate")
+    .select("id, name, name_urdu, unit, selling_price, tax_rate, stock")
     .eq("tenant_id", session.tenantId)
     .eq("is_active", true)
     .in("id", [...new Set(wanted.map((line) => line.id))]);
@@ -119,6 +129,26 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
       return { ok: false, error: `${item.name} is sold in whole ${unit}s.` };
     }
 
+    const stock = Number(item.stock) || 0;
+
+    // The shelf count is a gate, not a warning. The till refuses to put an
+    // item at zero on a bill and refuses to step one past what is counted;
+    // this is the same rule on the server, because a control the browser draws
+    // is not a control nobody can call — and this read is the fresher of the
+    // two, since the till's copy was loaded when the page was.
+    //
+    // It names the item and both numbers, because the fix is a stocktake on
+    // Products & stock and the owner needs to know which row to open.
+    if (quantity > stock) {
+      return {
+        ok: false,
+        error:
+          stock <= 0
+            ? `${item.name} is out of stock, so it cannot be sold. Count it in on Products & stock first.`
+            : `Flo counts ${stock} ${unit} of ${item.name} and this bill has ${quantity}. Lower it, or count the shelf in on Products & stock.`,
+      };
+    }
+
     lines.push({
       id: item.id,
       name: item.name,
@@ -128,6 +158,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
       price: Number(item.selling_price) || 0,
       taxRate: Number(item.tax_rate) || 0,
       fractional,
+      stock,
     });
   }
 
@@ -186,8 +217,50 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     return { ok: false, error: `${counter.name} is not set up to take ${input.tender}.` };
   }
 
+  // No drawer, no sale. `record_sale` stamps whichever shift the counter is in
+  // and a null `shift_id` used to be the ordinary case — it is now a sale that
+  // belongs to nobody's count, which is the thing shifts exist to stop. Checked
+  // here rather than in SQL for the reason the stock check above is: this is
+  // where a refusal can be a sentence the cashier can act on.
+  const { data: shift } = await supabase
+    .from("shifts")
+    .select("id")
+    .eq("tenant_id", session.tenantId)
+    .eq("counter_id", counter.id)
+    .eq("status", "open")
+    .maybeSingle();
+
+  if (!shift) {
+    return {
+      ok: false,
+      error: `No drawer is open on ${counter.name}. Open it at the top of the Register — a sale has to land in a till somebody has counted into.`,
+    };
+  }
+
   const settings = await getShopSettings(session.tenantId);
-  const bill = billOf(lines);
+
+  // The discount, re-resolved here against the ceiling this session actually
+  // has. `discountOf` is the same function the till used to draw the figure on
+  // screen, so a cashier inside their limit sees the number they will be
+  // charged — and one who edited the request gets it clamped rather than
+  // refused, because a clamp is what the owner's ceiling means.
+  const till = await getTillAccess(session);
+  const asked = input.discount;
+
+  if (asked && asked.value > 0 && !till.canDiscount) {
+    return {
+      ok: false,
+      error: "You are not allowed to take anything off a bill. Ask the owner.",
+    };
+  }
+
+  const gross = billOf(lines);
+  const off =
+    asked && till.canDiscount
+      ? discountOf(gross.subtotal, asked, till.discountCeilingPct)
+      : 0;
+
+  const bill = billOf(lines, off);
 
   const { data, error } = await supabase.rpc("record_sale", {
     p_tenant: session.tenantId,
@@ -201,6 +274,10 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     p_subtotal: bill.subtotal,
     p_total: bill.total,
     p_tender: input.tender,
+    p_discount: bill.discount,
+    // The floor under the check above. `record_sale` raises rather than
+    // clamps, so this being wrong is a failed sale and not a silent giveaway.
+    p_ceiling_pct: till.discountCeilingPct,
     p_lines: lines.map((line) => ({
       // The catalog row this line came off, so a report can group by item.
       // `name_snapshot` beside it is what the receipt was printed from, and it
@@ -248,6 +325,10 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
         receipt_number: receiptNo,
         tender: input.tender,
         total: bill.total,
+        // Audited by name because it is the one figure on a bill the person
+        // entering it benefits from getting wrong. A shop asking "who has been
+        // giving money away" needs this answerable.
+        discount: bill.discount,
         lines: bill.lines,
       },
     });
@@ -256,5 +337,5 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
   // The day-end screen is the one that has to be right the moment a sale lands.
   revalidatePath("/app/sales");
 
-  return { ok: true, receiptNo, total: bill.total };
+  return { ok: true, receiptNo, total: bill.total, discount: bill.discount };
 }

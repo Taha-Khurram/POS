@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { BarcodeScanner } from "@/components/pos/barcode-scanner";
 import {
   IconAlert,
   IconBarcode,
-  IconCamera,
   IconCart,
   IconCheck,
   IconClose,
   IconMinus,
+  IconPause,
+  IconPercent,
   IconPlus,
   IconPrinter,
   IconSearch,
@@ -21,14 +21,20 @@ import { useDismiss } from "@/components/pos/use-dismiss";
 import { useToast } from "@/components/pos/toaster";
 import {
   billOf,
+  discountOf,
   lineTotal,
   moneyFormatter,
+  NO_DISCOUNT,
+  parseDiscount,
   parseQuantity,
   newSaleId,
   provisionalReceiptNumber,
   round3,
+  roundOffs,
+  stockLeft,
   type CartLine,
   type Counter,
+  type Discount,
   type TenderId,
 } from "@/lib/pos/counter";
 import {
@@ -43,9 +49,18 @@ import {
   writePhone,
   type Customer,
 } from "@/lib/pos/customer";
+import {
+  heldAge,
+  heldTitle,
+  HELD_LABEL_MAX,
+  isStale,
+  type HeldBill,
+} from "@/lib/pos/held";
+import type { TillAccess } from "@/lib/pos/modules";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
 import { recordSale } from "./actions";
+import { dropHeldBill, holdBill } from "./hold-actions";
 import { PaymentSheet } from "./payment-sheet";
 import { Receipt, type Sale } from "./receipt";
 
@@ -79,6 +94,9 @@ export function Till({
   counter,
   shop,
   settings,
+  access,
+  held,
+  drawerOpen,
 }: {
   items: Product[];
   /** Everyone the till may put a bill against — the shop's own, minus the ones
@@ -89,20 +107,61 @@ export function Till({
   counter: Counter;
   shop: ShopProfile;
   settings: ShopSettings;
+  /** What this cashier may do at the counter — resolved on the server from the
+   *  stored permissions, and re-checked by every action it unlocks. What
+   *  crosses here is the answer, never the permissions row behind it. */
+  access: TillAccess;
+  /** The bills already parked at this till, oldest first. Read on the server
+   *  and refreshed by the `revalidatePath` the hold actions fire, so the tray
+   *  never has to poll. */
+  held: HeldBill[];
+  /** Whether a drawer is open on this counter. Nothing can be charged without
+   *  one: the money has to land in a drawer somebody has counted into and will
+   *  count out of, or the shift figures are a subset of the day and mean
+   *  nothing. The Server Action refuses for itself as well. */
+  drawerOpen: boolean;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
-  const [scanning, setScanning] = useState(false);
   const [paying, setPaying] = useState(false);
   const [sale, setSale] = useState<Sale | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
 
+  /**
+   * What this tablet has sold since the page loaded, per item.
+   *
+   * `items` is read once by the server component and does not follow the shop,
+   * so without this the shelf note would go on promising "4 left" through four
+   * consecutive sales of the same thing. Re-fetching the catalog after every
+   * bill would be the obvious fix and the wrong one — four hundred rows down
+   * shop 3G between one customer and the next is exactly the round trip this
+   * screen is built to avoid.
+   *
+   * It only knows about this tablet. The counter by the door is selling from
+   * the same shelf and this will never hear about it, which is why the note it
+   * feeds is worded as what Flo counts rather than as what is there.
+   */
+  const [sold, setSold] = useState<Record<string, number>>({});
+
   const searchRef = useRef<HTMLInputElement>(null);
 
   const money = moneyFormatter(settings);
-  const bill = useMemo(() => billOf(lines), [lines]);
+
+  // What the cashier agreed to, as they said it. Resolved to rupees against
+  // their own ceiling by `discountOf` — the same function the Server Action
+  // runs again on the way in, so the figure on screen is the figure charged.
+  const [discount, setDiscount] = useState<Discount>(NO_DISCOUNT);
+
+  const bill = useMemo(() => {
+    const gross = billOf(lines);
+    const off = access.canDiscount
+      ? discountOf(gross.subtotal, discount, access.discountCeilingPct)
+      : 0;
+
+    return billOf(lines, off);
+  }, [lines, discount, access]);
 
   /* ---------------- Finding an item ---------------- */
 
@@ -151,6 +210,24 @@ export function Till({
 
   const add = useCallback((item: Product) => {
     const fractional = UNITS.find((unit) => unit.id === item.unit)?.fractional ?? false;
+    const shelf = round3(item.stock - (sold[item.id] ?? 0));
+
+    // Nothing left to sell. Refused here rather than warned about, and said in
+    // words that tell the cashier what to do next: the shelf count is what the
+    // till bills from, so an item at zero has to be counted in on Products &
+    // stock before it can go on a bill.
+    const onBill =
+      lines.find((line) => line.id === item.id)?.quantity ?? 0;
+    const step = fractional ? 0.5 : 1;
+
+    if (round3(shelf - onBill) < step) {
+      setNotice(
+        onBill > 0
+          ? `That is all the ${item.name} Flo counts — ${shelf.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(item.unit)}. Count the shelf in on Products & stock to sell more.`
+          : `${item.name} is out of stock, so it cannot go on a bill. Count it in on Products & stock first.`,
+      );
+      return;
+    }
 
     setLines((previous) => {
       const existing = previous.find((line) => line.id === item.id);
@@ -161,7 +238,7 @@ export function Till({
       if (existing) {
         return previous.map((line) =>
           line.id === item.id
-            ? { ...line, quantity: round3(line.quantity + (fractional ? 0.5 : 1)) }
+            ? { ...line, quantity: round3(line.quantity + step) }
             : line,
         );
       }
@@ -179,13 +256,15 @@ export function Till({
           price: item.price,
           taxRate: item.taxRate,
           fractional,
+          // What the page loaded, less whatever this tablet has sold since.
+          stock: shelf,
         },
       ];
     });
 
     setNotice(null);
     setConfirmClear(false);
-  }, []);
+  }, [sold, lines]);
 
   /** Take an item off the list: on the bill, box emptied, list shut, focus
    *  back where the scanner types. */
@@ -224,25 +303,6 @@ export function Till({
     take(hit);
   };
 
-  /** A code off the tablet camera. Only a real barcode match counts — a
-   *  decoder that read one digit wrong must not sell the wrong thing. */
-  const acceptScan = (code: string) => {
-    setScanning(false);
-
-    const hit = items.find((item) => item.barcode === code);
-
-    if (!hit) {
-      setQuery(code);
-      setNotice(
-        `Scanned ${code}, which is not on any item yet. Add it on Products & stock.`,
-      );
-      focusSearch();
-      return;
-    }
-
-    take(hit);
-  };
-
   const setQuantity = (id: string, value: string) =>
     setLines((previous) =>
       previous.map((line) => {
@@ -263,6 +323,17 @@ export function Till({
           line.quantity + direction * (line.fractional ? 0.25 : 1),
         );
 
+        // Never past what the shelf has. The plus button stops rather than
+        // taking the line somewhere the Charge button would then refuse — a
+        // control that moves a number into an invalid state is a control that
+        // makes the cashier work out why nothing happens next.
+        if (direction === 1 && quantity > line.stock) {
+          setNotice(
+            `Flo counts ${line.stock.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(line.unit)} of ${line.name}. Count the shelf in on Products & stock to sell more.`,
+          );
+          return [line];
+        }
+
         // Stepping past zero takes the line off the bill, which is what the
         // cashier meant — nobody presses minus five times to reach nothing.
         return quantity > 0 ? [{ ...line, quantity }] : [];
@@ -276,11 +347,41 @@ export function Till({
     if (!confirmClear) return setConfirmClear(true);
     setLines([]);
     setCustomer(null);
+    setDiscount(NO_DISCOUNT);
+    // Clearing the screen does not drop the parked bill it came from. The
+    // cashier who resumes one and then clears has changed their mind about
+    // this screen, not about the shopping still sitting on the counter — the
+    // bill stays in the tray until somebody settles it or drops it by name.
+    resumed.current = null;
     setConfirmClear(false);
     focusSearch();
   };
 
   /* ---------------- Settling ---------------- */
+
+  /**
+   * Why this bill cannot be charged, or null when it can.
+   *
+   * One string rather than a handful of booleans, because it is both the
+   * disabled state and the sentence printed under the footer — a button that
+   * is dead for a reason nobody states is a button a cashier taps three times
+   * and then calls the owner about. The empty string is the one case that
+   * needs no words: nothing on the bill yet.
+   *
+   * The order is the order a cashier can act on. A shut drawer is the first
+   * thing to fix and applies to the whole bill; a line over the shelf count is
+   * last, because it names an item and a number.
+   */
+  const short = lines.find((line) => stockLeft(line) < 0);
+
+  const blocked: string | null =
+    lines.length === 0
+      ? ""
+      : !drawerOpen
+        ? "Open the drawer at the top of this screen before charging anything — a sale has to land in a till somebody has counted into."
+        : short
+          ? `Flo counts ${short.stock.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(short.unit)} of ${short.name} and this bill has ${short.quantity.toLocaleString("en-PK", { maximumFractionDigits: 3 })}. Lower it, or count the shelf in on Products & stock.`
+          : null;
 
   // The sale's id, minted on the tablet the moment the payment sheet opens. It
   // is what makes a retry a replay rather than a second bill: `record_sale`
@@ -310,6 +411,10 @@ export function Till({
           // The id only. The server re-reads the row, the same way it re-prices
           // every line — the browser says who, never what is true about them.
           customerId: customer?.id ?? null,
+          // As the cashier said it. The ceiling is applied again on that side
+          // against this session's own permissions, never against anything
+          // sent from here.
+          discount,
         }).catch(() => ({
           ok: false as const,
           error:
@@ -342,11 +447,43 @@ export function Till({
       change,
     });
 
+    // Off this tablet's running count of the shelf, but only for a sale that
+    // was actually recorded — a bill printed without being written down has
+    // not moved `items.stock` either, and pretending otherwise here would make
+    // the next customer's shelf note wrong in the same direction twice.
+    if (result?.ok) {
+      setSold((previous) => {
+        const next = { ...previous };
+        for (const line of frozen) {
+          next[line.id] = round3((next[line.id] ?? 0) + line.quantity);
+        }
+        return next;
+      });
+    }
+
+    // A bill that was picked up off the tray and has now been paid for is no
+    // longer on hold. Dropped after the sale is recorded and never before: a
+    // parked bill removed first and a sale that then failed to write is
+    // shopping nobody can account for.
+    //
+    // Fire and forget — the sale is already recorded and the receipt is on its
+    // way to the printer, and blocking that on a tidy-up is the wrong order.
+    // A row left behind is a stale bill in the tray, which is visible and
+    // droppable; a receipt delayed is a queue.
+    if (result?.ok && resumed.current) {
+      const parked = resumed.current;
+      resumed.current = null;
+      void dropHeldBill(parked).catch(() => {});
+    }
+
     // The next person at the counter is the next person at the counter. A
     // customer left attached is how somebody else's shopping lands on a
     // regular's record.
     setCustomer(null);
     setLines([]);
+    // The next customer did not haggle. A discount left standing is the
+    // cheapest way to give a shop's margin away all afternoon.
+    setDiscount(NO_DISCOUNT);
     setPaying(false);
     saleId.current = "";
 
@@ -374,11 +511,134 @@ export function Till({
     focusSearch();
   };
 
+  /* ---------------- Putting a bill down ---------------- */
+
+  /**
+   * Which parked bill is on the screen, if any.
+   *
+   * A bill picked up keeps its id, so putting it back down again — the cashier
+   * who resumed it, added the dahi and was asked to wait again — updates the
+   * row it came from rather than leaving a stale copy beside it. Cleared on a
+   * completed sale and on Clear, because both of those end the bill.
+   */
+  const resumed = useRef<string | null>(null);
+  const [parking, setParking] = useState(false);
+  const [tray, setTray] = useState(false);
+
+  const park = async (label: string) => {
+    const id = resumed.current ?? newSaleId();
+
+    const result = await holdBill({
+      id,
+      counterId: counter.id,
+      label,
+      customerId: customer?.id ?? null,
+      // Ids and quantities. The prices are deliberately not sent: resuming
+      // re-prices from the catalog, the same way recording a sale does.
+      lines: lines.map((line) => ({ id: line.id, quantity: line.quantity })),
+      discount,
+    }).catch(() => ({
+      ok: false as const,
+      error: "We could not reach Flo to put this bill down. Check the connection.",
+    }));
+
+    if (!result.ok) {
+      toast({ title: "Not put down", detail: result.error, tone: "bad" });
+      return;
+    }
+
+    toast({
+      title: label ? `${label} is on hold` : "Bill on hold",
+      detail: "Pick it up from Held bills when they come back.",
+      tone: "good",
+    });
+
+    setLines([]);
+    setCustomer(null);
+    setDiscount(NO_DISCOUNT);
+    resumed.current = null;
+    setParking(false);
+    focusSearch();
+  };
+
+  /**
+   * Picking one back up.
+   *
+   * Re-priced here, not restored: the stored bill is item ids and quantities,
+   * and the prices come off the catalog the till already holds. That is what
+   * makes a bill parked before a rate change settle at the rate on the shelf.
+   *
+   * An item withdrawn while the bill was down is dropped and said out loud
+   * rather than quietly left out — a cashier who is not told is a cashier who
+   * hands over shopping that is not on the receipt.
+   */
+  const resume = (bill: HeldBill) => {
+    const restored: CartLine[] = [];
+    const lost: string[] = [];
+
+    for (const line of bill.lines) {
+      const item = items.find((entry) => entry.id === line.itemId);
+
+      if (!item) {
+        lost.push(line.itemId);
+        continue;
+      }
+
+      restored.push({
+        id: item.id,
+        name: item.name,
+        urdu: item.urdu,
+        unit: item.unit,
+        quantity: line.quantity,
+        // Today's price, off today's catalog.
+        price: item.price,
+        taxRate: item.taxRate,
+        fractional: UNITS.find((unit) => unit.id === item.unit)?.fractional ?? false,
+        stock: round3(item.stock - (sold[item.id] ?? 0)),
+      });
+    }
+
+    setLines(restored);
+    setCustomer(
+      bill.customerId
+        ? (customers.find((entry) => entry.id === bill.customerId) ?? null)
+        : null,
+    );
+    setDiscount(access.canDiscount ? bill.discount : NO_DISCOUNT);
+    resumed.current = bill.id;
+    setTray(false);
+
+    setNotice(
+      lost.length === 0
+        ? null
+        : lost.length === 1
+          ? "One item on that bill is no longer in the list and has been left off. Check the shopping against the screen."
+          : `${lost.length} items on that bill are no longer in the list and have been left off. Check the shopping against the screen.`,
+    );
+
+    focusSearch();
+  };
+
+  const drop = async (bill: HeldBill) => {
+    const result = await dropHeldBill(bill.id).catch(() => ({
+      ok: false as const,
+      error: "We could not reach Flo to drop that bill.",
+    }));
+
+    if (!result.ok) {
+      toast({ title: "Not dropped", detail: result.error, tone: "bad" });
+      return;
+    }
+
+    if (resumed.current === bill.id) resumed.current = null;
+    toast({ title: `${heldTitle(bill)} dropped`, tone: "good" });
+  };
+
   // The scanner is a keyboard, so the box it types into has to be the one with
   // focus whenever no dialog is open.
   useEffect(() => {
-    if (!scanning && !paying && !sale) focusSearch();
-  }, [scanning, paying, sale, focusSearch]);
+    if (!paying && !sale) focusSearch();
+  }, [paying, sale, focusSearch]);
 
   /**
    * The keyboard in the search box.
@@ -452,15 +712,31 @@ export function Till({
               />
             </label>
 
-            <button
-              type="button"
-              onClick={() => setScanning((on) => !on)}
-              aria-pressed={scanning}
-              className={`pos-btn flex-none ${scanning ? "pos-btn-primary" : "pos-btn-soft"}`}
-            >
-              <IconCamera className="h-4 w-4" />
-              <span className="hidden sm:inline">Camera</span>
-            </button>
+            {/* Beside the search box rather than down in the footer. The
+                haggling happens while the shopping is still going on the
+                counter, so the control belongs in the row the cashier's hand
+                is already in — and it is rendered whenever this cashier may
+                discount, disabled on an empty bill, so the row does not
+                reflow the moment the first item is scanned. */}
+            {access.canDiscount ? (
+              <DiscountBar
+                subtotal={bill.subtotal}
+                taken={bill.discount}
+                discount={discount}
+                ceilingPct={access.discountCeilingPct}
+                disabled={lines.length === 0}
+                money={money}
+                // Never refocuses. This fires on every keystroke in the
+                // per cent and rupees boxes, and sending focus back to the
+                // search box from here threw the cashier out of the field
+                // after a single character.
+                onChange={setDiscount}
+                // The scanner is a keyboard, so focus does have to come back
+                // to the search box — but only when the panel is deliberately
+                // finished with, not while somebody is still typing in it.
+                onDone={focusSearch}
+              />
+            ) : null}
 
             {/* What was searched for, and nothing else. Tapping a row is the
                 second way in; the scanner is the first, and loose items have
@@ -545,18 +821,6 @@ export function Till({
               bring your sheet in through Bulk import.
             </p>
           ) : null}
-
-          {scanning ? (
-            <div className="mt-3">
-              <BarcodeScanner
-                onRead={acceptScan}
-                onClose={() => {
-                  setScanning(false);
-                  focusSearch();
-                }}
-              />
-            </div>
-          ) : null}
         </div>
 
         {/* ================= The bill ================= */}
@@ -580,6 +844,32 @@ export function Till({
             }}
           />
 
+          {/* The tray. Drawn whenever anything is parked at this till, whether
+              or not there is a bill on screen — a cashier standing at an empty
+              register is exactly who needs to pick one up. */}
+          {held.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setTray(true)}
+              className="pos-btn pos-btn-sm pos-btn-soft flex-none"
+            >
+              <IconPause className="h-3.5 w-3.5" />
+              Held
+              <span className="pos-badge pos-badge-warn ml-0.5">{held.length}</span>
+            </button>
+          ) : null}
+
+          {lines.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setParking(true)}
+              className="pos-btn pos-btn-sm pos-btn-quiet flex-none"
+            >
+              <IconPause className="h-3.5 w-3.5" />
+              Hold
+            </button>
+          ) : null}
+
           {lines.length > 0 ? (
             <button
               type="button"
@@ -598,6 +888,13 @@ export function Till({
               Nothing on the bill yet.
               <span className="mt-1 block text-[0.75rem]">
                 Scan an item, or search for it above.
+                {held.length > 0 ? (
+                  <>
+                    {" "}
+                    {held.length === 1 ? "One bill is" : `${held.length} bills are`}{" "}
+                    on hold at this counter.
+                  </>
+                ) : null}
               </span>
             </p>
           ) : (
@@ -634,6 +931,7 @@ export function Till({
                           two are not the same number. */}
                       <span className="mt-0.5 block text-[0.75rem] tabular-nums text-graphite-500">
                         {money(line.price)} per {unitShort(line.unit)}
+                        <ShelfNote line={line} />
                       </span>
                     </td>
 
@@ -698,6 +996,13 @@ export function Till({
           <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.8125rem]">
             <Figure label="Subtotal" value={money(bill.subtotal)} />
 
+            {bill.discount > 0 ? (
+              <Figure
+                label="Discount"
+                value={`−${money(bill.discount)}`}
+              />
+            ) : null}
+
             {bill.taxIncluded > 0 ? (
               <Figure
                 label="Sales tax, already included"
@@ -723,13 +1028,32 @@ export function Till({
                 saleId.current = newSaleId();
                 setPaying(true);
               }}
-              disabled={lines.length === 0}
+              disabled={Boolean(blocked)}
+              // The reason travels with the button. A control that is dead and
+              // silent is a control a cashier taps three times and then calls
+              // the owner about.
+              title={blocked ?? undefined}
+              aria-describedby={blocked ? "charge-blocked" : undefined}
               className="pos-btn pos-btn-primary px-8 py-3 text-[1rem] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Charge
             </button>
           </div>
         </footer>
+
+        {/* Said under the bar rather than inside the button, because it names
+            an item and a number and neither fits on a button. An empty string
+            is "nothing on the bill yet", which needs no explanation at all. */}
+        {blocked ? (
+          <p
+            id="charge-blocked"
+            role="status"
+            className="flex items-start gap-2 border-t border-orchid-100 bg-signal-warn/5 px-4 py-2.5 text-[0.8125rem] leading-relaxed text-graphite-700"
+          >
+            <IconAlert className="mt-0.5 h-4 w-4 flex-none text-signal-warn" />
+            {blocked}
+          </p>
+        ) : null}
       </section>
 
       {paying ? (
@@ -745,6 +1069,27 @@ export function Till({
             saleId.current = "";
           }}
           onTender={tendered}
+        />
+      ) : null}
+
+      {parking ? (
+        <HoldSheet
+          customer={customer?.name ?? ""}
+          lines={bill.lines}
+          total={money(bill.total)}
+          onClose={() => setParking(false)}
+          onHold={park}
+        />
+      ) : null}
+
+      {tray ? (
+        <HeldTray
+          held={held}
+          counter={counter}
+          busy={lines.length > 0}
+          onResume={resume}
+          onDrop={drop}
+          onClose={() => setTray(false)}
         />
       ) : null}
 
@@ -1080,6 +1425,246 @@ function SaleDone({
 }
 
 /**
+ * Taking something off the bill.
+ *
+ * Haggling is not an edge case in a Pakistani shop and a till that cannot do
+ * it is a till the cashier works around — out of the drawer, or by ringing up
+ * one item fewer — and a till that is worked around stops being the record of
+ * what the shop sold. So it sits in the top row beside the search box, where
+ * the cashier's hand already is, rather than in a payment screen that opens
+ * once the money is already in somebody's hand.
+ *
+ * Drawn whenever this cashier may discount and disabled on an empty bill,
+ * rather than appearing when the first item lands: a control that materialises
+ * in the row holding focus reflows the box the scanner types into.
+ *
+ * Three ways in, in the order they are actually said across a counter:
+ *
+ *   - **"Make it 470."** The round-off buttons, which is the commonest
+ *     discount there is and the one a cashier would otherwise do in their head
+ *     with a queue watching. Only the roundings that are inside the ceiling are
+ *     offered, so a button that is there is a button that works.
+ *   - **"Ten per cent for you."** Typed as a percentage, resolved to rupees
+ *     before it leaves the browser.
+ *   - **"Twenty rupees off."** Typed as rupees.
+ *
+ * The ceiling is stated in both currencies — "up to 5% · Rs 23.90 on this
+ * bill" — because a percentage is not a number a cashier can check a customer's
+ * demand against while holding their shopping. Going over it is clamped rather
+ * than refused, with the clamp said out loud: the owner's ceiling means "this
+ * much and no more", and a cashier who types 50 and gets 23.90 with a line
+ * explaining why has learnt the limit, where one who gets an error has learnt
+ * that the discount button is unreliable.
+ */
+function DiscountBar({
+  subtotal,
+  taken,
+  discount,
+  ceilingPct,
+  disabled,
+  money,
+  onChange,
+  onDone,
+}: {
+  subtotal: number;
+  /** What actually came off after the ceiling — not what was typed. */
+  taken: number;
+  discount: Discount;
+  ceilingPct: number;
+  /** Nothing on the bill yet. There is no figure to take anything off. */
+  disabled: boolean;
+  money: (amount: number) => string;
+  /** Fires on every keystroke, so it must not move focus. */
+  onChange: (next: Discount) => void;
+  /**
+   * The panel is finished with — put focus back where the scanner types.
+   *
+   * Only on Done, No discount and Escape. Deliberately not on an outside
+   * click: that click landed somewhere the cashier chose, and yanking focus
+   * out of it would be the same bug one step along.
+   */
+  onDone: () => void;
+}) {
+  const { ref, open, setOpen } = useDismiss<HTMLDivElement>();
+  const [draft, setDraft] = useState("");
+
+  const close = () => {
+    setOpen(false);
+    onDone();
+  };
+
+  const ceiling = Math.ceil(subtotal * Math.max(0, ceilingPct)) / 100;
+  const roundings = roundOffs(subtotal, ceilingPct);
+
+  // What was typed was more than the owner allows. Said rather than silently
+  // applied: the cashier has to know the customer is not getting what they
+  // asked for before they say the total out loud.
+  const asked = discountOf(subtotal, discount, 100);
+  const clamped = asked > taken;
+
+  const set = (next: Discount) => {
+    onChange(next);
+    setDraft(next.value > 0 ? String(next.value) : "");
+  };
+
+  const type = (value: string, kind: Discount["kind"]) => {
+    setDraft(value);
+    const parsed = parseDiscount(value, kind);
+    // Unparseable leaves the bill alone rather than zeroing it — mid-typing,
+    // "1." is not an instruction to remove the discount.
+    if (parsed !== null) onChange({ kind, value: parsed });
+  };
+
+  return (
+    <div className="pos-select-wrap flex-none" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        disabled={disabled}
+        className={`pos-btn ${taken > 0 ? "pos-btn-primary" : "pos-btn-soft"} disabled:cursor-not-allowed disabled:opacity-50`}
+      >
+        <IconPercent className="h-4 w-4" />
+        <span className="hidden sm:inline">
+          {taken > 0 ? `−${money(taken)}` : "Discount"}
+        </span>
+      </button>
+
+      {open ? (
+        // `pos-menu` and not `pos-select-menu`: the second is left-aligned and
+        // exactly as wide as its trigger, which for a small button at the right
+        // edge of the search row would hang the panel off the card. This one
+        // hangs off the right edge, which is what a toolbar button wants.
+        <div
+          className="pos-menu w-72 p-3"
+          onKeyDown={(event) => {
+            // Both mean "I am done here" to a cashier with their hands on the
+            // number pad. Enter must not reach the bill — the Charge button is
+            // the only thing that settles one.
+            if (event.key !== "Enter" && event.key !== "Escape") return;
+            if (event.target instanceof HTMLButtonElement) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }}
+        >
+          <p className="text-[0.75rem] leading-relaxed text-graphite-500">
+            Up to {ceilingPct}% on this bill — {money(ceiling)}.
+          </p>
+
+          {roundings.length > 0 ? (
+            <div className="mt-2.5">
+              <span className="pos-label">Round it off</span>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {roundings.map((off) => (
+                  <button
+                    key={off}
+                    type="button"
+                    onClick={() => set({ kind: "amount", value: off })}
+                    className="pos-btn pos-btn-soft pos-btn-sm tabular-nums"
+                  >
+                    Make it {money(subtotal - off)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="pos-label">Per cent</span>
+              <input
+                className="pos-field py-1.5 text-right tabular-nums"
+                inputMode="decimal"
+                placeholder="0"
+                value={discount.kind === "percent" ? draft : ""}
+                onChange={(event) => type(event.target.value, "percent")}
+                onFocus={(event) => event.target.select()}
+              />
+            </label>
+
+            <label className="block">
+              <span className="pos-label">Rupees off</span>
+              <input
+                className="pos-field py-1.5 text-right tabular-nums"
+                inputMode="decimal"
+                placeholder="0"
+                value={discount.kind === "amount" ? draft : ""}
+                onChange={(event) => type(event.target.value, "amount")}
+                onFocus={(event) => event.target.select()}
+              />
+            </label>
+          </div>
+
+          {clamped ? (
+            <p className="mt-2 text-[0.75rem] leading-relaxed text-signal-warn">
+              That is over your limit, so {money(taken)} came off instead. Ask
+              the owner if the customer needs more.
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-orchid-100 pt-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                set(NO_DISCOUNT);
+                close();
+              }}
+              disabled={taken === 0}
+              className="pos-btn pos-btn-quiet pos-btn-sm disabled:opacity-50"
+            >
+              No discount
+            </button>
+
+            <button
+              type="button"
+              onClick={close}
+              className="pos-btn pos-btn-soft pos-btn-sm"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What is left on the shelf, once this line is rung up.
+ *
+ * Said only when it is worth saying. A bill for two of something the shop has
+ * ninety of needs no commentary, and a note on every line is a note nobody
+ * reads — so it appears at the last few, and turns into a warning when the
+ * bill has gone past the count.
+ *
+ * The count is a limit, not a hint: at zero the item will not go on a bill at
+ * all, and a line over it makes the Charge button refuse and say which item and
+ * by how much. This note is the warning that comes before either, so the
+ * cashier reaches for the stocktake on Products & stock before there is a
+ * customer waiting on it rather than after.
+ */
+function ShelfNote({ line }: { line: CartLine }) {
+  const left = stockLeft(line);
+
+  // A shelf that is not short and is not nearly short. Nothing to say.
+  if (left > 3) return null;
+
+  const short = left < 0;
+
+  return (
+    <span
+      className={`ml-2 ${short ? "font-medium text-signal-bad" : "text-signal-warn"}`}
+    >
+      {short
+        ? `Flo counts only ${line.stock.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(line.unit)} — check the shelf`
+        : `${left.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(line.unit)} left after this`}
+    </span>
+  );
+}
+
+/**
  * The quantity box.
  *
  * It holds the text as typed rather than the parsed number, because "0.75 kg"
@@ -1140,6 +1725,326 @@ function Figure({
       >
         {value}
       </dd>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Naming a bill before it goes down.
+ *
+ * One field, and it is optional — a cashier with three people waiting will not
+ * type anything, and a dialog that insists is a dialog that gets worked around
+ * by not holding the bill at all. But the field is the difference between a
+ * tray a cashier can read and one they have to open four bills to search, so it
+ * is offered with the fastest thing to type already in it: the customer's name
+ * when one is attached, which is the case where the label matters least and
+ * costs nothing to fill.
+ *
+ * Enter holds. The hands are on the keyboard because they were just typing a
+ * name, and reaching for a button is the slow way.
+ */
+function HoldSheet({
+  customer,
+  lines,
+  total,
+  onClose,
+  onHold,
+}: {
+  customer: string;
+  lines: number;
+  total: string;
+  onClose: () => void;
+  onHold: (label: string) => Promise<void>;
+}) {
+  const [label, setLabel] = useState(customer);
+  const [busy, setBusy] = useState(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fieldRef.current?.focus();
+    fieldRef.current?.select();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose, busy]);
+
+  const hold = async () => {
+    if (busy) return;
+    setBusy(true);
+    await onHold(label);
+    setBusy(false);
+  };
+
+  return (
+    <div
+      className="pos-modal"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Put this bill on hold"
+        className="pos-sheet outline-none"
+      >
+        <header className="flex items-start gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-100 text-orchid-800">
+            <IconPause className="h-[18px] w-[18px]" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[1rem] leading-tight font-bold">
+              Put this bill down
+            </h2>
+            <p className="mt-0.5 text-[0.75rem] text-graphite-500">
+              {lines} {lines === 1 ? "line" : "lines"} · {total}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="pos-icon-btn disabled:opacity-50"
+            aria-label="Close"
+          >
+            <IconClose />
+          </button>
+        </header>
+
+        <div className="px-4 py-5 sm:px-5">
+          <label className="block">
+            <span className="pos-label">What will you call it?</span>
+            <input
+              ref={fieldRef}
+              className="pos-field"
+              value={label}
+              onChange={(event) =>
+                setLabel(event.target.value.slice(0, HELD_LABEL_MAX))
+              }
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                void hold();
+              }}
+              placeholder="Blue shirt, the aunty with the pram, Bilal…"
+              autoComplete="off"
+              autoCorrect="off"
+            />
+            <p className="pos-hint">
+              Optional. Whatever you will recognise across the counter — leave
+              it blank and the list shows the time and what was on it.
+            </p>
+          </label>
+
+          <p className="mt-4 rounded-xl bg-orchid-50 px-3.5 py-3 text-[0.8125rem] leading-relaxed text-graphite-700">
+            Nothing is sold and no stock moves. When you pick it up the prices
+            come off the list again, so a rate that changes in between is the
+            rate you charge.
+          </p>
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-orchid-100 px-4 py-3 sm:px-5">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="pos-btn pos-btn-quiet disabled:opacity-60"
+          >
+            Back to the bill
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void hold()}
+            disabled={busy}
+            className="pos-btn pos-btn-primary disabled:opacity-60"
+          >
+            {busy ? "Putting it down…" : "Put it on hold"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The bills already down at this till.
+ *
+ * Oldest first, because the one that has been waiting longest is the one
+ * somebody is about to ask about — and because a list that reorders as bills
+ * are added is a list a cashier re-reads every time.
+ *
+ * Picking one up while there is already a bill on screen would silently throw
+ * that bill away, so it is said rather than prevented: the cashier is told what
+ * will happen and can put the current one down first. Preventing it outright
+ * would be a tray that refuses to open in exactly the situation it exists for.
+ *
+ * Dropping asks twice, in the same tap-again shape the Clear button uses.
+ * Nothing about a held bill is recoverable — there is no money, no receipt and
+ * no stock movement behind it — so the second tap is the only thing standing
+ * between a busy thumb and a customer's shopping.
+ */
+function HeldTray({
+  held,
+  counter,
+  busy,
+  onResume,
+  onDrop,
+  onClose,
+}: {
+  held: HeldBill[];
+  counter: Counter;
+  /** Whether there is a bill on screen that picking one up would replace. */
+  busy: boolean;
+  onResume: (bill: HeldBill) => void;
+  onDrop: (bill: HeldBill) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [confirm, setConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="pos-modal"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Bills on hold at ${counter.name}`}
+        className="pos-sheet outline-none"
+      >
+        <header className="flex items-start gap-3 border-b border-orchid-100 px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-100 text-orchid-800">
+            <IconPause className="h-[18px] w-[18px]" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[1rem] leading-tight font-bold">
+              On hold at {counter.name}
+            </h2>
+            <p className="mt-0.5 text-[0.75rem] text-graphite-500">
+              {held.length} {held.length === 1 ? "bill" : "bills"} waiting to be
+              picked up
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="pos-icon-btn"
+            aria-label="Close"
+          >
+            <IconClose />
+          </button>
+        </header>
+
+        <div className="px-4 py-4 sm:px-5">
+          {busy ? (
+            <p className="mb-3 flex items-start gap-2 rounded-xl border border-signal-warn/40 bg-signal-warn/5 p-3 text-[0.8125rem] leading-relaxed text-graphite-700">
+              <IconAlert className="mt-0.5 h-4 w-4 flex-none text-signal-warn" />
+              There is a bill on the screen already. Picking one up will replace
+              it — put this one down first if you still need it.
+            </p>
+          ) : null}
+
+          <ul className="space-y-2">
+            {held.map((bill) => (
+              <li
+                key={bill.id}
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-orchid-100 p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-display text-[0.9375rem] font-semibold text-graphite-900">
+                      {heldTitle(bill)}
+                    </span>
+
+                    {bill.customerName ? (
+                      <span className="text-[0.8125rem] text-graphite-500">
+                        {bill.customerName}
+                      </span>
+                    ) : null}
+
+                    {/* A bill left overnight. Flagged and never swept away on a
+                        timer — deleting a shop's own data while nobody is
+                        looking is how a cashier loses one they meant to keep. */}
+                    {isStale(bill.at) ? (
+                      <span className="pos-badge pos-badge-warn">Overnight</span>
+                    ) : null}
+                  </p>
+
+                  <p className="mt-0.5 text-[0.75rem] text-graphite-500">
+                    {bill.lines.length}{" "}
+                    {bill.lines.length === 1 ? "item" : "items"} ·{" "}
+                    {heldAge(bill.at)} · {bill.by}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirm((id) => (id === bill.id ? null : bill.id));
+                  }}
+                  onBlur={() => setConfirm(null)}
+                  className={`pos-btn pos-btn-sm flex-none ${confirm === bill.id ? "pos-btn-primary" : "pos-btn-quiet"}`}
+                >
+                  {confirm === bill.id ? "Tap again to drop" : "Drop"}
+                </button>
+
+                {confirm === bill.id ? (
+                  <button
+                    type="button"
+                    onPointerDown={(event) => {
+                      // The Drop button's blur would clear the confirmation
+                      // before this click landed. Handled on pointer-down for
+                      // the same reason the search list is.
+                      event.preventDefault();
+                      setConfirm(null);
+                      void onDrop(bill);
+                    }}
+                    className="pos-btn pos-btn-sm pos-btn-primary flex-none"
+                  >
+                    Yes, drop it
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => onResume(bill)}
+                  className="pos-btn pos-btn-sm pos-btn-soft flex-none"
+                >
+                  Pick it up
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <footer className="flex items-center justify-end border-t border-orchid-100 px-4 py-3 sm:px-5">
+          <button type="button" onClick={onClose} className="pos-btn pos-btn-quiet">
+            Close
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

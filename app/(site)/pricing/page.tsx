@@ -59,10 +59,6 @@ const PLANS = [
  * reads with a calculator, and it is the last honest moment before money moves.
  */
 const NOT_INCLUDED = [
-  "Returns and refunds at the till",
-  "Discounts at the till",
-  "Held or parked bills",
-  "Shift open and close, with the drawer counted",
   "Billing while the internet is down",
   "The reports module — the dashboard is live, reports are not",
   "Purchase orders and supplier ledgers",
@@ -103,7 +99,7 @@ const FAQS = [
   },
   {
     q: "What is genuinely not built yet?",
-    a: "Returns, discounts at the till, held bills, shift close, offline billing, the reports module, purchasing, batch and expiry, variants, multi-branch, wallet payments, and FBR invoicing. The full list is above and the order they are being built in is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
+    a: "Offline billing, the reports module, purchasing, batch and expiry, variants, multi-branch, wallet payments, and FBR invoicing. The full list is above and the order they are being built in is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
   },
   {
     q: "Does Flo file my FBR invoices?",
