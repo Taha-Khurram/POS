@@ -10,13 +10,26 @@ export type TenantRole = "owner" | "manager" | "cashier";
 
 const TENANT_ROLES = ["owner", "manager", "cashier"] as const;
 
+/** `super_admin` and `support`, from `public.platform_admins`. Null for every
+ *  shopkeeper, which is nearly everybody. */
+const PLATFORM_ROLES = ["super_admin", "support"] as const;
+
 export type SessionContext = {
   userId: string;
   email: string | null;
   tenantId: string | null;
   tenantRole: TenantRole | null;
   branchId: string | null;
+  /**
+   * Whether this account works for us, and in what capacity. It is a claim
+   * rather than a read, so the `/admin` gate costs nothing — and it is
+   * deliberately orthogonal to `tenantRole`: an operator who also runs their
+   * own shop is both, and neither answer says anything about the other.
+   */
+  platformRole: PlatformRole | null;
 };
+
+export type PlatformRole = (typeof PLATFORM_ROLES)[number];
 
 const asString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
@@ -39,8 +52,9 @@ function asMember<T extends readonly string[]>(
  * Note the claim is `tenant_role`, not `role`: Supabase already uses `role` for
  * the Postgres role the request runs as. Since `0012` a cashier is an auth user
  * too, so the claim has three values and every `=== "owner"` check in the app
- * closes against the two new ones by default. `platform_role` is still stamped by
- * the hook but no longer read here — there is no platform console to gate.
+ * closes against the two new ones by default. `platform_role` has been stamped
+ * by the hook since `0001` and is read again here now that `/admin` exists —
+ * `lib/platform/access.ts` is the only thing that acts on it.
  *
  * Wrapped in `cache()` so the app gate can call it without re-verifying the
  * token more than once per request.
@@ -59,6 +73,7 @@ export const getSessionContext = cache(
       tenantId: asString(claims.tenant_id),
       tenantRole: asMember(claims.tenant_role, TENANT_ROLES),
       branchId: asString(claims.branch_id),
+      platformRole: asMember(claims.platform_role, PLATFORM_ROLES),
     };
   },
 );

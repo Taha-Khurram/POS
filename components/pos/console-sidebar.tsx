@@ -16,6 +16,7 @@ import {
   IconSales,
   IconSettings,
   IconSignOut,
+  IconStore,
   IconTruck,
   type IconProps,
 } from "./icons";
@@ -74,6 +75,7 @@ export function ConsoleSidebar({
   shopName,
   email,
   access,
+  platform,
   onNavigate,
   onClose,
 }: {
@@ -86,6 +88,10 @@ export function ConsoleSidebar({
   /** Decided on the server by `moduleAccess`. A row this says false to is not
    *  drawn — and its page returns 404 to anyone who types the path anyway. */
   access: ModuleAccess;
+  /** Whether this account also works for us. Drawn as a door rather than a
+   *  module, because the platform console is not one of the shop's screens —
+   *  it is the other product, and `/admin` 404s anybody without the claim. */
+  platform: boolean;
   onNavigate: () => void;
   onClose: () => void;
 }) {
@@ -158,6 +164,19 @@ export function ConsoleSidebar({
             </ul>
           </div>
         ))}
+        {platform ? (
+          <div className="mt-6 border-t border-orchid-100 pt-3">
+            <Link
+              href="/admin"
+              onClick={onNavigate}
+              className="pos-rail-link"
+              title={tight ? "Platform console" : undefined}
+            >
+              <IconStore className="h-[18px] w-[18px] flex-none" />
+              <span className="pos-rail-text flex-1">Platform console</span>
+            </Link>
+          </div>
+        ) : null}
       </nav>
 
       {/* Who is signed in, at the foot of the rail — and the only place the

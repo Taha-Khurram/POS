@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { COUNTER_COOKIE } from "@/components/pos/console-prefs";
 import { IconRegister, IconSettings } from "@/components/pos/icons";
 import { requireSession } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getTillAccess } from "@/lib/pos/access";
 import { listActiveCustomers } from "@/lib/pos/customers";
 import { listHeldBills } from "@/lib/pos/held-bills";
@@ -126,7 +127,7 @@ export default async function RegisterPage() {
   const staff = await listStaff(session.tenantId);
   const names = staff.map((person) => ({ id: person.id, name: person.name }));
 
-  const [held, shift, variants] = await Promise.all([
+  const [held, shift, variants, entitlements] = await Promise.all([
     listHeldBills(session.tenantId, counter.id, names),
     // Whichever shift this till is in, or null — which is the ordinary case for
     // a shop that does not use them and is never an error. The strip says so
@@ -140,7 +141,13 @@ export default async function RegisterPage() {
     // trip per tap is a grid nobody uses. A shop that sells nothing by variant
     // reads nothing — the table is empty for them.
     variantsByItem(session.tenantId),
+    // Whether this shop is still allowed to charge. `recordSale` asks the same
+    // question and is the control; this is so the cashier is told before there
+    // is a customer waiting on a Charge button that is going to refuse.
+    getEntitlements(session.tenantId),
   ]);
+
+  const onHold = entitlements !== null && !entitlements.canOperate;
 
   return (
     // `data-fit` is the register saying it is the window and not a page on it:
@@ -166,6 +173,19 @@ export default async function RegisterPage() {
       {/* Above the till, because it is the first and last thing of the day and
           nothing in between. It never gates the register — a shop that cannot
           sell until somebody has done paperwork stops using the paperwork. */}
+      {/* What a suspended subscription actually costs the shop, said where the
+          selling happens rather than only in the owner's bell. Everything else
+          on this screen stays exactly as it was: the bills, the history and the
+          export are the shop's own and are never held back over an invoice. */}
+      {onHold ? (
+        <p className="pos-note pos-note-bad flex-none">
+          <span className="font-semibold">Billing is on hold.</span> The register
+          cannot take a new sale until it is put back on. Everything already rung
+          up is still here, still prints and still exports. Message us on the
+          WhatsApp number you arranged Flo on.
+        </p>
+      ) : null}
+
       <ShiftBar
         counter={counter}
         shift={shift}

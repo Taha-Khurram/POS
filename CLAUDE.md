@@ -377,11 +377,12 @@ address, checked *before* Supabase verifies the password, and every successful
 sign-in lands on `/app` — there is no `next` return path and no role-based
 fork. Delete the constant and its check to open it up.
 
-There is no platform console. The layout calls `getShopName()` for the rail's
-account block, and both that and the dashboard fall back rather than fail, so an
-account with a null `tenant_id` still reaches the dashboard and is shown a shop
-that has sold nothing — keep that true. Nothing reads `branches`; there is no
-branch picker and no counters list until a shop can actually have a second one.
+The platform console is real since `0036` — see **The platform console**
+below. The `/app` layout still calls `getShopName()` for the rail's account
+block, and both that and the dashboard fall back rather than fail, so an account
+with a null `tenant_id` still reaches the dashboard and is shown a shop that has
+sold nothing — keep that true. Nothing reads `branches`; there is no branch
+picker and no counters list until a shop can actually have a second one.
 `Plan.md` has the order the modules arrive in.
 
 Settings is real. `tenant_settings` and `role_permissions` (migration `0009`)
@@ -812,6 +813,116 @@ not run a dhaba.
 
 `moduleAccess` no longer takes the shop at all, which hands the owner's rail
 back the read `restaurant_mode` used to cost it on every request.
+
+## The platform console
+
+`/admin` is the product owner's own console, built by `0036` on tables
+`0001_init.sql` has carried since day one — `tenants`, `plans`,
+`subscriptions`, `orders`, `payments`, `invites`, `leads`, `audit_log`,
+`tenant_notes`. Nothing had ever called any of it: a shop was activated by hand
+in the SQL editor.
+
+**It is the same console, not a second product.** `app/(admin)/admin/` is its
+own route group so it inherits neither the site's `Nav`/`Footer` nor `/app`'s
+tenant chrome, but `components/admin/admin-shell.tsx` is the same `.pos-shell`,
+`.pos-rail` and `.pos-topbar`, the same `paper-*`/`graphite-*`/`orchid-*`
+palette and the same `flo_theme` cookie. Two consoles that looked like two
+products is how an operator ends up unsure which one they are in with a
+shopkeeper on the phone. It is deliberately *not* `ConsoleShell`: that one takes
+a `ModuleAccess`, a shop name and the bell's notices, all of which are a
+tenant's.
+
+**`/admin` 404s, it never refuses.** `requirePlatform()` in
+`lib/platform/access.ts` is the gate and it calls `notFound()` — a console that
+can activate paid accounts and read every client's sales should not be
+discoverable, and "you are not allowed here" has already confirmed there is a
+here. Signed out is the one case that redirects to `/login` instead. The gate is
+in the layout *and* in every page, because Next renders a page and its layout in
+parallel.
+
+**Every read is through the operator's own JWT** (`lib/platform/console.ts`,
+`server-only`), never the service role. Every platform table's read policy
+already carries `or private.is_platform_admin()`, so RLS is the gate here too —
+and if the access-token hook stops stamping `platform_role` the console goes
+empty rather than quietly working with a gate nobody is checking. Like every
+reader in `lib/pos/`, **none of them may be wrapped in React `cache()`**. The
+one exception is `proofUrl`, which signs a ten-minute link to a payment
+screenshot in the private `payment-proofs` bucket: storage has no policy for the
+platform role, and the alternative is a bucket every signed-in account can read.
+
+**Every write is a service-role Server Action that re-checks for itself.**
+`requireBilling()` returns a sentence rather than a 404, because a form has to
+say something back. A `support` operator reads every screen, works the leads and
+writes notes, and is refused anything that touches money — checked in the
+action, not trusted from the rail.
+
+**Two writes are one transaction each, in SQL.** `public.activate_tenant` writes
+the tenant, its primary branch, the subscription and a hashed invite together,
+because a half-done activation is the worst row in the system: a shop that signs
+in to a console with no plan behind it, or a link already pasted into a chat
+pointing at a tenant that has none. `public.record_subscription_payment` locks
+the subscription row, works the new period out and inserts the payment beside
+it, so two operators recording the same renewal cannot both extend from the same
+end date. Both are granted to `service_role` alone, which is why neither needs
+`security definer`.
+
+**The invite token is minted in the Server Action and never reaches Postgres.**
+`activate_tenant` takes the sha256, because a function's arguments end up in
+`pg_stat_statements` and the slow-query log. The plaintext is returned once, in
+`AdminState.invite`, drawn by `components/admin/invite-card.tsx` with the
+WhatsApp message already composed — and is then unrecoverable by anything. An
+operator who loses it regenerates, which revokes the one they lost;
+`invites_one_live_per_tenant_role` is what makes that the only safe move.
+
+**Both activation paths are one function.** `/admin/orders`' Verify button and
+the direct form both call `activateShop` in `clients/activate.ts`, which is
+`server-only` and deliberately *not* in a `"use server"` module — every export
+of one is a callable endpoint, so a shared body taking its actor as an argument
+would be a way to activate a shop as anybody. Verify claims the order first
+through `orders.verification_started_at` (`0005`), because one order becoming
+two tenants is the failure that queue has.
+
+**The reads are grouped in Postgres.** `platform_clients()` returns one row per
+shop with its plan, standing, monthly value, last sale and item count;
+`platform_overview()` is the strip. Both are `security invoker` like
+`dashboard_summary`, with an `is_platform_admin()` guard on top — a tenant who
+found the RPC would otherwise get a one-row "platform" of their own shop, which
+is not a leak but is a screen that lies about what it is. `last_sale_at` is read
+live off `sales` rather than from `tenant_health`, which has existed since
+`0004` and which nothing has ever written a row into.
+
+**MRR counts `active` and `past_due` only.** A trial is not revenue, and a
+suspended shop is money that has stopped arriving — which is what the figure is
+for. `private.monthly_value` and `monthlyValue` in `lib/platform/admin.ts` are
+the same division written twice, and have to stay identical.
+
+**What suspension means is the whole of "disable", and it is deliberately
+narrow.** A suspended shop still signs in, still reads every sale it ever made,
+still exports it and still closes the drawer it opened this morning. What stops
+is ringing up a new one: `recordSale` refuses through `getEntitlements`, and the
+register draws a strip above the till saying so. Holding a shop's own books
+hostage over an unpaid invoice is indecent and, in a dispute about their
+records, the weaker position to stand in. `past_due` stays operable on purpose —
+suspension is a decision somebody takes, not a date that arrives.
+
+**`plans.features` is still copy.** The plan editor says so on the screen:
+nothing in `/app` gates a screen on a flag, so unticking a box changes
+`/pricing` and not what a shop can open. `PLAN_FEATURES` marks which ones the
+product actually honours, and `0020`'s rule stands — flip a flag in the
+migration that lands the feature. The one entitlement that bites is
+`subscriptions.max_registers`, which Settings enforces, and it lives on the
+subscription rather than the plan precisely so a haggled "teen counter kar do"
+is a one-row update.
+
+`lib/platform/admin.ts` carries no `server-only` — the activation form and the
+plan editor are client components and the actions validate against the same
+lists. Note that `SelectRow` is a listbox the page owns and not an `<input>`:
+every one of them needs its own hidden field, or the action gets a body with no
+plan in it and refuses a form that looked complete.
+
+The invite link's origin comes off the request headers, overridable with
+`NEXT_PUBLIC_SITE_URL` behind a proxy that rewrites the host. A link that is
+nearly right is one nobody notices until the shop rings up.
 
 ## Notifications
 

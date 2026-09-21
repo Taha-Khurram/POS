@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireSession } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
+import { getEntitlements } from "@/lib/entitlements";
 import { UNITS } from "@/lib/pos/catalog";
 import {
   billOf,
@@ -86,6 +87,36 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
 
   if (!session.tenantId) {
     return { ok: false, error: "This login is not linked to a shop." };
+  }
+
+  /**
+   * Is this shop still allowed to trade?
+   *
+   * The whole of what suspension means, and deliberately the *only* thing it
+   * means. A suspended shop can still sign in, read every sale it has ever
+   * made, export it, and close the drawer it opened this morning — what stops
+   * is ringing up a new one. Holding a shop's own books hostage over an unpaid
+   * invoice is indecent, it is the fastest way to earn a bad name in a bazaar,
+   * and in a dispute about their own records it is the weaker position to be
+   * standing in.
+   *
+   * Checked here rather than in `record_sale`, the same placement as the stock
+   * and shift gates and for the same reason: a refusal in a Server Action is a
+   * sentence somebody at a counter can act on, where a raise from a function is
+   * a failed write with a Postgres message behind it.
+   *
+   * It fails open. A subscription that cannot be read is not evidence that
+   * anybody stopped paying, and a shop with a customer at the counter must not
+   * be shut by a network blip.
+   */
+  const entitlements = await getEntitlements(session.tenantId);
+
+  if (entitlements && !entitlements.canOperate) {
+    return {
+      ok: false,
+      error:
+        "Billing is on hold for this shop, so the register cannot take a new sale. Everything already rung up is still here and still exports. Message us on WhatsApp and we will put it back on.",
+    };
   }
 
   if (!UUID.test(input.saleId) || !UUID.test(input.counterId)) {

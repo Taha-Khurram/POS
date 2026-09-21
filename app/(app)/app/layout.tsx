@@ -123,6 +123,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
         signature={signature}
         unseen={unseen}
         access={access}
+        platform={session.platformRole !== null}
         initialTight={initialTight}
         theme={theme}
       >

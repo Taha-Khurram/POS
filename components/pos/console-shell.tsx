@@ -39,6 +39,7 @@ export function ConsoleShell({
   signature,
   unseen,
   access,
+  platform,
   initialTight,
   theme,
   children,
@@ -54,6 +55,8 @@ export function ConsoleShell({
   unseen: boolean;
   /** Which rail rows this session may see. Resolved by the layout. */
   access: ModuleAccess;
+  /** This account works for us as well as in a shop. The rail grows one row. */
+  platform: boolean;
   initialTight: boolean;
   /** Read from the cookie by the layout, so the first paint is already right. */
   theme: ConsoleTheme;
@@ -109,6 +112,7 @@ export function ConsoleShell({
           shopName={shopName}
           email={email}
           access={access}
+          platform={platform}
           onNavigate={() => setDrawer(false)}
           onClose={() => setDrawer(false)}
         />
