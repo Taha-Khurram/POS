@@ -42,9 +42,12 @@ and `SUPABASE_SERVICE_ROLE_KEY`. See `.env.example`. The service-role key
 bypasses RLS — it must never be `NEXT_PUBLIC_*` and must never be imported
 outside `utils/supabase/admin.ts`.
 
-Database work uses the Supabase CLI: `supabase start`, `supabase db reset`,
-`supabase test db`. Migrations are plain SQL in `supabase/migrations/`, applied
-in filename order.
+Database work goes through the **Supabase MCP** — `apply_migration` for a
+migration, `execute_sql` to look. There is no Docker on this machine, so
+`supabase start`, `supabase db reset` and `supabase test db` are not available
+and pgTAP cannot run at all. Migrations are still plain SQL in
+`supabase/migrations/`, applied in filename order, and the file is written
+*and* applied in the same step so the folder and the database cannot disagree.
 
 ## Layout
 
@@ -94,8 +97,12 @@ and fonts only — chrome belongs to the group.
   non-static path purely to refresh the session cookie; don't insert logic
   between creating that client and `auth.getUser()`. Route protection is never
   proxy logic.
-- `supabase/` — `migrations/` (plain SQL, applied in filename order),
-  `tests/rls.test.sql` (pgTAP, a CI gate), `config.toml` (local stack).
+- `supabase/` — `migrations/` (plain SQL, applied in filename order) and
+  `config.toml` (local stack). There is no `tests/`: `rls.test.sql` was 1,700
+  lines of pgTAP that needed a local Postgres to run, and with no Docker here it
+  could only ever be edited and hoped over. It was removed in favour of not
+  carrying a gate nobody can open — recoverable from git history if a machine
+  with Docker ever runs this.
 - `@/*` maps to the repo root.
 
 Next 16 renamed `middleware.js` to `proxy.js`; the export is `proxy`, not
@@ -222,12 +229,18 @@ symlinked into `.claude/skills/`) **before** touching anything under
    `anon` and `authenticated` outright. Every write goes through the service
    role inside a Server Action, so there is one auditable path.
 4. Read paths may carry `or private.is_platform_admin()`. Write paths never do —
-   support impersonation is read-only, and the RLS test asserts it.
+   support impersonation is read-only.
 5. `audit_log` is append-only, enforced by a trigger rather than by policy,
    because the service role has `bypassrls`.
 
-`supabase/tests/rls.test.sql` is the gate for all of that. It runs in CI and has
-to stay green.
+**Nothing verifies any of that automatically any more.** `rls.test.sql` proved
+all five rules and is gone with the Docker that ran it, so the five are now
+held up by review alone. A migration that adds a business table therefore has
+to be read against them by hand — enable and force RLS, select-only for tenant
+JWTs, `private.*` claim helpers wrapped in `(select …)`, no platform-admin
+escape on a write path — and a `security definer` function granted to
+`authenticated` has to be argued for in its own header, because there is no
+longer a test that will notice.
 
 ## Gating a route
 
@@ -490,9 +503,13 @@ entered wrongly is corrected the way a shop corrects one on paper — by countin
 the shelf on Products & stock, which writes its own movement and says why.
 
 `0028` flipped `plans.features.purchase_orders` true on both plans, per `0020`'s
-rule. The marketing site still says purchase orders are not built (`/pricing`,
-`/products`, `/roadmap`) — that copy is now the wrong way round, and like the
-Reports copy it is a product-announcement decision rather than a code one.
+rule. The marketing site said purchase orders were not built for several
+migrations after that; `/pricing`, `/products`, `/roadmap` and `/solutions` were
+corrected when the console screenshots were re-taken and Buying became visible
+in the rail of every one of them. **What is still a packaging decision rather
+than a code one** is the per-plan feature lists on `/pricing`, which name
+neither Buying nor Reports — nothing gates either by plan today, so a tier that
+claims them is a decision about what Standard is sold as.
 
 ### The supplier ledger
 
@@ -519,7 +536,8 @@ Three screens quote it — the Suppliers column, the account, and the Buying til
 — off one `listSupplierBalances` read, so they cannot disagree.
 `public.supplier_balances` is `security invoker` like `dashboard_summary`, so
 `p_tenant` is a filter and RLS is the gate; it is the third function granted to
-`authenticated`, and `rls.test.sql` proves naming another shop returns nothing.
+`authenticated`; naming another shop returns nothing, because the policy and
+not the argument is what decides.
 
 **The opening balance is what makes day one believable**, and it carries a date
 (`opening_balance_on`) because a balance with no date is a figure nobody can
@@ -1034,9 +1052,8 @@ with no business crossing shop 3G to be added up in a browser runtime.
 The function is `security invoker`, so it runs under the shop's own JWT and
 `p_tenant` is a filter rather than a permission — a caller who names another
 shop gets that shop's rows refused by the policy. It is the only function here
-granted to `authenticated`, and `rls.test.sql` proves the claim. Like every
-other reader in `lib/pos/`, `getDashboardData` **may not be wrapped in React
-`cache()`**.
+granted to `authenticated`. Like every other reader in `lib/pos/`,
+`getDashboardData` **may not be wrapped in React `cache()`**.
 
 **Profit is real because the cost is on the line.** `sale_lines.cost_snapshot`
 is stamped by `record_sale` from `items.cost_price` at the moment of sale, for
@@ -1072,8 +1089,7 @@ still on the shelves. Four of them are **one** call to
 `public.reports_summary` — the window and the one before it, the day-by-day
 takings, hour-of-day, profit by item, both levels of the tree, the tender mix,
 the counters and the cashiers, all grouped in Postgres. `security invoker` like
-`dashboard_summary`, so `p_tenant` is a filter and RLS is the gate, and
-`rls.test.sql` proves it and proves the two functions cost a window identically.
+`dashboard_summary`, so `p_tenant` is a filter and RLS is the gate.
 Like every other reader in `lib/pos/`, `getReportData` **may not be wrapped in
 React `cache()`**.
 
@@ -1127,6 +1143,9 @@ it, so any tax figure would be reverse-engineered from `items.tax_rate` as it
 stands today — the same mistake as costing last month's sales from today's
 `cost_price`. The reprint on `/app/sales` already refuses to guess it.
 
-The marketing site still says the reports module is not built
-(`/pricing`, `/products`, `/roadmap`). That copy is now the wrong way round and
-is a product-announcement decision, not a code one.
+The marketing site said for several migrations that the reports module was not
+built. `/pricing`, `/products` and `/roadmap` were corrected when the
+screenshots were re-taken — Reports is in the rail of every light shot, so the
+old copy was being contradicted by the picture beside it. The `/pricing` plan
+lists still do not name Reports, which is packaging rather than staleness: the
+module is reached through `can_view_reports` and nothing gates it by plan.

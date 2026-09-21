@@ -71,28 +71,29 @@ const NOW = [
     title: "Shift open and close",
     copy: "An opening float, a counted drawer and the over-or-short — per person, not per day. The cashier counts and only the owner sees the difference, because a cashier shown the expected figure can count to it.",
   },
+  {
+    title: "Stock by batch and expiry",
+    copy: "Switched on per item, so a bag of flour stays one number and a crate of milk does not. The date is taken at the door while somebody is holding the carton, the till sells the soonest-expiring stock first, and expired stock cannot go on a bill at all — the way through is a write-off, which is recorded as its own act.",
+  },
+  {
+    title: "Size and colour variants",
+    copy: "One item, two axes, a grid underneath it. Stock counted per row, its own barcode where you want one, and a price stored only where it differs from the item's — because most sizes are one price and the XXL is not.",
+  },
+  {
+    title: "Reports",
+    copy: "Five tabs over one period: what it came to, which items made it, which half of the shop made it, how it was paid for and by whose till, and what is on the shelves. Every figure says how it was worked out, in the same words in the table and in the exported file.",
+  },
+  {
+    title: "Buying",
+    copy: "Suppliers, an order to one, and the delivery against it — with the freight apportioned across the lines, so what a carton actually cost you is what the margin is worked out from. A running account per supplier, what you paid this month, and how old the rest is.",
+  },
 ];
 
 const NEXT = [
   {
-    title: "The reports module",
-    why: "Sales by item, by category, by cashier, by hour. Profit by line. The dashboard answers the owner's first question; this answers the accountant's.",
-    order: 1,
-  },
-  {
     title: "Offline billing",
-    why: "The register queues the sale on the tablet and posts it when the line comes back. Hard to do correctly, which is why it is not being claimed before it works.",
-    order: 2,
-  },
-  {
-    title: "Purchasing",
-    why: "An order to a supplier, goods received against it, and the cost updated from what you actually paid — which is what turns the margin column from a guess into a fact.",
-    order: 3,
-  },
-  {
-    title: "Stock by batch",
-    why: "The ledger records every movement today, and what it cannot yet do is tell one delivery of the same item from another. That is the gate for anything with a date on it.",
-    order: 4,
+    why: "The register queues the sale on the tablet and posts it when the line comes back. Hard to do correctly, which is why it is not being claimed before it works — and the one thing on this page that a shop with load-shedding asks about first.",
+    order: 1,
   },
 ];
 
@@ -104,14 +105,6 @@ const LATER = [
   {
     title: "Raast and wallet payments",
     copy: "Recording them is easy; settling them means an integration and an acquirer. Cash and card are what Flo records honestly today.",
-  },
-  {
-    title: "Batch numbers and expiry",
-    copy: "The gate for pharmacies and most perishables.",
-  },
-  {
-    title: "Size and colour variants",
-    copy: "The gate for cloth and footwear. One item, nine sizes, three colours — one row of work, not twenty-seven.",
   },
   {
     title: "More than one branch",
@@ -166,14 +159,16 @@ export default function RoadmapPage() {
             <h2 className="heading">Running today</h2>
           </Reveal>
           <Reveal as="p" className="lede mt-3 max-w-xl" delay={100}>
-            Every one of these has a screenshot behind it on the{" "}
+            Every one of these is on a real counter, and the screens they live
+            on are photographed from the working software on the{" "}
             <Link
               href="/products"
               className="text-iris-600 transition-colors duration-300 hover:text-iris-500"
             >
               products page
             </Link>
-            , photographed from the working software.
+            . The two newest are shown there on the screen they belong to
+            rather than in a panel of their own.
           </Reveal>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

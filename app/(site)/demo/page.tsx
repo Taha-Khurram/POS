@@ -21,7 +21,7 @@ const EXPECT = [
   },
   {
     title: "What is missing, said out loud",
-    copy: "Returns, discounts at the till and offline billing are not built yet. We will tell you on the call rather than let you find out in week two.",
+    copy: "Offline billing, a second branch, and taking the payment itself are not built. We will tell you on the call rather than let you find out in week two.",
   },
   {
     title: "A real number in rupees",

@@ -118,7 +118,8 @@ cookie. One toaster, mounted by the shell so it reaches the till.
 3. **Tenant users get `select` policies only.** Insert/update/delete are revoked
    from `anon` and `authenticated` outright. Every write goes through the
    service role inside a Server Action — one auditable path.
-4. Support impersonation is read-only, and `rls.test.sql` asserts it.
+4. Support impersonation is read-only. `rls.test.sql` asserted it when this was
+   written; that suite has since been removed — see `supabase/README.md`.
 5. `audit_log` is append-only, enforced by a trigger because the service role
    has `bypassrls`.
 6. `requireSession()` re-reads the caller's own `profiles` row on every gated

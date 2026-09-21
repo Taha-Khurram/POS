@@ -8,57 +8,56 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Solutions",
   description:
-    "Who Flo suits today — kiryana and general stores, bakery counters, hardware and cosmetics retail — and which shop types are not ready for it yet, with what each one is waiting on.",
+    "What Flo runs today — every counter in a supermarket, from the grocery aisles to the bakery scale — what a shop needs to start, and what it is honestly not for.",
 };
 
 /**
- * Four shop types Flo genuinely serves, and then four it does not.
+ * One shop, and the counters inside it.
  *
- * The second list is the important one. A page that claims six verticals on one
- * vertical's feature set is a page that books demos which end in silence, and
- * the shopkeeper who drove across Lahore for it does not come back.
+ * This list used to name four trades — a bakery, a hardware shop, a cosmetics
+ * counter — as four separate products Flo served. It served one, and a page
+ * that claims four verticals off one vertical's feature set books demos that
+ * end in silence; the shopkeeper who drove across Lahore for it does not come
+ * back. Flo is a supermarket till, so the four cards below are four *sections
+ * of a supermarket*, and every chip on them is a screen that exists.
  */
 const SUITED = [
   {
-    name: "Kiryana & general store",
+    name: "The grocery aisles",
     lede: "Two hundred regulars, four hundred lines, and everybody is in a hurry.",
     copy: "Barcode or Urdu-name search, sugar and daal off the scale by the quarter kilo, packets and cartons by the piece, and a customer list that knows your regulars by phone number.",
     wins: ["Sale by weight", "Regulars by phone", "Your own aisles"],
     accent: true,
   },
   {
-    name: "Bakery & confectionery counter",
+    name: "The bakery & deli counter",
     lede: "Biscuits by the packet, mithai off the scale, one queue for both.",
     copy: "The same bill takes a 350 g box and 1.75 kg of loose barfi. Each line prints its own unit, and the total is right without a calculator on the counter.",
     wins: ["Weight and piece on one bill", "Counter-wise takings", "Reprint a receipt"],
   },
   {
-    name: "Hardware, paint & electrical",
-    lede: "Nine hundred SKUs and nothing has a barcode on it.",
-    copy: "Give an item your own SKU or let Flo suggest one, print an internal barcode, and file it under departments you named yourself — not somebody else's idea of an aisle.",
-    wins: ["SKU search", "Internal barcodes", "Supplier on the item"],
+    name: "Dairy, bread & anything dated",
+    lede: "The stock that is worth nothing the morning after.",
+    copy: "Switch batch tracking on for the lines that need it, take the expiry date at the door when somebody is holding the carton, and the till sells the soonest-expiring stock first. Expired stock cannot go on a bill at all.",
+    wins: ["Expiry by batch", "Sold first-expired-first", "Write-offs recorded"],
   },
   {
-    name: "Cosmetics & general retail",
-    lede: "Margins vary line by line, and that is the whole business.",
-    copy: "Cost beside price on every item, the margin worked out, and the profit on a month's sales taken from what each line actually cost when it sold.",
-    wins: ["Cost and margin", "Profit by department", "Low-stock alerts"],
+    name: "Household, hardware & cosmetics",
+    lede: "Nine hundred lines, half of them with no barcode, and the margin different on every one.",
+    copy: "Give an item your own SKU or let Flo suggest one, print an internal barcode, and file it under departments you named yourself. Cost sits beside price on every line, and a month's profit is taken from what each one actually cost when it sold.",
+    wins: ["SKU search", "Internal barcodes", "Cost and margin"],
   },
 ];
 
-/** Named, with what each is waiting on, so a demo is never a wasted trip. */
+/** Named out loud, so a demo is never a wasted trip. */
 const NOT_YET = [
   {
-    name: "Pharmacies & medical stores",
-    waiting: "Batch numbers and expiry dates. Selling medicine without them is not something we are going to pretend to support.",
-  },
-  {
-    name: "Clothing & footwear",
-    waiting: "Size and colour variants. One item, nine sizes and three colours is three rows of work in Flo today, and it should be one.",
-  },
-  {
     name: "Multi-branch chains",
-    waiting: "A second branch. Flo runs as many counters as your plan allows in one shop; comparing Karachi against Lahore is not built.",
+    waiting: "A second branch. Flo runs as many counters as your plan allows in one shop; comparing Karachi against Lahore is not built, and it lands the day a Flo shop opens its second outlet.",
+  },
+  {
+    name: "Restaurants, cafés & dhabas",
+    waiting: "Nothing — this one is not on the way. A dining room needs a floor map, kitchen tickets and a bill that stays open for an hour, which is a different product from a counter with a queue at it. It sits on the roadmap under what Flo will never build, rather than on this list looking imminent.",
   },
 ];
 
@@ -107,11 +106,11 @@ export default function SolutionsPage() {
         eyebrow="Solutions"
         title={
           <>
-            Built for your floor,{" "}
-            <span className="text-gradient">and honest about whose</span>
+            Built for the supermarket floor,{" "}
+            <span className="text-gradient">and honest about the rest</span>
           </>
         }
-        lede="Flo runs a counter that sells packaged goods and loose weight — a 7pm kiryana queue in Johar Town, a bakery counter on a Saturday, a hardware shop with nine hundred lines and no barcodes. Some shops it is not ready for, and those are named below too."
+        lede="Flo runs a supermarket counter: packaged goods and loose weight on one bill, a 7pm queue in Johar Town, four hundred lines filed under aisles you named yourself. Every counter in the shop bills off the same list. What it is not for is named below too, rather than on the call."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -194,11 +193,12 @@ export default function SolutionsPage() {
         <div className="shell">
           <div className="mx-auto max-w-2xl text-center">
             <Reveal as="h2" className="heading">
-              And who it is not for yet
+              And what it is not for
             </Reveal>
             <Reveal as="p" className="lede mx-auto mt-4 max-w-lg" delay={120}>
-              Rather than find this out on the call. If your shop is on this
-              list, tell us — it is how the order below gets decided.
+              One of these is being built and one never will be, and it says
+              which. If your shop is on this list, tell us anyway — it is how
+              the order of the rest gets decided.
             </Reveal>
           </div>
 

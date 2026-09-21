@@ -26,7 +26,7 @@ const PLANS = [
     features: [
       "Up to 2 counters, each with its own receipt series",
       "Unlimited staff accounts, each with their own sign-in",
-      "Cash and card, recorded separately",
+      "Cash, card, Raast, Easypaisa, JazzCash or a transfer — and one bill split across them",
       "Your item list — cost, price, margin, Urdu name, barcode",
       "Departments and categories you name yourself",
       "Customer list, searchable by name or phone",
@@ -60,13 +60,11 @@ const PLANS = [
  */
 const NOT_INCLUDED = [
   "Billing while the internet is down",
-  "The reports module — the dashboard is live, reports are not",
-  "Purchase orders and supplier ledgers",
-  "Batch numbers and expiry dates",
-  "Size and colour variants",
   "More than one branch",
-  "Raast, Easypaisa, JazzCash and card processing through us",
+  "Raast, Easypaisa, JazzCash and card processing through us — you can record that a bill was paid that way, with its transaction number, but the money does not move through Flo",
   "FBR digital invoicing and provincial tax filing",
+  "A sales-tax summary — a line records the price it sold at and not the rate behind it, so any tax figure would be reverse-engineered",
+  "Anything a dining room needs — tables, kitchen tickets, a bill that stays open. Flo is a supermarket till",
 ];
 
 const ADD_ONS = [
@@ -99,7 +97,7 @@ const FAQS = [
   },
   {
     q: "What is genuinely not built yet?",
-    a: "Offline billing, the reports module, purchasing, batch and expiry, variants, multi-branch, wallet payments, and FBR invoicing. The full list is above and the order they are being built in is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
+    a: "Offline billing, more than one branch, taking the payment itself through a wallet or a card network, FBR invoicing, and a sales-tax summary. Reports, buying, batch and expiry, and variants used to be on this list and are now on the counter. The full list is above and the order is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
   },
   {
     q: "Does Flo file my FBR invoices?",
@@ -111,7 +109,7 @@ const FAQS = [
   },
   {
     q: "Which payment methods can I record?",
-    a: "Cash and card. Card means the machine you already have — the sale is recorded against it so your day close and the settlement reconcile, but Flo does not process the payment and takes no cut of it. Raast and the wallets are not built.",
+    a: "Cash, card, Raast, Easypaisa, JazzCash and a bank transfer, and a bill can be split across them — two thousand on the card and the rest in notes is one bill with two tenders on it. All of them mean the machine or the app you already have: the cashier records how the money arrived, with its transaction number, so your day close reconciles against the statement. Flo does not process the payment and takes no cut of it.",
   },
   {
     q: "Is sales tax included in those figures?",

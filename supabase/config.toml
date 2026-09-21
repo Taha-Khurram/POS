@@ -1,5 +1,6 @@
-# Local Supabase stack. `supabase start` reads this; CI uses `supabase db start`
-# followed by `supabase test db`.
+# Local Supabase stack, read by `supabase start` on a machine that has Docker.
+# This one does not, so migrations are applied to the hosted project through the
+# Supabase MCP and there is no pgTAP suite to run.
 #
 # The two settings that are not defaults are the ones that matter most:
 #   - auth.enable_signup = false        → nobody can create an account but us

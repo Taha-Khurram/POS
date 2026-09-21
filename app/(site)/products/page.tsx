@@ -161,10 +161,10 @@ export default function ProductsPage() {
                   What is not here yet
                 </h2>
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-white/85">
-                  The reports module, billing while the internet is down, and
-                  purchase orders against your suppliers. They are being built
-                  in that order, and none of them are on this page pretending
-                  otherwise.
+                  Billing while the internet is down, a second branch, and
+                  taking the payment itself — Flo records how money arrived, it
+                  does not move it. None of the three are on this page
+                  pretending otherwise.
                 </p>
               </div>
               <Link

@@ -7,15 +7,28 @@ Plain SQL migrations, applied in filename order. Load the
 migrations/0001_init.sql        platform tables, RLS, access-token hook
 migrations/0002_seed_plans.sql  Standard (Rs 5,000) and Premium (Rs 10,000)
 migrations/0003_storage.sql     private payment-proofs bucket, no policies
-tests/rls.test.sql              pgTAP tenant-isolation check (run by hand)
 config.toml                     local stack; signup off, MFA on, hook enabled
 ```
 
-## Local
+## Applying one
+
+There is no Docker on the development machine, so the local stack does not run
+and neither does pgTAP. Migrations go to the hosted project through the
+**Supabase MCP** (`apply_migration`), and the file under `migrations/` is
+written in the same step — a migration that exists in one place and not the
+other is the drift every header in here complains about.
+
+**There is no `tests/`.** `rls.test.sql` was a 1,700-line pgTAP suite covering
+tenant isolation, the select-only rule and the read-only platform admin, and it
+needed a local Postgres to run. With none available it could only be edited and
+hoped over, so it was removed rather than left standing as a gate nobody can
+open. It is in git history. Nothing verifies the five rules in `0001`'s header
+automatically now — read a new migration against them by hand.
+
+With Docker, the CLI still works as it always did:
 
 ```bash
 supabase start          # applies every migration
-supabase test db        # runs tests/rls.test.sql
 supabase db reset       # wipe and re-apply from scratch
 supabase gen types typescript --local > lib/database.types.ts
 ```
