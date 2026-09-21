@@ -115,7 +115,7 @@ export async function getShopSettings(tenantId: string): Promise<ShopSettings> {
   const { data } = await supabase
     .from("tenant_settings")
     .select(
-      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts, restaurant_mode",
+      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts",
     )
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -126,7 +126,6 @@ export async function getShopSettings(tenantId: string): Promise<ShopSettings> {
   // so a value that fails `pickOption` here is a row written before this file
   // existed. Falling back beats rendering a select with nothing selected.
   return {
-    restaurantMode: Boolean(data.restaurant_mode),
     currency: pickOption(CURRENCIES, data.currency) ?? DEFAULT_SETTINGS.currency,
     currencyFormat:
       pickOption(CURRENCY_FORMATS, data.currency_format) ??

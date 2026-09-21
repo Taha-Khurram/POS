@@ -4,7 +4,7 @@ import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconAlert, IconChevron } from "@/components/pos/icons";
 import { InfoTip } from "@/components/pos/info-tip";
-import { writeBusinessDay } from "@/lib/pos/counter";
+import { moneyFormatter, writeBusinessDay } from "@/lib/pos/counter";
 import { initialsOf, writePhone } from "@/lib/pos/customer";
 import {
   ageOf,
@@ -16,6 +16,7 @@ import {
   type SupplierBalance,
 } from "@/lib/pos/ledger";
 import type { SupplierStatement } from "@/lib/pos/ledgers";
+import type { ShopSettings } from "@/lib/pos/settings-options";
 import { writeTerms, type Supplier } from "@/lib/pos/supplier";
 import { PaySupplierButton } from "./payments-panel";
 import { EditSupplierButton } from "./suppliers-panel";
@@ -44,16 +45,21 @@ export function SupplierRecord({
   balance,
   statement,
   today,
-  money,
+  settings,
   taken,
 }: {
   supplier: Supplier;
   balance: SupplierBalance;
   statement: SupplierStatement;
   today: string;
-  money: (value: number) => string;
+  settings: ShopSettings;
   taken: string[];
 }) {
+  // This screen is a server component and could take a ready-made formatter,
+  // but `PaySupplierButton` below is a client one and cannot — so the settings
+  // come down and both sides build their own from the same row.
+  const money = moneyFormatter(settings);
+
   const { buckets, oldestUnpaidOn } = ageOf(
     statement.debits,
     statement.paid,
@@ -173,7 +179,7 @@ export function SupplierRecord({
             supplier={{ id: supplier.id, name: supplier.name }}
             balances={new Map([[supplier.id, balance]])}
             today={today}
-            money={money}
+            settings={settings}
           />
         </div>
       </header>

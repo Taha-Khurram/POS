@@ -3,6 +3,14 @@
 **Written:** 11 Sep 2026 · **Revised:** 11 Sep 2026 (owner console promoted, FBR
 deferred) · **Target ship:** 9 Oct 2026 (28 days) · **Tooling budget:** Rs 0
 
+> **Superseded on 21 Sep 2026 where it concerns restaurants.** Flo targets
+> **supermarkets and general stores** only. Restaurant mode was built in
+> migration `0033` and removed in `0034` — the tables, the functions, the
+> setting and the screens — and it is on `/roadmap` under what Flo will never
+> build. Part 5's restaurant half below is history, not a plan; the multi-branch
+> half still stands. `tenants.shop_type` now takes one value, `supermarket`.
+> `CLAUDE.md` § "No restaurant mode" is the current account.
+
 ---
 
 ## 0. Where we actually stand
@@ -37,7 +45,8 @@ invoicing, PRA/SRB filing, Foodpanda reconciliation, payroll export, loyalty
 campaigns, and API access. All of that in 28 days produces a demo, not a product
 someone keeps paying for.
 
-So v1 targets **kiryana/general store and restaurant**, and everything else is
+So v1 targets **kiryana/general store and restaurant** (restaurant since
+withdrawn — see the note under the title), and everything else is
 dated in §10 with the site copy corrected in Part 8 — so nothing is ever sold
 that doesn't exist.
 

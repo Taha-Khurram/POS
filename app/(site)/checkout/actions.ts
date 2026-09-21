@@ -3,9 +3,9 @@
 import { redirect } from "next/navigation";
 
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { pickOption, SHOP_TYPES } from "@/lib/pos/settings-options";
 import { createAdminClient } from "@/utils/supabase/admin";
 
-const SHOP_TYPES = ["kiryana", "restaurant", "bakery", "pharmacy", "clothing", "retail", "other"];
 const BILLING_CYCLES = ["monthly", "quarterly", "yearly"];
 
 function text(value: FormDataEntryValue | null) {
@@ -28,7 +28,10 @@ export async function createCheckoutOrder(formData: FormData) {
   const branches = Number(text(formData.get("branches")) || "1");
   const registers = Number(text(formData.get("registers")) || "1");
 
-  if (!shopName || !ownerName || !phone || !city || !SHOP_TYPES.includes(shopType)) {
+  // The console's own list rather than a second copy of it: this order becomes
+  // a `tenants` row, and `shop_type` there is a check constraint over exactly
+  // these ids.
+  if (!shopName || !ownerName || !phone || !city || !pickOption(SHOP_TYPES, shopType)) {
     redirect("/checkout?error=Please+complete+the+required+shop+details.");
   }
   if (!BILLING_CYCLES.includes(billingCycle) || !Number.isInteger(branches) || branches < 1 || !Number.isInteger(registers) || registers < 1) {

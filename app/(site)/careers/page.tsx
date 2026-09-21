@@ -7,13 +7,13 @@ import { PageHeader } from "@/components/site/page-header";
 export const metadata: Metadata = {
   title: "Careers",
   description:
-    "Open roles at Flo — engineering, design, support, and sales in Lahore, Karachi, and Islamabad, building POS software for Pakistani shops and restaurants.",
+    "Open roles at Flo — engineering, design, support, and sales in Lahore, Karachi, and Islamabad, building POS software for Pakistani supermarkets.",
 };
 
 const VALUES = [
   {
     title: "Ship where it is used",
-    copy: "Every new joiner spends a shift behind a real counter in their first month — a kiryana store in Anarkali, or a karahi place after 9pm. You cannot design a register from a desk in Gulberg.",
+    copy: "Every new joiner spends a shift behind a real counter in their first month — a kiryana store in Anarkali, or a supermarket checkout at 9pm. You cannot design a register from a desk in Gulberg.",
   },
   {
     title: "Peak is the spec",
@@ -55,12 +55,6 @@ const ROLES = [
     title: "Product Designer, Back Office",
     team: "Design",
     location: "Remote — Pakistan",
-    type: "Full-time",
-  },
-  {
-    title: "Support Lead, Restaurants",
-    team: "Support",
-    location: "Lahore",
     type: "Full-time",
   },
   {

@@ -22,11 +22,6 @@ import { IDLE, SaveBar } from "./save-bar";
  * Six closed lists and nothing free-text, because every one of them is also a
  * check constraint. The same arrays are what the Server Action validates
  * against, so there is no second list to fall out of step.
- *
- * The seventh field is the odd one and sits apart from them: every list above
- * changes how one figure is *written*, and `restaurant_mode` changes which
- * screens the shop has at all. It is here rather than on its own tab because
- * it is a fact about the shop, and the shop is what this card is.
  */
 export function CurrencyClockForm({
   settings,
@@ -84,7 +79,7 @@ export function CurrencyClockForm({
             value={settings.dayEndsAt}
             options={DAY_ENDS}
             disabled={locked}
-            hint="A dhaba that shuts at 1 am wants that sale on the day it opened."
+            hint="A store that shuts at 1 am wants that sale on the day it opened."
           />
 
           <SelectField
@@ -102,29 +97,6 @@ export function CurrencyClockForm({
             options={FISCAL_YEAR_STARTS}
             disabled={locked}
           />
-        </fieldset>
-
-        <fieldset disabled={locked} className="mt-4 border-t border-pale-lilac pt-4">
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              name="restaurant_mode"
-              defaultChecked={settings.restaurantMode}
-              disabled={locked}
-              className="mt-0.5 h-4 w-4 shrink-0 accent-orchid-700"
-            />
-            <span className="text-[0.8125rem] leading-relaxed">
-              <span className="font-semibold text-graphite-900">
-                This shop seats people
-              </span>
-              <span className="mt-0.5 block text-graphite-500">
-                Adds Tables to the rail: a floor map, an order per table, and a
-                ticket to the kitchen. Switching it off later hides those
-                screens and keeps every meal ever served on them — nothing is
-                deleted and the tables are still there if you switch it back on.
-              </span>
-            </span>
-          </label>
         </fieldset>
       </ChartCard>
     </form>

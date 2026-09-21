@@ -184,7 +184,7 @@ export default async function PurchasingPage({
           orders={orders}
           suppliers={pickable}
           products={products}
-          money={money}
+          settings={settings}
         />
       ) : tab === "deliveries" ? (
         <ReceiptsPanel
@@ -192,7 +192,7 @@ export default async function PurchasingPage({
           suppliers={pickable}
           products={products}
           openOrders={openOrders}
-          money={money}
+          settings={settings}
         />
       ) : tab === "payments" ? (
         <PaymentsPanel
@@ -200,10 +200,10 @@ export default async function PurchasingPage({
           suppliers={pickable}
           balances={balances}
           today={today}
-          money={money}
+          settings={settings}
         />
       ) : (
-        <SuppliersPanel suppliers={suppliers} balances={balances} money={money} />
+        <SuppliersPanel suppliers={suppliers} balances={balances} settings={settings} />
       )}
     </div>
   );
@@ -361,7 +361,7 @@ async function Account({
       balance={balance}
       statement={statement}
       today={currentBusinessDay(settings)}
-      money={moneyFormatter(settings)}
+      settings={settings}
       taken={everyone.map((one) => foldName(one.name))}
     />
   );

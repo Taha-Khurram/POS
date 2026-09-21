@@ -2,8 +2,8 @@
 
 # Flo — marketing site
 
-Public marketing site for **Flo**, a point-of-sale product for Pakistani shops and
-restaurants. Next.js 16 App Router, React 19, Tailwind v4, TypeScript strict.
+Public marketing site for **Flo**, a point-of-sale product for Pakistani
+supermarkets. Next.js 16 App Router, React 19, Tailwind v4, TypeScript strict.
 Supabase session plumbing is wired but there is **no backend yet** — every form is
 front end only.
 
@@ -187,7 +187,8 @@ limit or a reminder about money owed.
 **`plans.features` is copy too.** `0020` flipped `stock_ledger`, `shift_close`,
 `offline_register`, `staff_pins`, `restaurant_mode`, `advanced_reports` and the
 multi-branch flags back to false, because a flag is a promise the console can be
-held to. Flip one back in the same migration that lands the feature — `0021`
+held to. `0034` went further with `restaurant_mode` and removed the key, which
+is what a flag gets when the answer is never rather than not yet. Flip one back in the same migration that lands the feature — `0021`
 did exactly that for `advanced_reports` on Premium, `0022` for `stock_ledger`
 and `0026` for `shift_close`, both on both plans, because a shelf that never
 moves and a drawer that is never counted are not a tier. Standard's stays false and
@@ -748,81 +749,40 @@ name and now means "took, but not into the drawer".
 to nothing is a day whose columns do not add up to the figure beside them. The
 day-close screen draws that column only when there is something in it.
 
-## Restaurant mode
+## No restaurant mode
 
-`/app/tables` is real since `0033`, and it is the one module a shop switches on
-rather than earns: `tenant_settings.restaurant_mode` is a checkbox on Settings →
-Shop & currency, `moduleAccess` reads it, and a kiryana that types the path gets
-the same `notFound()` every other module gate gives. A permission decides who
-may reach a screen; this decides whether the screen exists for that shop at all,
-which is why it is a setting and not a `role_permissions` column. The Settings
-tab that lays the floor out appears from the same flag, on the same screen as
-the switch — a tab that opens on "you have no tables and never will" is one more
-thing between a shopkeeper and the setting they came for.
+`0033` built it — a floor map, an order per table, kitchen tickets, modifiers,
+`settle_table_order` — and `0034` took all of it out: six tables, seven
+functions, `tenant_settings.restaurant_mode`, the `tables` module key, the rail
+row, the Settings tab, `lib/pos/restaurant.ts` and `lib/pos/tables.ts`. **Flo is
+a supermarket till and only that**: aisles, barcodes, a trolley at a counter.
 
-**A table order is not a sale, and must never look like one.** `table_orders`
-carries `order_number` off `document_series` — `T-00042` — and claims no receipt
-number until it settles. That is the same call `held_bills` made in `0025` and
-for the same reason: a number claimed before anybody pays is a hole in the
-shop's series. The link to the money is `table_orders.sale_id`, null while open,
-and every figure a restaurant reports still comes off `sales`. Nothing on the
-dashboard, the reports or `/app/sales` reads `table_orders` at all.
+It is deleted rather than left standing unread, the call `0018` made about the
+khata and `0016` made about `items.subcategory` — a table nothing writes is how
+a product ends up claiming something it cannot do, and the next person to read
+the schema cannot tell a dead branch from a quiet one. It cost nothing to do it
+now: every one of the six tables was empty, because the module shipped into a
+private preview and no shop ever laid a floor out. A settled table order is a
+receipt somebody holds, so the same migration a month later would have had to
+be an export first.
 
-**Occupancy is derived, never stored.** A table is busy because an open order
-points at it, and `table_orders_one_open_per_table_idx` — partial on
-`status = 'open'` — is what guarantees one bill per table. Two waiters opening
-T1 in the same second is the ordinary way a restaurant charges one party twice,
-and a `dining_tables.status` column is the second copy that drifts the first
-time a settle fails halfway.
+**Do not re-add it a screen at a time.** A dining room is a different product —
+that is `0033`'s own header, and it is the reason this is on `/roadmap` under
+what Flo will never build rather than under what is coming. `plans.features`
+lost the `restaurant_mode` key outright rather than going back to false, because
+false says "not yet, on a tier we may sell you".
 
-`table_orders_seated` ties the other half together: a dine-in is at a table and
-a parcel is not. An order with neither is one nobody can find; an order with
-both is one two waiters will serve.
+**The shop type is one value.** `SHOP_TYPES` in `lib/pos/settings-options.ts`
+holds `supermarket` alone and `0034` narrows the check constraint on
+`tenants.shop_type` to match — the list is what the product is, not a survey of
+what a shop might be. The checkout form reads that same array rather than the
+second copy it used to keep. `orders.shop_type` and `leads.shop_type` are free
+text and were deliberately not rewritten: they record what somebody said about
+their own shop, and the constraint is the right place to find out that Flo does
+not run a dhaba.
 
-**The KOT is one row per *send*, not per order.** A table that orders starters
-at eight and mains at half past has two tickets, and the kitchen works the
-second without re-reading the first — which is also what makes a reprint
-meaningful, because "KOT-00114, sent 20:31" is a thing a cook can be asked
-about. `send_to_kitchen` mints the ticket and stamps `kot_id` on exactly the
-lines that were `new`, in one transaction, so a line can never be on two tickets
-or on none. `printed_at` is when the browser drew it: Flo does not route to a
-printer at the grill, and the honest record is when somebody pressed print.
-
-**A voided line is kept, not deleted.** "Who cancelled the mutton after it was
-fired" is the question a restaurant asks at the end of a bad night, and a
-deleted row cannot answer it. `void_order_line` sets the status and stamps who
-and why; `orderTotal` skips it.
-
-**Prices are snapshotted when the line is added** — the opposite of a held bill,
-which re-prices on resume. A restaurant quotes off a menu the customer is
-holding, and a rate that moved between the order and the bill is an argument at
-the table. Modifiers snapshot the same way in `table_order_line_modifiers`.
-
-**Modifiers are two different things and only one of them is a row.** "No
-onions" changes the cooking and nothing else, so it is `table_order_lines.note`,
-free text, because no closed list survives contact with a kitchen. "Extra
-cheese" changes the bill, so it is an `item_modifiers` row with a signed
-`price_delta` — signed, because "no raita" should be able to take money off as
-easily as cheese puts it on. Deliberately not a min/max selection engine: a
-required single-choice group with a default pays off for a chain with a menu
-team, and a dhaba needs a list of things you can add, each with a price.
-
-**Settling folds the modifiers into the line.** `settle_table_order` builds one
-`sale_line` per order line at `unit_price + sum(price_delta)` and hands the lot
-to `record_sale`, in one transaction, under the same discount ceiling, shift
-gate and stock gate the register charges under. A modifier printed as a line of
-its own is a receipt with "Extra raita … 80" under a karahi, which is not what
-the customer ordered and not what the kitchen cooked. Settling an already
-settled order **returns the receipt rather than raising**, so a retry after a
-dropped connection shows the cashier the bill instead of an error against money
-the customer has already handed over.
-
-`lib/pos/restaurant.ts` carries no `server-only` — `lineTotalOf`, `orderTotal`
-and `byCourse` are what the order screen draws with and what the Server Actions
-re-check against, the same split `counter.ts` makes — with `lib/pos/tables.ts`
-as its `server-only` reader. `listTables` is the floor with its bills on it and
-pays three reads for them; `listDiningTables` is the Settings list and pays one,
-because a form of four text boxes per row cannot show an order anyway.
+`moduleAccess` no longer takes the shop at all, which hands the owner's rail
+back the read `restaurant_mode` used to cost it on every request.
 
 ## Notifications
 

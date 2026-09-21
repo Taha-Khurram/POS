@@ -16,14 +16,19 @@ export type Option<T extends string> = {
   description?: string;
 };
 
+/**
+ * One entry, deliberately. Flo is a supermarket till — aisles, barcodes, a
+ * trolley at a counter — and the list is what the product is, not a survey of
+ * what a shop might be. A dhaba or a cloth house needs a floor map or a
+ * size/colour grid at the till before the word on this dropdown means
+ * anything, and offering the word first is how the site came to promise seven
+ * shops and serve one.
+ *
+ * `0034` narrows the check constraint on `tenants.shop_type` to match, so a
+ * value that slips past this file still cannot reach the table.
+ */
 export const SHOP_TYPES = [
-  { id: "kiryana", label: "Kiryana / general store" },
-  { id: "restaurant", label: "Restaurant / dhaba" },
-  { id: "bakery", label: "Bakery / sweets" },
-  { id: "pharmacy", label: "Pharmacy / medical store" },
-  { id: "clothing", label: "Clothing / cloth house" },
-  { id: "retail", label: "Retail — something else" },
-  { id: "other", label: "Other" },
+  { id: "supermarket", label: "Supermarket / general store" },
 ] as const satisfies readonly Option<string>[];
 
 export const CURRENCIES = [
@@ -89,10 +94,6 @@ export type WeekStart = (typeof WEEK_STARTS)[number]["id"];
 export type FiscalYearStart = (typeof FISCAL_YEAR_STARTS)[number]["id"];
 
 export type ShopSettings = {
-  /** Whether this shop seats people. Draws the floor map and the kitchen
-   *  ticket, and is the one setting that decides which *modules* a shop has
-   *  rather than how one behaves — see `moduleAccess`. */
-  restaurantMode: boolean;
   currency: Currency;
   currencyFormat: CurrencyFormat;
   timezone: Timezone;
@@ -103,7 +104,6 @@ export type ShopSettings = {
 
 /** What a shop with no row reads as — the same values `0009` backfills with. */
 export const DEFAULT_SETTINGS: ShopSettings = {
-  restaurantMode: false,
   currency: "PKR",
   currencyFormat: "rs-prefix",
   timezone: "Asia/Karachi",

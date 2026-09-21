@@ -49,10 +49,6 @@ const SUITED = [
 /** Named, with what each is waiting on, so a demo is never a wasted trip. */
 const NOT_YET = [
   {
-    name: "Restaurants, cafés & dhabas",
-    waiting: "Tables, kitchen printing, modifiers and split bills. Flo can ring up a counter sale today, but it cannot run a dining room.",
-  },
-  {
     name: "Pharmacies & medical stores",
     waiting: "Batch numbers and expiry dates. Selling medicine without them is not something we are going to pretend to support.",
   },

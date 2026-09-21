@@ -64,12 +64,6 @@ const TABLES = [
   "held_bills",
   "item_batches",
   "item_variants",
-  "dining_tables",
-  "table_orders",
-  "table_order_lines",
-  "item_modifiers",
-  "table_order_line_modifiers",
-  "kots",
 ];
 
 const CLAIMS = ["tenant_id", "tenant_role", "branch_id", "platform_role"];

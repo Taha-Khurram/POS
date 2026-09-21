@@ -18,13 +18,13 @@ const inter = Inter({
 export const metadata: Metadata = {
   // Pages set a bare title; the template appends the brand.
   title: {
-    default: "Flo — POS software for Pakistani shops and restaurants",
+    default: "Flo — POS software for Pakistani supermarkets",
     template: "%s — Flo",
   },
   description:
     "Flo is a point of sale for Pakistani shops — barcode and Urdu-name billing, a numbered receipt series per counter, real profit on every item, and one screen your staff learns in a day.",
   openGraph: {
-    title: "Flo — POS software for Pakistani shops and restaurants",
+    title: "Flo — POS software for Pakistani supermarkets",
     description:
       "Billing, stock, customers and the day's books on one screen. Built for counters in Lahore, Karachi, and everywhere between.",
     type: "website",

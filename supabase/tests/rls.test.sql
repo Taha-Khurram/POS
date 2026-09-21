@@ -47,9 +47,9 @@ values
 insert into public.tenants (id, shop_name, owner_name, phone, city, shop_type)
 values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'Al-Madina Kiryana', 'Owner A',
-   '03001112222', 'Lahore', 'kiryana'),
+   '03001112222', 'Lahore', 'supermarket'),
   ('bbbbbbbb-0000-4000-8000-000000000001', 'Bundu Khan Karahi', 'Owner B',
-   '03003334444', 'Karachi', 'restaurant');
+   '03003334444', 'Karachi', 'supermarket');
 
 insert into public.branches (tenant_id, name, city, is_primary)
 values
@@ -493,97 +493,6 @@ insert into public.sale_tenders (tenant_id, sale_id, method, amount, reference)
 values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001',
    'easypaisa', 0.01, 'EP-9912345');
-
--- Restaurant mode, added in 0033. Tenant B is the karahi house and the only one
--- of the two that seats anybody — which is also what makes these tables a
--- clean leak test: tenant A must see an empty floor, not a filtered one.
-update public.tenant_settings
-   set restaurant_mode = true
- where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001';
-
-insert into public.dining_tables (id, tenant_id, branch_id, name, area, seats, sort_order)
-select
-  v.id, v.tenant_id, b.id, v.name, v.area, v.seats, v.sort_order
-from (values
-  ('fb0b0b01-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
-   'T1', 'Family hall', 6::smallint, 1),
-  ('fb0b0b02-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
-   'T2', 'Terrace', 4::smallint, 2)
-) as v (id, tenant_id, name, area, seats, sort_order)
-join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
-
--- One name per shop, whatever the case: "t1" and "T1" are two rows nobody can
--- tell apart on a kitchen ticket, which is the whole point of the index.
-select throws_ok(
-  $$ insert into public.dining_tables (tenant_id, branch_id, name)
-     select 'bbbbbbbb-0000-4000-8000-000000000001', b.id, 't1'
-       from public.branches b
-      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
-  '23505', null,
-  'one shop cannot have two tables called T1'
-);
-
-insert into public.table_orders
-  (id, tenant_id, branch_id, table_id, order_number, service, covers, opened_by)
-select
-  'fb1b1b01-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001',
-  b.id, 'fb0b0b01-0000-4000-8000-000000000001', 'T-00001', 'dine_in', 4::smallint, null
-from public.branches b
-where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary;
-
--- **One open bill per table.** The index and not a Server Action, because two
--- waiters opening T1 in the same second is the ordinary way a restaurant ends
--- up charging one party twice.
-select throws_ok(
-  $$ insert into public.table_orders
-       (id, tenant_id, branch_id, table_id, order_number, service)
-     select gen_random_uuid(), 'bbbbbbbb-0000-4000-8000-000000000001', b.id,
-            'fb0b0b01-0000-4000-8000-000000000001', 'T-00002', 'dine_in'
-       from public.branches b
-      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
-  '23505', null,
-  'a table cannot carry two open bills at once'
-);
-
--- A dine-in is at a table and a parcel is not. An order with neither is one
--- nobody can find; an order with both is one two waiters will serve.
-select throws_ok(
-  $$ insert into public.table_orders
-       (id, tenant_id, branch_id, order_number, service)
-     select gen_random_uuid(), 'bbbbbbbb-0000-4000-8000-000000000001', b.id,
-            'T-00003', 'dine_in'
-       from public.branches b
-      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
-  '23514', null,
-  'a dine-in order with no table is refused'
-);
-
-insert into public.item_modifiers (id, tenant_id, item_id, group_name, name, price_delta)
-values
-  ('fb2b2b01-0000-4000-8000-000000000001',
-   'bbbbbbbb-0000-4000-8000-000000000001',
-   '0b0b0b0b-0000-4000-8000-000000000001', 'Add-ons', 'Extra raita', 80);
-
-insert into public.kots (id, tenant_id, order_id, kot_number)
-values
-  ('fb3b3b01-0000-4000-8000-000000000001',
-   'bbbbbbbb-0000-4000-8000-000000000001',
-   'fb1b1b01-0000-4000-8000-000000000001', 'KOT-00001');
-
-insert into public.table_order_lines
-  (id, tenant_id, order_id, item_id, name_snapshot, unit, quantity, unit_price, course, status, kot_id)
-values
-  ('fb4b4b01-0000-4000-8000-000000000001',
-   'bbbbbbbb-0000-4000-8000-000000000001', 'fb1b1b01-0000-4000-8000-000000000001',
-   '0b0b0b0b-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
-   1, 1200.00, 'main', 'sent', 'fb3b3b01-0000-4000-8000-000000000001');
-
-insert into public.table_order_line_modifiers
-  (tenant_id, line_id, modifier_id, name_snapshot, price_delta)
-values
-  ('bbbbbbbb-0000-4000-8000-000000000001',
-   'fb4b4b01-0000-4000-8000-000000000001',
-   'fb2b2b01-0000-4000-8000-000000000001', 'Extra raita', 80);
 
 -- =============================================================================
 -- Tenant A's owner
@@ -1144,112 +1053,6 @@ select throws_ok(
   'tenant user cannot change which tenders a counter takes'
 );
 
--- Restaurant mode, added in 0033. Tenant A is a kiryana and seats nobody, so
--- each of these is empty for the right reason and the wrong one at once —
--- which is why B's own session asserts the other half further down.
-select is_empty(
-  $$ select 1 from public.dining_tables $$,
-  'tenant A has no floor of its own and cannot see tenant B''s'
-);
-
-select is_empty(
-  $$ select 1 from public.table_orders $$,
-  'tenant A cannot read who is sitting at tenant B''s tables'
-);
-
-select is_empty(
-  $$ select 1 from public.table_order_lines $$,
-  'tenant A cannot read what tenant B''s tables ordered'
-);
-
-select is_empty(
-  $$ select 1 from public.table_order_line_modifiers $$,
-  'tenant A cannot read what tenant B''s tables asked for on the side'
-);
-
-select is_empty(
-  $$ select 1 from public.kots $$,
-  'tenant A cannot read tenant B''s kitchen tickets'
-);
-
-select is_empty(
-  $$ select 1 from public.item_modifiers $$,
-  'tenant A cannot read tenant B''s add-ons and what they cost'
-);
-
--- Rule 3 again, across the floor. Every one of these is a security-definer
--- function for the reason `record_sale` is: a ticket and the lines it fired
--- have to become true together, and a settle claims a receipt number.
-select throws_ok(
-  $$ insert into public.table_orders (id, tenant_id, branch_id, order_number, service)
-     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
-            'T-00001', 'parcel'
-       from public.branches b
-      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' and b.is_primary $$,
-  '42501', null,
-  'tenant user cannot open a table order directly'
-);
-
-select throws_ok(
-  $$ update public.table_order_lines set status = 'void' $$,
-  '42501', null,
-  'tenant user cannot void a line off a bill directly'
-);
-
-select throws_ok(
-  $$ select public.open_table_order('aaaaaaaa-0000-4000-8000-000000000001',
-       gen_random_uuid(), null, 'parcel', null, null, null) $$,
-  '42501', null,
-  'tenant user cannot call open_table_order'
-);
-
-select throws_ok(
-  $$ select public.add_order_lines('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb1b1b01-0000-4000-8000-000000000001', '[]'::jsonb, null) $$,
-  '42501', null,
-  'tenant user cannot call add_order_lines'
-);
-
-select throws_ok(
-  $$ select public.send_to_kitchen('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb1b1b01-0000-4000-8000-000000000001', null) $$,
-  '42501', null,
-  'tenant user cannot call send_to_kitchen'
-);
-
-select throws_ok(
-  $$ select public.void_order_line('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb4b4b01-0000-4000-8000-000000000001', 'changed their mind', null) $$,
-  '42501', null,
-  'tenant user cannot call void_order_line'
-);
-
-select throws_ok(
-  $$ select public.move_table_order('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb1b1b01-0000-4000-8000-000000000001',
-       'fb0b0b02-0000-4000-8000-000000000001') $$,
-  '42501', null,
-  'tenant user cannot call move_table_order'
-);
-
-select throws_ok(
-  $$ select public.cancel_table_order('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb1b1b01-0000-4000-8000-000000000001', 'walked out', null) $$,
-  '42501', null,
-  'tenant user cannot call cancel_table_order'
-);
-
--- The one that claims a receipt number. A tenant that could call it could mint
--- a sale against any counter it could name.
-select throws_ok(
-  $$ select public.settle_table_order('aaaaaaaa-0000-4000-8000-000000000001',
-       'fb1b1b01-0000-4000-8000-000000000001',
-       'ccccccc1-0000-4000-8000-000000000001', gen_random_uuid(),
-       current_date, '[]'::jsonb, 0, 0, null) $$,
-  '42501', null,
-  'tenant user cannot call settle_table_order'
-);
-
 -- Takings, added in 0011. The commercially expensive leak: one shop reading
 -- another's day, or writing itself a sale that never happened.
 select is(
@@ -1401,7 +1204,7 @@ select throws_ok(
 -- these fail on privilege (42501) rather than on a policy — belt and braces.
 select throws_ok(
   $$ insert into public.tenants (shop_name, owner_name, phone, city, shop_type)
-     values ('Forged Shop', 'Nobody', '03000000000', 'Lahore', 'kiryana') $$,
+     values ('Forged Shop', 'Nobody', '03000000000', 'Lahore', 'supermarket') $$,
   '42501',
   null,
   'tenant user cannot create a tenant'
@@ -1583,60 +1386,32 @@ select throws_ok(
 );
 
 -- =============================================================================
--- Tenant B's owner — the restaurant, and the other half of every assertion
--- above it.
+-- Tenant B's owner — the other half of every assertion above it.
 --
--- Tenant A reads an empty floor, which is the right answer for a kiryana and
--- also the answer a policy that returned nothing to anybody would give. This
--- block is what tells the two apart: B's own session must read exactly its own
--- two tables, its one open bill and its own kitchen ticket, and none of A's
--- catalog.
+-- Tenant A reads nothing of B's, which is the right answer and also the answer
+-- a policy that returned nothing to anybody would give. This block is what
+-- tells the two apart: B's own session must read exactly its own rows, and none
+-- of A's.
 -- =============================================================================
 set local request.jwt.claims = '{"sub":"22222222-0000-4000-8000-000000000001","role":"authenticated","tenant_id":"bbbbbbbb-0000-4000-8000-000000000001","tenant_role":"owner","platform_role":null}';
 
 select is(
-  (select count(*) from public.dining_tables), 2::bigint,
-  'tenant B reads its own two tables'
-);
-
-select is(
-  (select count(*) from public.table_orders where status = 'open'), 1::bigint,
-  'tenant B reads the one bill open on its floor'
-);
-
-select is(
-  (select count(*) from public.table_order_lines), 1::bigint,
-  'tenant B reads what that table ordered'
-);
-
-select is(
-  (select count(*) from public.kots), 1::bigint,
-  'tenant B reads its own kitchen ticket'
-);
-
-select is(
-  (select price_delta from public.item_modifiers limit 1), 80::numeric,
-  'tenant B reads what its own add-on costs'
+  (select count(*) from public.sales), 1::bigint,
+  'tenant B reads the one bill of its own'
 );
 
 select is_empty(
   $$ select 1 from public.items
      where tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' $$,
-  'the restaurant cannot read the kiryana''s catalog'
+  'tenant B cannot read tenant A''s catalog'
 );
 
 -- Rule 3 holds on this side too. Owner is the widest role there is, and it is
 -- still select-only.
 select throws_ok(
-  $$ update public.table_orders set status = 'settled' $$,
+  $$ update public.sales set status = 'refund' $$,
   '42501', null,
-  'even the owner cannot settle a table by hand'
-);
-
-select throws_ok(
-  $$ delete from public.kots $$,
-  '42501', null,
-  'even the owner cannot delete a kitchen ticket'
+  'even the owner cannot rewrite a bill by hand'
 );
 
 -- =============================================================================

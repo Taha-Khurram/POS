@@ -13,7 +13,9 @@ import {
 } from "@/components/pos/icons";
 import { Select, type SelectOption } from "@/components/pos/select-field";
 import { initialsOf, writePhone } from "@/lib/pos/customer";
+import { moneyFormatter } from "@/lib/pos/counter";
 import { balanceState, type SupplierBalance } from "@/lib/pos/ledger";
+import type { ShopSettings } from "@/lib/pos/settings-options";
 import {
   foldName,
   matchesSupplier,
@@ -204,14 +206,19 @@ const columnsFor = (
 export function SuppliersPanel({
   suppliers,
   balances,
-  money,
+  settings,
 }: {
   suppliers: Supplier[];
   /** What each one is owed, by id. Read once for the page by
    *  `listSupplierBalances`, so this column costs no round trip of its own. */
   balances: Map<string, SupplierBalance>;
-  money: (value: number) => string;
+  settings: ShopSettings;
 }) {
+  // Built here rather than handed down: a formatter is a function, and a
+  // function cannot cross the server/client boundary. `counter.ts` carries
+  // no `server-only` for exactly this.
+  const money = moneyFormatter(settings);
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
 

@@ -11,7 +11,8 @@ import {
   IconSearch,
 } from "@/components/pos/icons";
 import type { Product } from "@/lib/pos/catalog";
-import { writeBusinessDay } from "@/lib/pos/counter";
+import { moneyFormatter, writeBusinessDay } from "@/lib/pos/counter";
+import type { ShopSettings } from "@/lib/pos/settings-options";
 import {
   matchesReceipt,
   type GoodsReceipt,
@@ -121,14 +122,19 @@ export function ReceiptsPanel({
   suppliers,
   products,
   openOrders,
-  money,
+  settings,
 }: {
   receipts: GoodsReceipt[];
   suppliers: { id: string; name: string }[];
   products: Product[];
   openOrders: PurchaseOrderDetail[];
-  money: (value: number) => string;
+  settings: ShopSettings;
 }) {
+  // Built here rather than handed down: a formatter is a function, and a
+  // function cannot cross the server/client boundary. `counter.ts` carries
+  // no `server-only` for exactly this.
+  const money = moneyFormatter(settings);
+
   const [query, setQuery] = useState("");
   const [receiving, setReceiving] = useState(false);
   const [open, setOpen] = useState<GoodsReceiptDetail | null>(null);

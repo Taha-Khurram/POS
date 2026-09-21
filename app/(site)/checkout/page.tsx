@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 
 import { createCheckoutOrder } from "@/app/(site)/checkout/actions";
+import { SHOP_TYPES } from "@/lib/pos/settings-options";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 export const metadata: Metadata = {
@@ -54,7 +55,9 @@ export default async function CheckoutPage({ searchParams }: PageProps<"/checkou
             <div><label htmlFor="phone" className="label">Phone</label><input id="phone" name="phone" type="tel" className="field" required /></div>
             <div><label htmlFor="email" className="label">Email</label><input id="email" name="email" type="email" className="field" /></div>
             <div><label htmlFor="city" className="label">City</label><input id="city" name="city" className="field" required /></div>
-            <div><label htmlFor="shop_type" className="label">Shop type</label><select id="shop_type" name="shop_type" className="field" defaultValue="kiryana"><option value="kiryana">Kiryana</option><option value="restaurant">Restaurant</option><option value="bakery">Bakery</option><option value="retail">Retail</option><option value="other">Other</option></select></div>
+            {/* Flo's own list, so the word an owner picks here is one the console
+                can still show them on Settings. It has one entry today. */}
+            <div><label htmlFor="shop_type" className="label">Shop type</label><select id="shop_type" name="shop_type" className="field" defaultValue={SHOP_TYPES[0].id}>{SHOP_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></div>
             <div><label htmlFor="plan_code" className="label">Plan</label><select id="plan_code" name="plan_code" className="field" defaultValue={plans[0]?.code ?? "standard"}>{plans.map((plan) => <option key={plan.code} value={plan.code}>{plan.name} · Rs {Number(plan.list_price).toLocaleString("en-PK")}</option>)}</select></div>
             <div><label htmlFor="billing_cycle" className="label">Billing cycle</label><select id="billing_cycle" name="billing_cycle" className="field" defaultValue="monthly"><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
             {/* One shop. `branches` is still sent, because the order row and

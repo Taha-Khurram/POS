@@ -129,7 +129,10 @@ export async function saveShopDetails(
     .update(after)
     .eq("id", session.tenantId);
 
-  if (error) return fail("We could not save the shop details. Please try again.");
+  if (error) {
+    console.error("[settings] shop details save failed for %s", session.tenantId, error);
+    return fail("We could not save the shop details. Please try again.");
+  }
 
   await recordAudit(session, {
     action: "shop.details_updated",
@@ -186,10 +189,6 @@ export async function saveCurrencyClock(
     day_ends_at: dayEndsAt,
     week_starts_on: weekStartsOn,
     fiscal_year_starts: fiscalYearStarts,
-    // The one setting on this form that changes which *modules* the shop has
-    // rather than how one behaves — `moduleAccess` reads it, and switching it
-    // on is what makes the Tables rail row and `/app/tables` exist.
-    restaurant_mode: checked(formData, "restaurant_mode"),
   };
 
   const supabase = createAdminClient();
@@ -197,7 +196,7 @@ export async function saveCurrencyClock(
   const { data: before } = await supabase
     .from("tenant_settings")
     .select(
-      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts, restaurant_mode",
+      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts",
     )
     .eq("tenant_id", session.tenantId)
     .maybeSingle();
@@ -209,7 +208,10 @@ export async function saveCurrencyClock(
     .from("tenant_settings")
     .upsert(after, { onConflict: "tenant_id" });
 
-  if (error) return fail("We could not save the currency settings. Please try again.");
+  if (error) {
+    console.error("[settings] currency and clock save failed for %s", session.tenantId, error);
+    return fail("We could not save the currency settings. Please try again.");
+  }
 
   await recordAudit(session, {
     action: "shop.settings_updated",
@@ -219,7 +221,14 @@ export async function saveCurrencyClock(
     after,
   });
 
-  revalidatePath("/app/settings");
+  // The layout, not the page — the only call in this file that needs the second
+  // argument. `revalidatePath` defaults to `"page"`, and what this form changes
+  // is drawn by `app/(app)/app/layout.tsx`: the bell's expiry counts are
+  // windowed on `currentBusinessDay`, which is `day_ends_at`. Revalidating the
+  // page alone leaves the bell counting to yesterday's cut until a full reload.
+  // `"layout"` covers every screen beneath `/app`, which is right: moving the
+  // day's edge moves every figure on all of them.
+  revalidatePath("/app", "layout");
   return done();
 }
 
@@ -277,7 +286,10 @@ export async function saveRolePermissions(
     .from("role_permissions")
     .upsert(rows, { onConflict: "tenant_id,access_level" });
 
-  if (error) return fail("We could not save the permissions. Please try again.");
+  if (error) {
+    console.error("[settings] permissions save failed for %s", session.tenantId, error);
+    return fail("We could not save the permissions. Please try again.");
+  }
 
   await recordAudit(session, {
     action: "shop.permissions_updated",
@@ -527,7 +539,10 @@ export async function deleteCounter(
     .eq("id", counterId)
     .eq("tenant_id", session.tenantId);
 
-  if (error) return fail("We could not delete the counter. Please try again.");
+  if (error) {
+    console.error("[settings] counter delete failed for %s", counterId, error);
+    return fail("We could not delete the counter. Please try again.");
+  }
 
   await recordAudit(session, {
     action: "counter.deleted",

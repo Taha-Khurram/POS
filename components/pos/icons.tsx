@@ -364,15 +364,6 @@ export const IconPencil = (props: IconProps) => (
   </Glyph>
 );
 
-/** Tables — a plate and cutlery. The floor, not the counter. */
-export const IconTables = (props: IconProps) => (
-  <Glyph {...props}>
-    <circle cx="12" cy="12" r="7.2" />
-    <circle cx="12" cy="12" r="3.2" />
-    <path d="M4 4v4M20 4v4" />
-  </Glyph>
-);
-
 /** Buying — a delivery van. Not a second box: the rail already has one for
  *  Products & stock, and two boxes side by side is a rail nobody reads. */
 export const IconTruck = (props: IconProps) => (

@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconClose, IconPlus, IconSearch } from "@/components/pos/icons";
-import { writeBusinessDay } from "@/lib/pos/counter";
+import { moneyFormatter, writeBusinessDay } from "@/lib/pos/counter";
+import type { ShopSettings } from "@/lib/pos/settings-options";
 import {
   matchesPayment,
   paymentMethod,
@@ -88,14 +89,19 @@ export function PaymentsPanel({
   suppliers,
   balances,
   today,
-  money,
+  settings,
 }: {
   payments: SupplierPayment[];
   suppliers: { id: string; name: string }[];
   balances: Map<string, SupplierBalance>;
   today: string;
-  money: (value: number) => string;
+  settings: ShopSettings;
 }) {
+  // Built here rather than handed down: a formatter is a function, and a
+  // function cannot cross the server/client boundary. `counter.ts` carries
+  // no `server-only` for exactly this.
+  const money = moneyFormatter(settings);
+
   const [query, setQuery] = useState("");
   const [paying, setPaying] = useState(false);
 
@@ -199,13 +205,19 @@ export function PaySupplierButton({
   supplier,
   balances,
   today,
-  money,
+  settings,
 }: {
   supplier: { id: string; name: string };
   balances: Map<string, SupplierBalance>;
   today: string;
-  money: (value: number) => string;
+  settings: ShopSettings;
 }) {
+  // Reached from `supplier-record.tsx`, which is a server component, so this
+  // takes the settings and builds the formatter rather than being handed one.
+  // `PaymentSheet` below is a client component either way, so passing it the
+  // function is fine.
+  const money = moneyFormatter(settings);
+
   const [open, setOpen] = useState(false);
 
   return (

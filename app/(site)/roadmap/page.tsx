@@ -114,16 +114,16 @@ const LATER = [
     copy: "The gate for cloth and footwear. One item, nine sizes, three colours — one row of work, not twenty-seven.",
   },
   {
-    title: "Restaurant mode",
-    copy: "Tables, kitchen printing, modifiers and split bills. A different product from a retail counter, and it will be built like one.",
-  },
-  {
     title: "More than one branch",
     copy: "A central item list, per-branch staff, and one report over all of them. The day a Flo shop opens its second outlet.",
   },
 ];
 
 const NEVER = [
+  {
+    title: "Restaurant mode",
+    copy: "Tables, a floor map, kitchen tickets and modifiers were built and have been taken out — the schema with them, not just the screens. Flo is a supermarket till: aisles, barcodes, a trolley at a counter. A dining room is a different product and is better served by one, rather than by a register that has a floor map bolted to its side.",
+  },
   {
     title: "Udhaar khata",
     copy: "A customer balance, a credit limit and a reminder about money owed were in the plan and have been taken out of the schema, not just off the screen. Flo records what was sold and what was paid. It will not keep the book of what is owed — that is a lending product wearing a register's clothes, and a shopkeeper who wants one deserves to be told rather than sold.",

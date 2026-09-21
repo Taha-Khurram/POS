@@ -10,7 +10,7 @@ import {
   type ModuleKey,
   type TillAccess,
 } from "@/lib/pos/modules";
-import { getRolePermissions, getShopSettings } from "@/lib/pos/shop";
+import { getRolePermissions } from "@/lib/pos/shop";
 
 /**
  * What this session may reach, resolved once from the stored permissions.
@@ -28,17 +28,8 @@ import { getRolePermissions, getShopSettings } from "@/lib/pos/shop";
 export async function getModuleAccess(
   session: SessionContext,
 ): Promise<ModuleAccess> {
-  // Whether this shop seats people. Not a permission — see `moduleAccess` — and
-  // read for everybody including the owner, which is the one thing that costs a
-  // query on a path that otherwise costs the owner none. It is one row of one
-  // shop's settings, already read on most pages, and the alternative is a rail
-  // that draws a floor map for a kiryana.
-  const shop = session.tenantId
-    ? { restaurantMode: (await getShopSettings(session.tenantId)).restaurantMode }
-    : { restaurantMode: false };
-
   if (session.tenantRole === "owner" || !session.tenantId || !session.tenantRole) {
-    return moduleAccess(session.tenantRole, null, shop);
+    return moduleAccess(session.tenantRole, null);
   }
 
   const permissions = await getRolePermissions(session.tenantId);
@@ -46,7 +37,7 @@ export async function getModuleAccess(
   // `tenant_role` and `access_level` are the same two words below owner, which
   // is what lets the rail read the row the register enforces rather than a
   // second list that can drift away from it.
-  return moduleAccess(session.tenantRole, permissions[session.tenantRole], shop);
+  return moduleAccess(session.tenantRole, permissions[session.tenantRole]);
 }
 
 /**

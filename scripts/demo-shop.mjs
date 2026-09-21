@@ -65,7 +65,7 @@ const SHOP = {
   phone: "+92 300 842 1176",
   email: "owner@almadina.flopos.pk",
   city: "Lahore",
-  shop_type: "kiryana",
+  shop_type: "supermarket",
 };
 
 /** The demo staff. Passwords are printed at the end, not stored here. */

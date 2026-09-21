@@ -12,7 +12,8 @@ import {
 } from "@/components/pos/icons";
 import { Select, type SelectOption } from "@/components/pos/select-field";
 import type { Product } from "@/lib/pos/catalog";
-import { writeBusinessDay } from "@/lib/pos/counter";
+import { moneyFormatter, writeBusinessDay } from "@/lib/pos/counter";
+import type { ShopSettings } from "@/lib/pos/settings-options";
 import {
   matchesOrder,
   orderStatus,
@@ -178,13 +179,18 @@ export function OrdersPanel({
   orders,
   suppliers,
   products,
-  money,
+  settings,
 }: {
   orders: PurchaseOrder[];
   suppliers: { id: string; name: string }[];
   products: Product[];
-  money: (value: number) => string;
+  settings: ShopSettings;
 }) {
+  // Built here rather than handed down: a formatter is a function, and a
+  // function cannot cross the server/client boundary. `counter.ts` carries
+  // no `server-only` for exactly this.
+  const money = moneyFormatter(settings);
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const [, start] = useTransition();

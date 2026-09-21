@@ -13,16 +13,13 @@ const SIZES = [
   "More than one shop",
 ];
 
-const TYPES = [
-  "Kiryana or general store",
-  "Restaurant, café, or dhaba",
-  "Bakery or mithai shop",
-  "Pharmacy or medical store",
-  "Clothing or fabric retail",
-  "Hardware, paint or electrical",
-  "Cosmetics or general retail",
-  "Something else",
-];
+/** One entry, like the shop-type list in the console. Flo is a supermarket
+ *  till, and a dropdown offering seven trades is how a demo becomes a wasted
+ *  trip for both sides — a dhaba owner who picks "Restaurant" here has been
+ *  told nothing, and hears it on the call instead. Whatever else a shop is goes
+ *  in the message box, which is where a lead that is worth ringing anyway says
+ *  so in its own words. */
+const TYPES = ["Supermarket or general store"];
 
 const CITIES = [
   "Karachi",

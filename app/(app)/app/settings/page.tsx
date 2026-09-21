@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import {
-  IconEmployees,
-  IconRegister,
-  IconStore,
-  IconTables,
-} from "@/components/pos/icons";
+import { IconEmployees, IconRegister, IconStore } from "@/components/pos/icons";
 import { requireModule } from "@/lib/pos/access";
 import { getEntitlements } from "@/lib/entitlements";
 import {
@@ -15,10 +10,8 @@ import {
   getShopSettings,
   listCounters,
 } from "@/lib/pos/shop";
-import { listDiningTables } from "@/lib/pos/tables";
 import { CountersPanel } from "./counters-panel";
 import { RolesPanel } from "./roles-panel";
-import { TablesPanel } from "./tables-panel";
 import { StorePanel } from "./store-panel";
 
 export const metadata: Metadata = {
@@ -30,12 +23,6 @@ export const metadata: Metadata = {
 const TABS = [
   { id: "store", label: "Shop & currency", icon: IconStore },
   { id: "counter", label: "Counter", icon: IconRegister },
-  // Only for a shop that seats people. A kiryana has no floor to lay out, so
-  // the tab is drawn from `restaurant_mode` on the row above it — a tab that
-  // opens on "you have no tables and never will" is one more thing between a
-  // shopkeeper and the setting they came for. Switching the mode on is what
-  // makes it appear, on the same screen.
-  { id: "tables", label: "Tables", icon: IconTables, seated: true },
   { id: "roles", label: "Roles & permissions", icon: IconEmployees },
 ] as const;
 
@@ -76,14 +63,6 @@ export default async function SettingsPage({
     getEntitlements(session.tenantId),
   ]);
 
-  // Only read when it is the tab being drawn. Four of the five reads above are
-  // needed for the header or the tab strip whichever section is open; the floor
-  // is needed by one panel a kiryana never opens.
-  const diningTables =
-    settings.restaurantMode && tab === "tables"
-      ? await listDiningTables(session.tenantId)
-      : [];
-
   // The claim says there is a shop but RLS returned nothing. In practice that
   // is the access-token hook switched off in the project, which is worth
   // saying out loud — it is silent everywhere else.
@@ -103,7 +82,7 @@ export default async function SettingsPage({
       </header>
 
       <nav className="pos-tabs" aria-label="Settings sections">
-        {TABS.filter((item) => !("seated" in item) || settings.restaurantMode).map((item) => (
+        {TABS.map((item) => (
           <Link
             key={item.id}
             href={`/app/settings?tab=${item.id}`}
@@ -131,13 +110,6 @@ export default async function SettingsPage({
           atLimit={query.full === "1"}
           readOnly={readOnly}
         />
-      ) : tab === "tables" && settings.restaurantMode ? (
-        <TablesPanel tables={diningTables} readOnly={readOnly} />
-      ) : tab === "tables" ? (
-        // ?tab=tables typed at a shop that does not seat anybody. The store tab
-        // is where the switch is, so that is where it goes — not a 404, because
-        // the section exists and is one checkbox away.
-        <StorePanel shop={shop} settings={settings} readOnly={readOnly} />
       ) : (
         <RolesPanel permissions={permissions} readOnly={readOnly} />
       )}

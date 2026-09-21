@@ -268,8 +268,9 @@ export function CounterForm({
                     Print as soon as the sale is tendered
                   </span>
                   <span className="mt-0.5 block text-[0.75rem] leading-relaxed text-graphite-500">
-                    A dhaba at dinner wants this. A cloth house billing once an
-                    hour would rather press Print itself.
+                    A checkout with a queue at six wants this. A back-office
+                    counter billing once an hour would rather press Print
+                    itself.
                   </span>
                 </span>
               </label>

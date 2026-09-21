@@ -107,7 +107,7 @@ export function ShopDetailsForm({
             value={shop.shopType}
             options={SHOP_TYPES}
             disabled={locked}
-            hint="Sets the register's default units — plates for a dhaba, kilos for a kiryana."
+            hint="One kind of shop today. Flo is a supermarket till, and the list says so rather than offering a trade it cannot run."
           />
 
           <label className="block">
