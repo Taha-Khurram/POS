@@ -486,6 +486,13 @@ function asSale(detail: BillDetail): Sale {
 
     return {
       id: line.id,
+      // The reprint reads `sale_lines`, where the item and the variant are
+      // already two columns — and `name_snapshot` already carries "Shirt —
+      // Medium / Blue" if it was one, because that is what the roll printed.
+      // Nothing here has to reconstruct it.
+      itemId: line.itemId ?? "",
+      variantId: null,
+      variantLabel: "",
       name: line.name,
       // Not stored on the line. The roll printed it when the sale was rung up
       // and cannot print it again from a snapshot that never held it.
@@ -735,6 +742,9 @@ function RefundSlip({
       // The slip has no catalog behind it and needs none. The id is only a
       // React key here, and nothing downstream reads it.
       id: `refund-${index}`,
+      itemId: "",
+      variantId: null,
+      variantLabel: "",
       name: line.name,
       urdu: "",
       unit,

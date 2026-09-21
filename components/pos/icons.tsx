@@ -355,6 +355,24 @@ export const IconBox = (props: IconProps) => (
   </Glyph>
 );
 
+/** Edit. Used where a row's name already goes somewhere else, so the chevron
+ *  would promise navigation the button does not do. */
+export const IconPencil = (props: IconProps) => (
+  <Glyph {...props}>
+    <path d="M4 16.4V20h3.6L18.1 9.5a1.7 1.7 0 0 0 0-2.4l-1.2-1.2a1.7 1.7 0 0 0-2.4 0Z" />
+    <path d="m13.6 6.9 3.5 3.5" />
+  </Glyph>
+);
+
+/** Tables — a plate and cutlery. The floor, not the counter. */
+export const IconTables = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="12" cy="12" r="7.2" />
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M4 4v4M20 4v4" />
+  </Glyph>
+);
+
 /** Buying — a delivery van. Not a second box: the rail already has one for
  *  Products & stock, and two boxes side by side is a rail nobody reads. */
 export const IconTruck = (props: IconProps) => (

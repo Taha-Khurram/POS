@@ -309,8 +309,9 @@ async function seed() {
         name: "Front counter",
         receipt_prefix: "ALM",
         is_active: true,
-        accepts_cash: true,
-        accepts_card: true,
+        // The front till takes a card as well, so the screenshots show a
+        // payment sheet with something to choose between.
+        accepted_tenders: ["cash", "card"],
         receipt_footer: "Shukriya! Exchange within 3 days with this receipt.",
         auto_print: true,
         sort_order: 1,
@@ -322,8 +323,7 @@ async function seed() {
         name: "Back counter",
         receipt_prefix: "ALM2",
         is_active: true,
-        accepts_cash: true,
-        accepts_card: false,
+        accepted_tenders: ["cash"],
         receipt_footer: "Shukriya! Exchange within 3 days with this receipt.",
         auto_print: true,
         sort_order: 2,

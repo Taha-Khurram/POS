@@ -12,12 +12,14 @@ import { requireSession } from "@/lib/auth";
 import { getEntitlements } from "@/lib/entitlements";
 import { getModuleAccess } from "@/lib/pos/access";
 import { stockCounts } from "@/lib/pos/items";
+import { expiryCounts } from "@/lib/pos/batches";
+import { currentBusinessDay } from "@/lib/pos/counter";
 import {
   buildNotices,
   noticeSignature,
   visibleNotices,
 } from "@/lib/pos/notices";
-import { getShopName, listCounters } from "@/lib/pos/shop";
+import { getShopName, getShopSettings, listCounters } from "@/lib/pos/shop";
 
 export const viewport: Viewport = {
   // orchid-800. The one colour that cannot come from a token — the browser
@@ -56,13 +58,24 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
   //     small and neither is allowed to fail the console: a shop whose
   //     subscription cannot be resolved still gets a till, it just gets a
   //     quieter bell.
-  const [shopName, access, entitlements, counters, stock] = await Promise.all([
-    getShopName(session.tenantId),
-    getModuleAccess(session),
-    session.tenantId ? getEntitlements(session.tenantId) : null,
-    session.tenantId ? listCounters(session.tenantId) : [],
-    session.tenantId ? stockCounts(session.tenantId) : { out: 0, low: 0 },
-  ]);
+  const [shopName, access, entitlements, counters, stock, settings] =
+    await Promise.all([
+      getShopName(session.tenantId),
+      getModuleAccess(session),
+      session.tenantId ? getEntitlements(session.tenantId) : null,
+      session.tenantId ? listCounters(session.tenantId) : [],
+      session.tenantId ? stockCounts(session.tenantId) : { out: 0, low: 0 },
+      session.tenantId ? getShopSettings(session.tenantId) : null,
+    ]);
+
+  // Expiry needs the shop's own trading day, which needs the settings above, so
+  // it is the one read that cannot join that round. It costs nothing for a shop
+  // that tracks no batches: the index behind it is partial on `quantity > 0`
+  // and an untracked shop has no rows at all.
+  const expiry =
+    session.tenantId && settings
+      ? await expiryCounts(session.tenantId, currentBusinessDay(settings))
+      : { expired: 0, critical: 0, expiredUnits: 0 };
 
   // Both display preferences, read before the first byte so the shell renders
   // at the right width and in the right palette instead of correcting itself a
@@ -89,6 +102,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
         : null,
       counters,
       stock,
+      expiry,
     }),
     access,
     session.tenantRole,

@@ -293,17 +293,36 @@ export function writeTender(tenders: BillTender[]): string {
   if (tenders.length === 0) return "—";
   if (tenders.length > 1) return "Split";
 
-  return tenders[0].method === "cash"
-    ? "Cash"
-    : tenders[0].method === "card"
-      ? "Card"
-      : tenders[0].method;
+  // The label off the one list that names them, so a bill in the history and a
+  // button on the payment sheet call the same thing the same word.
+  return TENDER_LABELS[tenders[0].method] ?? tenders[0].method;
 }
 
+/**
+ * What each stored method is called on screen.
+ *
+ * Its own map rather than an import of `TENDERS` from `counter.ts`: this module
+ * is deliberately free of imports so the history can be read anywhere, and the
+ * three words below are a label, not the vocabulary. `counter.ts` remains the
+ * list a till offers; this is how a stored row reads.
+ */
+export const TENDER_LABELS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  raast: "Raast",
+  easypaisa: "Easypaisa",
+  jazzcash: "JazzCash",
+  bank: "Transfer",
+};
+
 export const TENDER_FILTERS = [
-  { id: "all", label: "Any payment", note: "Cash, card and split" },
+  { id: "all", label: "Any payment", note: "Every way a bill was settled" },
   { id: "cash", label: "Cash", note: "Notes in the drawer" },
   { id: "card", label: "Card", note: "On the shop's machine" },
+  // One filter for all four rather than four filters, because the question a
+  // shopkeeper asks is "what did not go in the drawer" — and a shop that takes
+  // none of them would otherwise have four dead rows in the menu.
+  { id: "digital", label: "Raast and wallets", note: "Nothing in the drawer" },
   { id: "split", label: "Split", note: "More than one tender" },
 ] as const;
 
@@ -312,6 +331,14 @@ export type TenderFilterId = (typeof TENDER_FILTERS)[number]["id"];
 export function matchesTender(bill: BillRow, filter: TenderFilterId): boolean {
   if (filter === "all") return true;
   if (filter === "split") return bill.tenders.length > 1;
+
+  if (filter === "digital") {
+    return (
+      bill.tenders.length === 1 &&
+      !["cash", "card"].includes(bill.tenders[0].method)
+    );
+  }
+
   return bill.tenders.length === 1 && bill.tenders[0].method === filter;
 }
 
@@ -366,8 +393,8 @@ export type BillSummary = {
   gross: number;
   cash: number;
   card: number;
-  /** Anything settled by neither — nothing today, and a figure rather than a
-   *  silence the moment a wallet tender ships. */
+  /** Anything settled by neither. A silence until `0032`, when the wallets and
+   *  Raast shipped — and the reason it was a column all along. */
   other: number;
   average: number;
 };

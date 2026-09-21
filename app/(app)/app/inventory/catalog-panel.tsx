@@ -18,6 +18,7 @@ import {
   IconUpload,
 } from "@/components/pos/icons";
 import { Select, type SelectOption } from "@/components/pos/select-field";
+import { EXPIRY_STATES, expiryState, type BatchSummary } from "@/lib/pos/batch";
 import { useToast } from "@/components/pos/toaster";
 import { useDismiss } from "@/components/pos/use-dismiss";
 import {
@@ -88,6 +89,24 @@ const STOCK_FILTERS = [
     note: "Switched off — the cashier cannot find them",
     match: (item: Product) => !item.isActive,
   },
+  // The two cuts a pharmacy opens this screen for. They take the batch
+  // summaries as a second argument rather than reading a field on `Product`,
+  // because expiry is not a fact about an item — it is a fact about the stock
+  // of it, and a shop can hold both good and expired stock of one line.
+  {
+    id: "expired",
+    label: "Has expired stock",
+    note: "The till refuses it. Write it off.",
+    match: (item: Product, batches?: Map<string, BatchSummary>) =>
+      (batches?.get(item.id)?.expired ?? 0) > 0,
+  },
+  {
+    id: "going",
+    label: "Going off soon",
+    note: "Front of the shelf, or marked down",
+    match: (item: Product, batches?: Map<string, BatchSummary>) =>
+      (batches?.get(item.id)?.critical ?? 0) > 0,
+  },
 ] as const;
 
 type StockFilter = (typeof STOCK_FILTERS)[number]["id"];
@@ -100,7 +119,11 @@ const stockFilter = (id: StockFilter) =>
  * opens the editor. The button is the name itself: a row of nine columns with
  * one small pencil at the end of it is a target nobody hits on a tablet.
  */
-const columnsFor = (onEdit: (item: Product) => void): Column<Product>[] => [
+const columnsFor = (
+  onEdit: (item: Product) => void,
+  batches: Map<string, BatchSummary>,
+  today: string,
+): Column<Product>[] => [
   {
     key: "item",
     header: "Item",
@@ -205,13 +228,33 @@ const columnsFor = (onEdit: (item: Product) => void): Column<Product>[] => [
     align: "end",
     cell: (item) => {
       const state = stockState(item);
+      const batch = batches.get(item.id);
+
+      // Expiry outranks the low-stock badge when there is one. A shelf with
+      // fourteen expired strips on it is not "low", it is a problem — and the
+      // two badges stacked would be a cell nobody reads on a tablet.
+      const expiry =
+        batch && batch.expired > 0
+          ? { label: `${batch.expired.toLocaleString("en-PK")} expired`, tone: "bad" }
+          : batch?.nextExpiry
+            ? (() => {
+                const look = EXPIRY_STATES[expiryState(batch.nextExpiry, today)];
+                return look.tone === "warn" ? { label: look.label, tone: "warn" } : null;
+              })()
+            : null;
 
       return (
         <span className="inline-flex flex-col items-end gap-1">
           <span>
             {item.stock.toLocaleString("en-PK")} {unitShort(item.unit)}
           </span>
-          {state === "out" ? (
+          {expiry ? (
+            <span
+              className={`pos-badge ${expiry.tone === "bad" ? "pos-badge-bad" : "pos-badge-warn"}`}
+            >
+              {expiry.label}
+            </span>
+          ) : state === "out" ? (
             <span className="pos-badge pos-badge-bad">Out</span>
           ) : state === "low" ? (
             <span className="pos-badge pos-badge-warn">Low</span>
@@ -245,6 +288,7 @@ export function CatalogPanel({
   items,
   tree,
   suppliers,
+  batches,
   nextSerial,
   today,
 }: {
@@ -253,11 +297,17 @@ export function CatalogPanel({
   tree: Department[];
   /** The shop's own active suppliers, for the sheet's dropdown. */
   suppliers: { id: string; name: string }[];
+  /** What each tracked item's batches come to, by item id. One read for the
+   *  page rather than one per row, which is the n+1 this list would otherwise
+   *  pay on every paint. Empty for a shop that tracks nothing. */
+  batches: Map<string, BatchSummary>;
   /** What the next in-store barcode and suggested SKU are cut from. */
   nextSerial: number;
-  /** The shop's own trading day, for the export's filename. Resolved on the
-   *  server like every other date here — a counter tablet bought in Dubai and
-   *  shipped to Lahore keeps the wrong clock for months. */
+  /** The shop's own trading day — the export's filename, and the expiry states
+   *  in the product sheet's batch panel. Resolved on the server like every
+   *  other date here: a counter tablet bought in Dubai and shipped to Lahore
+   *  keeps the wrong clock for months, and a wrong date marks good stock
+   *  expired. */
   today: string;
 }) {
   const toast = useToast();
@@ -298,12 +348,16 @@ export function CatalogPanel({
   const rows = useMemo(
     () =>
       inDepartment.filter(
-        (item) => stockFilter(filter).match(item) && matchesProduct(item, query),
+        (item) =>
+          stockFilter(filter).match(item, batches) && matchesProduct(item, query),
       ),
-    [inDepartment, query, filter],
+    [inDepartment, query, filter, batches],
   );
 
-  const columns = useMemo(() => columnsFor(setEditing), []);
+  const columns = useMemo(
+    () => columnsFor(setEditing, batches, today),
+    [batches, today],
+  );
 
   const departmentOptions: SelectOption[] = useMemo(
     () => [
@@ -327,9 +381,11 @@ export function CatalogPanel({
         id: entry.id,
         label: entry.label,
         description: entry.note,
-        meta: inDepartment.filter(entry.match).length.toLocaleString("en-PK"),
+        meta: inDepartment
+          .filter((item) => entry.match(item, batches))
+          .length.toLocaleString("en-PK"),
       })),
-    [inDepartment],
+    [inDepartment, batches],
   );
 
   // What is actually on, as chips under the bar. Search is not one of them —
@@ -517,6 +573,7 @@ export function CatalogPanel({
           tree={tree}
           suppliers={suppliers}
           nextSerial={nextSerial}
+          today={today}
           onClose={() => setEditing(null)}
         />
       ) : null}

@@ -39,7 +39,11 @@ export type HeldBill = {
   /** Item ids and quantities only. The prices are deliberately not stored:
    *  resuming re-prices from the catalog, so a bill parked before a rate
    *  change settles at the rate on the shelf. */
-  lines: { itemId: string; quantity: number }[];
+  /** What is on it, and which size or colour where the item has a grid. No
+   *  prices: resuming re-prices from the catalog, and a stored price is a quiet
+   *  way to sell at yesterday's cost. `variantId` is null for everything a
+   *  shop does not sell by variant, which is most of it. */
+  lines: { itemId: string; variantId: string | null; quantity: number }[];
   /** What was agreed off it, as it was agreed. Re-checked against the
    *  cashier's ceiling when it settles, never when it was parked. */
   discount: Discount;

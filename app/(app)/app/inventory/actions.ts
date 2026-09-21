@@ -119,7 +119,7 @@ type ItemRow = {
   low_at: number;
   supplier_id: string | null;
   tax_rate: number;
-  variant_count: number | null;
+  tracks_batches: boolean;
   is_active: boolean;
   search_terms: string[];
 };
@@ -140,6 +140,10 @@ function readProduct(
   tree: Department[],
   supplierIds: Set<string>,
 ): ItemRow | string {
+  // `variant_count` is deliberately not in `ItemRow`. Since `0031` it is
+  // written by `public.save_variants` alone, off the grid that was actually
+  // saved — a hidden field on this form would null it every time somebody
+  // corrected a price on an item whose grid they had not opened.
   const name = text(formData.get("name"));
 
   if (name.length < NAME_MIN || name.length > NAME_MAX) {
@@ -218,7 +222,6 @@ function readProduct(
     return "Add a department on the Categories tab first — an item has to sit somewhere.";
   }
 
-  const variantCount = Number(text(formData.get("variant_count")));
 
   return {
     name,
@@ -235,10 +238,11 @@ function readProduct(
     low_at: lowAt,
     supplier_id: supplierId || null,
     tax_rate: taxRate,
-    variant_count:
-      tracking === "variant" && Number.isInteger(variantCount) && variantCount > 0
-        ? Math.min(variantCount, 999)
-        : null,
+    // Opt-in, and only ever on or off — switching it *on* opens no batches and
+    // moves no stock, so an item with a count already on it keeps that count as
+    // untracked stock until somebody opens a batch for it. The product sheet
+    // says so rather than silently inventing a batch with no date on it.
+    tracks_batches: text(formData.get("tracks_batches")) === "on",
     // An unchecked box is absent from the body altogether, so absent is off.
     // The import sets it explicitly rather than relying on that.
     is_active: text(formData.get("is_active")) === "on",
@@ -338,7 +342,7 @@ async function ownItem(tenantId: string, itemId: unknown) {
   const { data } = await supabase
     .from("items")
     .select(
-      "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, tax_rate, variant_count, is_active",
+      "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, tax_rate, variant_count, tracks_batches, is_active",
     )
     .eq("tenant_id", tenantId)
     .eq("id", itemId)

@@ -89,6 +89,10 @@ export type WeekStart = (typeof WEEK_STARTS)[number]["id"];
 export type FiscalYearStart = (typeof FISCAL_YEAR_STARTS)[number]["id"];
 
 export type ShopSettings = {
+  /** Whether this shop seats people. Draws the floor map and the kitchen
+   *  ticket, and is the one setting that decides which *modules* a shop has
+   *  rather than how one behaves — see `moduleAccess`. */
+  restaurantMode: boolean;
   currency: Currency;
   currencyFormat: CurrencyFormat;
   timezone: Timezone;
@@ -99,6 +103,7 @@ export type ShopSettings = {
 
 /** What a shop with no row reads as — the same values `0009` backfills with. */
 export const DEFAULT_SETTINGS: ShopSettings = {
+  restaurantMode: false,
   currency: "PKR",
   currencyFormat: "rs-prefix",
   timezone: "Asia/Karachi",

@@ -42,6 +42,14 @@ export type Product = {
   tracking: TrackingMode;
   /** How many size/colour rows sit under this item. Only for `"variant"`. */
   variants?: number;
+  /** What this item's two variant columns are called — `["Size", "Colour"]`.
+   *  On the item since `0031` so its rows cannot disagree about what they mean.
+   *  Empty for everything that is not variant-tracked. */
+  variantAxes: string[];
+  /** Opt-in since `0030`. When true the item's stock also lives in
+   *  `item_batches`, the till sells first-expired-first, and a whole-item
+   *  stocktake is refused — one figure cannot say which batch expires when. */
+  tracksBatches: boolean;
   /** Off hides it from the register without losing its history. A seasonal
    *  item, or one the shop has stopped carrying but still has sales against. */
   isActive: boolean;

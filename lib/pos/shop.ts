@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
-import type { Counter } from "@/lib/pos/counter";
+import type { Counter, TenderId } from "@/lib/pos/counter";
 import {
   CURRENCIES,
   CURRENCY_FORMATS,
@@ -115,7 +115,7 @@ export async function getShopSettings(tenantId: string): Promise<ShopSettings> {
   const { data } = await supabase
     .from("tenant_settings")
     .select(
-      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts",
+      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts, restaurant_mode",
     )
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -126,6 +126,7 @@ export async function getShopSettings(tenantId: string): Promise<ShopSettings> {
   // so a value that fails `pickOption` here is a row written before this file
   // existed. Falling back beats rendering a select with nothing selected.
   return {
+    restaurantMode: Boolean(data.restaurant_mode),
     currency: pickOption(CURRENCIES, data.currency) ?? DEFAULT_SETTINGS.currency,
     currencyFormat:
       pickOption(CURRENCY_FORMATS, data.currency_format) ??
@@ -215,7 +216,7 @@ export async function listCounters(tenantId: string): Promise<Counter[]> {
   const { data } = await supabase
     .from("counters")
     .select(
-      "id, name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print, sort_order, receipt_day, receipt_serial",
+      "id, name, is_active, receipt_prefix, accepted_tenders, receipt_footer, auto_print, sort_order, receipt_day, receipt_serial",
     )
     .eq("tenant_id", tenantId)
     .order("sort_order")
@@ -226,8 +227,7 @@ export async function listCounters(tenantId: string): Promise<Counter[]> {
     name: row.name,
     isActive: row.is_active,
     receiptPrefix: row.receipt_prefix,
-    acceptsCash: row.accepts_cash,
-    acceptsCard: row.accepts_card,
+    acceptedTenders: (row.accepted_tenders ?? ["cash"]) as TenderId[],
     receiptFooter: row.receipt_footer,
     autoPrint: row.auto_print,
     sortOrder: row.sort_order,

@@ -63,6 +63,13 @@ export type ReceiptInput = {
     unit: string;
     quantity: number;
     unitCost: number;
+    /** Off the carton, for a batch-tracked item. Blank for everything else, and
+     *  blank is allowed even for a tracked one — the person at the door has a
+     *  queue behind them, and a delivery recorded without a batch is worth more
+     *  than a delivery not recorded. `record_receipt` puts it in the item's
+     *  plain stock and the Products screen says so. */
+    batchNo?: string;
+    expiresOn?: string;
   }[];
 };
 
@@ -134,6 +141,13 @@ export async function recordGoodsReceipt(
       unit: item?.unit ?? line.unit,
       quantity: line.quantity,
       unitCost: line.unitCost,
+      // Kept as typed and validated by the function, which is the side that
+      // knows whether the item is tracked at all — a flag the browser sent
+      // about somebody else's item is not a flag worth reading.
+      batchNo: (line.batchNo ?? "").trim().slice(0, 60),
+      expiresOn: /^\d{4}-\d{2}-\d{2}$/.test(line.expiresOn ?? "")
+        ? (line.expiresOn as string)
+        : "",
     };
   });
 
@@ -174,6 +188,8 @@ export async function recordGoodsReceipt(
       quantity: line.quantity,
       unit_cost: line.unitCost,
       line_total: lineTotalOf(line),
+      batch_no: line.batchNo || null,
+      expires_on: line.expiresOn || null,
     })),
     p_by: session.userId,
   });
@@ -218,6 +234,15 @@ export async function recordGoodsReceipt(
         other_cost: input.otherCost,
         total: totals.total,
         lines: lines.length,
+        // Named because a wrong expiry date is the one field on a delivery
+        // nobody catches until stock is refused at the till months later.
+        batches: lines
+          .filter((line) => line.batchNo || line.expiresOn)
+          .map((line) => ({
+            item_id: line.itemId,
+            batch_no: line.batchNo || null,
+            expires_on: line.expiresOn || null,
+          })),
         // Audited by name because this is the write that moves what the shop
         // believes its stock costs. "Why did the margin on the atta drop in
         // March" has to be answerable, and this is the entry that answers it.

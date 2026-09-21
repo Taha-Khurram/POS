@@ -78,6 +78,10 @@ export function SupplierSheet({
   const [taxNumber, setTaxNumber] = useState(supplier?.taxNumber ?? "");
   const [terms, setTerms] = useState(String(supplier?.paymentTermsDays ?? 0));
   const [notes, setNotes] = useState(supplier?.notes ?? "");
+  const [opening, setOpening] = useState(
+    supplier?.opening ? String(supplier.opening) : "",
+  );
+  const [openingOn, setOpeningOn] = useState(supplier?.openingOn ?? "");
   const [onList, setOnList] = useState(supplier?.isActive ?? true);
 
   const [armed, setArmed] = useState(false);
@@ -135,6 +139,13 @@ export function SupplierSheet({
 
   const stored = normalisePhone(phone);
 
+  // Signed and blank-is-nought, matching what the action reads. Most suppliers
+  // start level, and an empty box is that rather than a mistake.
+  const openingAmount = (() => {
+    const value = Number(opening.replace(/[,\s]/g, ""));
+    return Number.isFinite(value) ? value : 0;
+  })();
+
   // The same function the Server Action refuses with, so the sentence under the
   // form and the sentence that comes back from the server are one sentence.
   const complaint = checkSupplier({
@@ -146,6 +157,8 @@ export function SupplierSheet({
     taxNumber,
     paymentTermsDays: Number(terms) || 0,
     notes,
+    opening: openingAmount,
+    openingOn,
   });
 
   // A name somebody else on the list already carries, folded the way the index
@@ -181,6 +194,8 @@ export function SupplierSheet({
             <input type="hidden" name="supplier_id" value={supplier.id} />
           ) : null}
           <input type="hidden" name="payment_terms_days" value={terms} />
+          <input type="hidden" name="opening" value={opening} />
+          <input type="hidden" name="opening_on" value={openingOn} />
 
           <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-orchid-100 bg-paper-50 px-4 py-3.5 sm:px-5">
             <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
@@ -338,6 +353,51 @@ export function SupplierSheet({
                 Only your shop sees it.
               </p>
             </label>
+
+            {/* ---------------- What was owed before Flo ---------------- */}
+            <section className="rounded-2xl border border-orchid-100 p-3.5">
+              <h3 className="font-display text-[0.9375rem] font-semibold">
+                Opening balance
+              </h3>
+              <p className="mt-1 text-[0.8125rem] leading-relaxed text-graphite-700">
+                What you already owed them the day you started using Flo. Leave
+                it empty if you were level. Without it, their balance here will
+                never match the page at the back of your own book — and a figure
+                that does not match is one nobody checks twice.
+              </p>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="pos-label">Owed to them</span>
+                  <input
+                    className="pos-field text-right tabular-nums"
+                    inputMode="decimal"
+                    value={opening}
+                    placeholder="0"
+                    onChange={(event) => setOpening(event.target.value)}
+                  />
+                  <p className="pos-hint">
+                    A minus figure if you had paid them in advance.
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="pos-label">As at</span>
+                  <input
+                    type="date"
+                    className="pos-field"
+                    value={openingOn}
+                    disabled={openingAmount === 0}
+                    onChange={(event) => setOpeningOn(event.target.value)}
+                  />
+                  <p className="pos-hint">
+                    {openingAmount === 0
+                      ? "Nothing owed, so no date needed."
+                      : "The morning that figure was true."}
+                  </p>
+                </label>
+              </div>
+            </section>
 
             {/* ---------------- On the list ---------------- */}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3.5">

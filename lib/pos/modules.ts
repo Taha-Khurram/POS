@@ -20,6 +20,11 @@ import type { RolePermission } from "@/lib/pos/settings-options";
  *   - **Role** governs the two administration screens. Staff and Settings have
  *     no switch of their own and never should: a permission that could hide
  *     Settings is a permission an owner can hide Settings from themselves with.
+ *   - **The shop** governs Tables. It is not a permission at all — it is
+ *     whether this shop is a place people sit down in, which is
+ *     `tenant_settings.restaurant_mode`. A kiryana's owner must not be shown a
+ *     floor map, and a dhaba's cashier must be: taking an order is the floor's
+ *     whole job, so there is nobody to withhold it from.
  *
  * Hiding a link is presentation. Every gate below is re-checked on the server by
  * `requireModule` in `lib/pos/access.ts`, because a rail that does not draw a
@@ -29,6 +34,7 @@ import type { RolePermission } from "@/lib/pos/settings-options";
 export const MODULES = [
   "dashboard",
   "register",
+  "tables",
   "sales",
   "inventory",
   "purchasing",
@@ -46,6 +52,7 @@ export type ModuleAccess = Record<ModuleKey, boolean>;
 const ALL: ModuleAccess = {
   dashboard: true,
   register: true,
+  tables: true,
   sales: true,
   inventory: true,
   purchasing: true,
@@ -59,10 +66,18 @@ export function moduleAccess(
   role: TenantRole | null,
   /** The stored row for this person's access level, or null to read defaults. */
   permission: RolePermission | null,
+  /** What the shop itself is set up for. Only `restaurant_mode` today, and it
+   *  is the one thing on this function that is not about the person. */
+  shop?: { restaurantMode: boolean },
 ): ModuleAccess {
+  // Tables are the shop's shape rather than anybody's permission, so the answer
+  // is the same for the owner and the newest cashier — and `false` for every
+  // shop that has not switched it on, which is nearly all of them.
+  const tables = Boolean(shop?.restaurantMode);
+
   // The owner is allowed everything by definition — the same reason `admin` is
   // not one of the `ACCESS_LEVELS` that can be switched off.
-  if (role === "owner") return ALL;
+  if (role === "owner") return { ...ALL, tables };
 
   // No role claim at all is an account that is not attached to a shop yet. It
   // still reaches the dashboard, which says so; everything else would be a
@@ -70,6 +85,7 @@ export function moduleAccess(
   if (!role) {
     return {
       ...ALL,
+      tables: false,
       inventory: false,
       purchasing: false,
       customers: false,
@@ -86,6 +102,7 @@ export function moduleAccess(
     // signs somebody in and shows them nowhere to go.
     dashboard: true,
     register: true,
+    tables,
     // "Today's sales total is visible to everyone" is what the permissions
     // screen promises beside `can_view_reports`, and this screen is that total.
     // The profit and margin behind it live under Reports.

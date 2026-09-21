@@ -35,7 +35,8 @@ import {
   type CartLine,
   type Counter,
   type Discount,
-  type TenderId,
+  cartKey,
+  type TenderPart,
 } from "@/lib/pos/counter";
 import {
   UNITS,
@@ -59,10 +60,17 @@ import {
 import type { TillAccess } from "@/lib/pos/modules";
 import type { ShopSettings } from "@/lib/pos/settings-options";
 import type { ShopProfile } from "@/lib/pos/shop";
+import {
+  priceOf,
+  sellableVariants,
+  writeVariant,
+  type Variant,
+} from "@/lib/pos/variant";
 import { recordSale } from "./actions";
 import { dropHeldBill, holdBill } from "./hold-actions";
 import { PaymentSheet } from "./payment-sheet";
 import { Receipt, type Sale } from "./receipt";
+import { VariantPicker } from "./variant-picker";
 
 /**
  * The register.
@@ -90,6 +98,7 @@ import { Receipt, type Sale } from "./receipt";
  */
 export function Till({
   items,
+  variants,
   customers,
   counter,
   shop,
@@ -99,6 +108,11 @@ export function Till({
   drawerOpen,
 }: {
   items: Product[];
+  /** Every live variant in the shop, by item id. Read whole on the server, for
+   *  the reason the item list is: a cloth house's cashier picks a size from a
+   *  grid and a round trip per tap is a grid nobody uses. Empty for a shop that
+   *  sells nothing by variant, which is most of them. */
+  variants: Map<string, Variant[]>;
   /** Everyone the till may put a bill against — the shop's own, minus the ones
    *  switched off. Attaching one is optional and stays that way: most bills in
    *  most shops are a walk-in, and a register that insists on a name before it
@@ -128,6 +142,11 @@ export function Till({
   const [sale, setSale] = useState<Sale | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+
+  // Which item's grid is open, if any. A variant item cannot go straight on the
+  // bill — the customer is buying a size, not the line — so `add` opens this
+  // instead and the choice comes back through `add(item, variant)`.
+  const [picking, setPicking] = useState<Product | null>(null);
 
   /**
    * What this tablet has sold since the page loaded, per item.
@@ -208,36 +227,58 @@ export function Till({
 
   /* ---------------- Putting it on the bill ---------------- */
 
-  const add = useCallback((item: Product) => {
+  const add = useCallback((item: Product, variant?: Variant) => {
+    const grid = variants.get(item.id) ?? [];
+
+    // A variant item with a grid is never added directly: the customer is
+    // buying a medium blue and the till has to be told which. An item *set* to
+    // variant whose grid nobody has built yet falls through and sells as one
+    // line, which is the honest reading of a grid that does not exist.
+    if (!variant && grid.length > 0) {
+      setPicking(item);
+      setNotice(null);
+      return;
+    }
+
+    const key = cartKey(item.id, variant?.id);
     const fractional = UNITS.find((unit) => unit.id === item.unit)?.fractional ?? false;
-    const shelf = round3(item.stock - (sold[item.id] ?? 0));
+
+    // A variant's shelf is its own row's, not the item's total — the whole
+    // point of the grid is that eight mediums and no larges is not "eight in
+    // stock" for somebody asking for a large.
+    const counted = variant ? variant.quantity : item.stock;
+    const shelf = round3(counted - (sold[key] ?? 0));
+    const label = variant ? writeVariant(variant) : "";
+    const price = variant ? priceOf(variant, item.price) : item.price;
 
     // Nothing left to sell. Refused here rather than warned about, and said in
     // words that tell the cashier what to do next: the shelf count is what the
     // till bills from, so an item at zero has to be counted in on Products &
     // stock before it can go on a bill.
-    const onBill =
-      lines.find((line) => line.id === item.id)?.quantity ?? 0;
+    const onBill = lines.find((line) => line.id === key)?.quantity ?? 0;
     const step = fractional ? 0.5 : 1;
+    const what = label ? `${item.name} (${label})` : item.name;
 
     if (round3(shelf - onBill) < step) {
       setNotice(
         onBill > 0
-          ? `That is all the ${item.name} Flo counts — ${shelf.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(item.unit)}. Count the shelf in on Products & stock to sell more.`
-          : `${item.name} is out of stock, so it cannot go on a bill. Count it in on Products & stock first.`,
+          ? `That is all the ${what} Flo counts — ${shelf.toLocaleString("en-PK", { maximumFractionDigits: 3 })} ${unitShort(item.unit)}. Count the shelf in on Products & stock to sell more.`
+          : `${what} is out of stock, so it cannot go on a bill. Count it in on Products & stock first.`,
       );
       return;
     }
 
     setLines((previous) => {
-      const existing = previous.find((line) => line.id === item.id);
+      const existing = previous.find((line) => line.id === key);
 
       // The same bottle scanned twice is two bottles, not two rows. A second
       // row for an item already on the bill is how a customer ends up
-      // disputing a receipt that is actually correct.
+      // disputing a receipt that is actually correct. Two *different* sizes of
+      // one item are two rows, because they are two things on the counter —
+      // which is exactly what `cartKey` decides.
       if (existing) {
         return previous.map((line) =>
-          line.id === item.id
+          line.id === key
             ? { ...line, quantity: round3(line.quantity + step) }
             : line,
         );
@@ -246,14 +287,17 @@ export function Till({
       return [
         ...previous,
         {
-          id: item.id,
+          id: key,
+          itemId: item.id,
+          variantId: variant?.id ?? null,
+          variantLabel: label,
           name: item.name,
           urdu: item.urdu,
           // The catalog's own unit, which is what `sale_lines.unit` stores.
           // Shortened to "pc" or "kg" only where it is shown.
           unit: item.unit,
           quantity: 1,
-          price: item.price,
+          price,
           taxRate: item.taxRate,
           fractional,
           // What the page loaded, less whatever this tablet has sold since.
@@ -262,9 +306,10 @@ export function Till({
       ];
     });
 
+    setPicking(null);
     setNotice(null);
     setConfirmClear(false);
-  }, [sold, lines]);
+  }, [sold, lines, variants]);
 
   /** Take an item off the list: on the bill, box emptied, list shut, focus
    *  back where the scanner types. */
@@ -392,7 +437,7 @@ export function Till({
   const toast = useToast();
 
   const tendered = async (
-    tender: TenderId,
+    parts: TenderPart[],
     given: number | null,
     change: number,
     force: boolean,
@@ -406,8 +451,12 @@ export function Till({
       : await recordSale({
           saleId: saleId.current,
           counterId: counter.id,
-          tender,
-          lines: frozen.map((line) => ({ id: line.id, quantity: line.quantity })),
+          tenders: parts,
+          lines: frozen.map((line) => ({
+            id: line.itemId,
+            variantId: line.variantId,
+            quantity: line.quantity,
+          })),
           // The id only. The server re-reads the row, the same way it re-prices
           // every line — the browser says who, never what is true about them.
           customerId: customer?.id ?? null,
@@ -440,9 +489,13 @@ export function Till({
       // happened, not a view onto rows that can change afterwards.
       customer: customer ? customer.name : null,
       bill,
-      // One tender, because the sheet takes one. A list all the same, so the
-      // roll already draws a split bill the day the sheet can settle one.
-      tenders: [{ method: tender, amount: bill.total }],
+      // Whatever the sheet settled with: one part on almost every bill, two
+      // when somebody put half on a card. The roll has been able to draw a
+      // split since it was written; `0032` is what finally produces one.
+      tenders: parts.map((part) => ({
+        method: part.method,
+        amount: part.amount,
+      })),
       tendered: given,
       change,
     });
@@ -535,7 +588,13 @@ export function Till({
       customerId: customer?.id ?? null,
       // Ids and quantities. The prices are deliberately not sent: resuming
       // re-prices from the catalog, the same way recording a sale does.
-      lines: lines.map((line) => ({ id: line.id, quantity: line.quantity })),
+      lines: lines.map((line) => ({
+        // The catalog row and which one of it. The action re-prices both from
+        // the shop's own rows — the browser never decides what anything costs.
+        id: line.itemId,
+        variantId: line.variantId,
+        quantity: line.quantity,
+      })),
       discount,
     }).catch(() => ({
       ok: false as const,
@@ -584,17 +643,36 @@ export function Till({
         continue;
       }
 
+      // The size or colour it was parked as, re-found in today's grid. A row
+      // switched off while the bill was down is dropped like a withdrawn item
+      // and said out loud — the customer's medium blue is not a large blue.
+      const variant = line.variantId
+        ? (variants.get(item.id) ?? []).find((one) => one.id === line.variantId)
+        : undefined;
+
+      if (line.variantId && !variant) {
+        lost.push(item.name);
+        continue;
+      }
+
+      const key = cartKey(item.id, variant?.id);
+      const counted = variant ? variant.quantity : item.stock;
+
       restored.push({
-        id: item.id,
+        id: key,
+        itemId: item.id,
+        variantId: variant?.id ?? null,
+        variantLabel: variant ? writeVariant(variant) : "",
         name: item.name,
         urdu: item.urdu,
         unit: item.unit,
         quantity: line.quantity,
-        // Today's price, off today's catalog.
-        price: item.price,
+        // Today's price, off today's catalog — the variant's own where it has
+        // one, which is the same rule the till follows when adding fresh.
+        price: variant ? priceOf(variant, item.price) : item.price,
         taxRate: item.taxRate,
         fractional: UNITS.find((unit) => unit.id === item.unit)?.fractional ?? false,
-        stock: round3(item.stock - (sold[item.id] ?? 0)),
+        stock: round3(counted - (sold[key] ?? 0)),
       });
     }
 
@@ -921,6 +999,13 @@ export function Till({
                         <span className="font-medium text-graphite-900">
                           {line.name}
                         </span>
+                        {/* Which size or colour, beside the name rather than
+                            under it: a customer disputing a receipt is looking
+                            for the word "Medium", and a bill that buries it is
+                            a bill the cashier has to explain. */}
+                        {line.variantLabel ? (
+                          <span className="pos-badge">{line.variantLabel}</span>
+                        ) : null}
                         <span
                           dir="rtl"
                           className="text-[0.8125rem] text-graphite-500"
@@ -1058,6 +1143,17 @@ export function Till({
           </p>
         ) : null}
       </section>
+
+      {picking ? (
+        <VariantPicker
+          item={picking}
+          variants={sellableVariants(variants.get(picking.id) ?? [])}
+          sold={sold}
+          money={money}
+          onPick={(variant: Variant) => add(picking, variant)}
+          onClose={() => setPicking(null)}
+        />
+      ) : null}
 
       {paying ? (
         <PaymentSheet

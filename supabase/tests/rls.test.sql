@@ -298,6 +298,69 @@ values
    'f8888882-0000-4000-8000-000000000001',
    'f7777772-0000-4000-8000-000000000001', 'Chai patti 1 kg', 'packet', 3, 330, 990, 330.0000);
 
+-- Variants, added in 0031. Tenant B sells one item by size and colour. Its
+-- grid is its price list and its stock depth in one table.
+update public.items
+   set tracking = 'variant',
+       variant_axes = array['Size','Colour'],
+       -- Given a code so the cross-table trigger below has something real to
+       -- collide with. Without it that assertion would pass for the wrong
+       -- reason and prove nothing.
+       barcode = 'BKK-CODE-1'
+ where id = '0b0b0b0b-0000-4000-8000-000000000001';
+
+insert into public.item_variants (id, tenant_id, item_id, option_a, option_b, barcode, quantity)
+values
+  ('fa0a0a01-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001',
+   '0b0b0b0b-0000-4000-8000-000000000001', 'Half', 'Plain', 'V-1', 4),
+  ('fa0a0a02-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001',
+   '0b0b0b0b-0000-4000-8000-000000000001', 'Full', 'Plain', 'V-2', 2);
+
+-- One row per combination, folded for case: "Plain" and "plain" are one thing
+-- on one shelf and two rows would be two stock figures for it.
+select throws_ok(
+  $$ insert into public.item_variants (tenant_id, item_id, option_a, option_b)
+     values ('bbbbbbbb-0000-4000-8000-000000000001',
+             '0b0b0b0b-0000-4000-8000-000000000001', 'half', 'PLAIN') $$,
+  '23505', null,
+  'one item cannot hold the same combination twice, whatever the case'
+);
+
+-- An item is split by batch or by variant, never both. Batches-per-variant is a
+-- third level for a shop that does not exist.
+select throws_ok(
+  $$ update public.items set tracks_batches = true
+      where id = '0b0b0b0b-0000-4000-8000-000000000001' $$,
+  '23514', null,
+  'an item cannot be counted by batch and sold by variant at once'
+);
+
+-- A barcode means exactly one thing. Two tables, so no single index can say it
+-- — the trigger in 0031 does, in both directions.
+select throws_ok(
+  $$ insert into public.item_variants (tenant_id, item_id, option_a, barcode)
+     values ('bbbbbbbb-0000-4000-8000-000000000001',
+             '0b0b0b0b-0000-4000-8000-000000000001', 'Extra', 'BKK-CODE-1') $$,
+  '23505', null,
+  'a variant cannot take a barcode an item already carries'
+);
+
+-- One payment each, and an opening balance on tenant A's supplier, so the
+-- ledger read tests have something to leak. What a shop owes and to whom is its
+-- cash position — the one thing a competitor could use directly.
+update public.suppliers
+   set opening_balance = 50000, opening_balance_on = current_date - 90
+ where id = 'f5555551-0000-4000-8000-000000000001';
+
+insert into public.supplier_payments (tenant_id, supplier_id, paid_on, amount, method, reference)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001',
+   'f5555551-0000-4000-8000-000000000001', current_date - 10, 20000, 'bank', 'IBFT-1'),
+  ('bbbbbbbb-0000-4000-8000-000000000001',
+   'f5555553-0000-4000-8000-000000000001', current_date - 5, 900, 'cash', null);
+
 -- One recorded sale each, so the read tests have something to leak.
 insert into public.sales (id, tenant_id, branch_id, counter_id, customer_id, receipt_number, business_day, subtotal, total)
 select
@@ -327,6 +390,42 @@ values
   ('0b0b0b0b-0000-4000-8000-000000000001',
    'bbbbbbbb-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
    1200.00, 800.00, 'Karahi', 'Mutton');
+
+-- Batches, added in 0030. Tenant A tracks one item by batch: two live batches,
+-- one of them already out of date. What a shop holds and when it goes off is
+-- both commercially sensitive and, for a pharmacy, regulated.
+update public.items
+   set tracks_batches = true
+ where id = '0a0a0a0a-0000-4000-8000-000000000001';
+
+insert into public.item_batches (id, tenant_id, item_id, batch_no, expires_on, quantity, unit_cost)
+values
+  ('f9999991-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001',
+   '0a0a0a0a-0000-4000-8000-000000000001', 'B-GOOD', current_date + 90, 12, 148),
+  ('f9999992-0000-4000-8000-000000000001',
+   'aaaaaaaa-0000-4000-8000-000000000001',
+   '0a0a0a0a-0000-4000-8000-000000000001', 'B-OLD', current_date - 3, 4, 140);
+
+-- One batch per item per number-and-expiry. A second delivery of the same batch
+-- tops the row up; a second row would be two expiry dates for one carton.
+select throws_ok(
+  $$ insert into public.item_batches (tenant_id, item_id, batch_no, expires_on, quantity)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '0a0a0a0a-0000-4000-8000-000000000001', 'B-GOOD', current_date + 90, 1) $$,
+  '23505', null,
+  'one item cannot hold the same batch number and expiry twice'
+);
+
+-- A batch is a number, a date, or both. Neither is not a batch — it is the
+-- item's ordinary stock, and there is already a column for that.
+select throws_ok(
+  $$ insert into public.item_batches (tenant_id, item_id, quantity)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '0a0a0a0a-0000-4000-8000-000000000001', 5) $$,
+  '23514', null,
+  'a batch with neither a number nor an expiry is refused'
+);
 
 insert into public.sale_lines
   (tenant_id, sale_id, item_id, name_snapshot, unit, quantity, unit_price, line_total, cost_snapshot)
@@ -378,6 +477,113 @@ from (values
    null::uuid, 500.00)
 ) as v (id, tenant_id, counter_id, opened_by, opening_float)
 join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+-- Tenders, widened by 0032. Tenant A's front counter takes the wallets; B's
+-- takes cash only, which is the state a shop that has never opened Settings is
+-- in. The column replaced two booleans, so an accepted method is a value in a
+-- list now and not a column somebody forgot to add.
+update public.counters
+   set accepted_tenders = array['cash','card','easypaisa','jazzcash']
+ where id = 'ccccccc1-0000-4000-8000-000000000001';
+
+-- A reference against a wallet payment. Sensitive in its own right: an
+-- Easypaisa transaction id is a handle on somebody's account, and it is the
+-- one field on a tender that identifies a person.
+insert into public.sale_tenders (tenant_id, sale_id, method, amount, reference)
+values
+  ('aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001',
+   'easypaisa', 0.01, 'EP-9912345');
+
+-- Restaurant mode, added in 0033. Tenant B is the karahi house and the only one
+-- of the two that seats anybody — which is also what makes these tables a
+-- clean leak test: tenant A must see an empty floor, not a filtered one.
+update public.tenant_settings
+   set restaurant_mode = true
+ where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001';
+
+insert into public.dining_tables (id, tenant_id, branch_id, name, area, seats, sort_order)
+select
+  v.id, v.tenant_id, b.id, v.name, v.area, v.seats, v.sort_order
+from (values
+  ('fb0b0b01-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
+   'T1', 'Family hall', 6::smallint, 1),
+  ('fb0b0b02-0000-4000-8000-000000000001'::uuid, 'bbbbbbbb-0000-4000-8000-000000000001'::uuid,
+   'T2', 'Terrace', 4::smallint, 2)
+) as v (id, tenant_id, name, area, seats, sort_order)
+join public.branches b on b.tenant_id = v.tenant_id and b.is_primary;
+
+-- One name per shop, whatever the case: "t1" and "T1" are two rows nobody can
+-- tell apart on a kitchen ticket, which is the whole point of the index.
+select throws_ok(
+  $$ insert into public.dining_tables (tenant_id, branch_id, name)
+     select 'bbbbbbbb-0000-4000-8000-000000000001', b.id, 't1'
+       from public.branches b
+      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
+  '23505', null,
+  'one shop cannot have two tables called T1'
+);
+
+insert into public.table_orders
+  (id, tenant_id, branch_id, table_id, order_number, service, covers, opened_by)
+select
+  'fb1b1b01-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001',
+  b.id, 'fb0b0b01-0000-4000-8000-000000000001', 'T-00001', 'dine_in', 4::smallint, null
+from public.branches b
+where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary;
+
+-- **One open bill per table.** The index and not a Server Action, because two
+-- waiters opening T1 in the same second is the ordinary way a restaurant ends
+-- up charging one party twice.
+select throws_ok(
+  $$ insert into public.table_orders
+       (id, tenant_id, branch_id, table_id, order_number, service)
+     select gen_random_uuid(), 'bbbbbbbb-0000-4000-8000-000000000001', b.id,
+            'fb0b0b01-0000-4000-8000-000000000001', 'T-00002', 'dine_in'
+       from public.branches b
+      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
+  '23505', null,
+  'a table cannot carry two open bills at once'
+);
+
+-- A dine-in is at a table and a parcel is not. An order with neither is one
+-- nobody can find; an order with both is one two waiters will serve.
+select throws_ok(
+  $$ insert into public.table_orders
+       (id, tenant_id, branch_id, order_number, service)
+     select gen_random_uuid(), 'bbbbbbbb-0000-4000-8000-000000000001', b.id,
+            'T-00003', 'dine_in'
+       from public.branches b
+      where b.tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' and b.is_primary $$,
+  '23514', null,
+  'a dine-in order with no table is refused'
+);
+
+insert into public.item_modifiers (id, tenant_id, item_id, group_name, name, price_delta)
+values
+  ('fb2b2b01-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001',
+   '0b0b0b0b-0000-4000-8000-000000000001', 'Add-ons', 'Extra raita', 80);
+
+insert into public.kots (id, tenant_id, order_id, kot_number)
+values
+  ('fb3b3b01-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001',
+   'fb1b1b01-0000-4000-8000-000000000001', 'KOT-00001');
+
+insert into public.table_order_lines
+  (id, tenant_id, order_id, item_id, name_snapshot, unit, quantity, unit_price, course, status, kot_id)
+values
+  ('fb4b4b01-0000-4000-8000-000000000001',
+   'bbbbbbbb-0000-4000-8000-000000000001', 'fb1b1b01-0000-4000-8000-000000000001',
+   '0b0b0b0b-0000-4000-8000-000000000001', 'Mutton karahi', 'plate',
+   1, 1200.00, 'main', 'sent', 'fb3b3b01-0000-4000-8000-000000000001');
+
+insert into public.table_order_line_modifiers
+  (tenant_id, line_id, modifier_id, name_snapshot, price_delta)
+values
+  ('bbbbbbbb-0000-4000-8000-000000000001',
+   'fb4b4b01-0000-4000-8000-000000000001',
+   'fb2b2b01-0000-4000-8000-000000000001', 'Extra raita', 80);
 
 -- =============================================================================
 -- Tenant A's owner
@@ -791,6 +997,259 @@ select throws_ok(
   'tenant user cannot call save_purchase_order'
 );
 
+-- The supplier ledger, added in 0029. A balance is the shop's cash position
+-- seen from the other side, and the payments under it name its bank references.
+select is(
+  (select count(*) from public.supplier_payments), 1::bigint,
+  'tenant A sees only its own supplier payments'
+);
+
+select is_empty(
+  $$ select 1 from public.supplier_payments
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B supplier payments'
+);
+
+select throws_ok(
+  $$ insert into public.supplier_payments (tenant_id, supplier_id, paid_on, amount)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             'f5555551-0000-4000-8000-000000000001', current_date, 1) $$,
+  '42501', null,
+  'tenant user cannot record a supplier payment directly'
+);
+
+select throws_ok(
+  $$ update public.supplier_payments set amount = 1 $$,
+  '42501', null,
+  'tenant user cannot change what was paid'
+);
+
+-- `supplier_balances` is the one purchasing function granted to `authenticated`,
+-- like `dashboard_summary` and `reports_summary`. It is `security invoker`, so
+-- naming another shop is a filter that RLS then empties rather than a way in —
+-- which is the property that has to be proven, not assumed.
+select is(
+  (select count(*) from public.supplier_balances('aaaaaaaa-0000-4000-8000-000000000001')),
+  2::bigint,
+  'supplier_balances returns tenant A''s own two suppliers'
+);
+
+select is_empty(
+  $$ select 1 from public.supplier_balances('bbbbbbbb-0000-4000-8000-000000000001') $$,
+  'supplier_balances names another tenant and gets nothing, because RLS is the gate'
+);
+
+-- The invoiced figure is the deliveries' own totals, carriage included: 3120
+-- of goods plus 200 of bhaara on tenant A's single receipt.
+select is(
+  (select invoiced from public.supplier_balances('aaaaaaaa-0000-4000-8000-000000000001')
+    where supplier_id = 'f5555551-0000-4000-8000-000000000001'),
+  3320::numeric,
+  'a supplier''s invoiced total counts the freight on the delivery'
+);
+
+-- Batches, added in 0030. A shop's expiry dates are its regulatory exposure and
+-- its markdown schedule in one table.
+select is(
+  (select count(*) from public.item_batches), 2::bigint,
+  'tenant A sees its own two batches'
+);
+
+select is_empty(
+  $$ select 1 from public.item_batches
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read tenant B batches'
+);
+
+-- Rule 3. `private.move_stock` is the only writer of item_batches.quantity
+-- anywhere, and it is revoked from everybody — which is what stops the two
+-- counts drifting, not a policy.
+select throws_ok(
+  $$ update public.item_batches set quantity = 999 $$,
+  '42501', null,
+  'tenant user cannot move a batch count directly'
+);
+
+select throws_ok(
+  $$ insert into public.item_batches (tenant_id, item_id, batch_no, quantity)
+     values ('aaaaaaaa-0000-4000-8000-000000000001',
+             '0a0a0a0a-0000-4000-8000-000000000001', 'FORGED', 100) $$,
+  '42501', null,
+  'tenant user cannot open a batch directly'
+);
+
+select throws_ok(
+  $$ select public.adjust_batch('aaaaaaaa-0000-4000-8000-000000000001',
+       'f9999991-0000-4000-8000-000000000001', 0, 'expired', null, null) $$,
+  '42501', null,
+  'tenant user cannot write a batch off'
+);
+
+select throws_ok(
+  $$ select public.open_batch('aaaaaaaa-0000-4000-8000-000000000001',
+       '0a0a0a0a-0000-4000-8000-000000000001', 'X', null, 1, 0, null, null) $$,
+  '42501', null,
+  'tenant user cannot call open_batch'
+);
+
+-- Variants, added in 0031. A shop's grid is its price list and its stock depth,
+-- and tenant A must see none of tenant B's.
+select is_empty(
+  $$ select 1 from public.item_variants $$,
+  'tenant A has no variants of its own and sees none of tenant B''s'
+);
+
+-- Rule 3. `private.move_stock` is the only writer of item_variants.quantity and
+-- `public.save_variants` the only writer of the grid — which is what keeps the
+-- rows and items.stock in step, not a policy.
+select throws_ok(
+  $$ update public.item_variants set quantity = 999 $$,
+  '42501', null,
+  'tenant user cannot move a variant count directly'
+);
+
+select throws_ok(
+  $$ select public.save_variants('aaaaaaaa-0000-4000-8000-000000000001',
+       '0a0a0a0a-0000-4000-8000-000000000001', array['Size'], '[]'::jsonb, null) $$,
+  '42501', null,
+  'tenant user cannot call save_variants'
+);
+
+select throws_ok(
+  $$ select public.adjust_variant('aaaaaaaa-0000-4000-8000-000000000001',
+       'fa0a0a01-0000-4000-8000-000000000001', 1, 'count', null, null) $$,
+  '42501', null,
+  'tenant user cannot call adjust_variant'
+);
+
+-- Tenders, widened by 0032. The reference is the sensitive half: a wallet
+-- transaction id is a handle on the customer's own account.
+select is(
+  (select count(*) from public.sale_tenders where reference is not null), 1::bigint,
+  'tenant A sees the reference on its own wallet payment'
+);
+
+select is_empty(
+  $$ select 1 from public.sale_tenders
+     where tenant_id = 'bbbbbbbb-0000-4000-8000-000000000001' $$,
+  'tenant A cannot read how tenant B was paid'
+);
+
+-- Which methods a counter takes is a setting, and Rule 3 holds: the shop reads
+-- it and the Server Action writes it. A till that could widen its own list is a
+-- till that can take a method the shop never agreed to reconcile.
+select throws_ok(
+  $$ update public.counters set accepted_tenders = array['cash'] $$,
+  '42501', null,
+  'tenant user cannot change which tenders a counter takes'
+);
+
+-- Restaurant mode, added in 0033. Tenant A is a kiryana and seats nobody, so
+-- each of these is empty for the right reason and the wrong one at once —
+-- which is why B's own session asserts the other half further down.
+select is_empty(
+  $$ select 1 from public.dining_tables $$,
+  'tenant A has no floor of its own and cannot see tenant B''s'
+);
+
+select is_empty(
+  $$ select 1 from public.table_orders $$,
+  'tenant A cannot read who is sitting at tenant B''s tables'
+);
+
+select is_empty(
+  $$ select 1 from public.table_order_lines $$,
+  'tenant A cannot read what tenant B''s tables ordered'
+);
+
+select is_empty(
+  $$ select 1 from public.table_order_line_modifiers $$,
+  'tenant A cannot read what tenant B''s tables asked for on the side'
+);
+
+select is_empty(
+  $$ select 1 from public.kots $$,
+  'tenant A cannot read tenant B''s kitchen tickets'
+);
+
+select is_empty(
+  $$ select 1 from public.item_modifiers $$,
+  'tenant A cannot read tenant B''s add-ons and what they cost'
+);
+
+-- Rule 3 again, across the floor. Every one of these is a security-definer
+-- function for the reason `record_sale` is: a ticket and the lines it fired
+-- have to become true together, and a settle claims a receipt number.
+select throws_ok(
+  $$ insert into public.table_orders (id, tenant_id, branch_id, order_number, service)
+     select gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', b.id,
+            'T-00001', 'parcel'
+       from public.branches b
+      where b.tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' and b.is_primary $$,
+  '42501', null,
+  'tenant user cannot open a table order directly'
+);
+
+select throws_ok(
+  $$ update public.table_order_lines set status = 'void' $$,
+  '42501', null,
+  'tenant user cannot void a line off a bill directly'
+);
+
+select throws_ok(
+  $$ select public.open_table_order('aaaaaaaa-0000-4000-8000-000000000001',
+       gen_random_uuid(), null, 'parcel', null, null, null) $$,
+  '42501', null,
+  'tenant user cannot call open_table_order'
+);
+
+select throws_ok(
+  $$ select public.add_order_lines('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb1b1b01-0000-4000-8000-000000000001', '[]'::jsonb, null) $$,
+  '42501', null,
+  'tenant user cannot call add_order_lines'
+);
+
+select throws_ok(
+  $$ select public.send_to_kitchen('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb1b1b01-0000-4000-8000-000000000001', null) $$,
+  '42501', null,
+  'tenant user cannot call send_to_kitchen'
+);
+
+select throws_ok(
+  $$ select public.void_order_line('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb4b4b01-0000-4000-8000-000000000001', 'changed their mind', null) $$,
+  '42501', null,
+  'tenant user cannot call void_order_line'
+);
+
+select throws_ok(
+  $$ select public.move_table_order('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb1b1b01-0000-4000-8000-000000000001',
+       'fb0b0b02-0000-4000-8000-000000000001') $$,
+  '42501', null,
+  'tenant user cannot call move_table_order'
+);
+
+select throws_ok(
+  $$ select public.cancel_table_order('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb1b1b01-0000-4000-8000-000000000001', 'walked out', null) $$,
+  '42501', null,
+  'tenant user cannot call cancel_table_order'
+);
+
+-- The one that claims a receipt number. A tenant that could call it could mint
+-- a sale against any counter it could name.
+select throws_ok(
+  $$ select public.settle_table_order('aaaaaaaa-0000-4000-8000-000000000001',
+       'fb1b1b01-0000-4000-8000-000000000001',
+       'ccccccc1-0000-4000-8000-000000000001', gen_random_uuid(),
+       current_date, '[]'::jsonb, 0, 0, null) $$,
+  '42501', null,
+  'tenant user cannot call settle_table_order'
+);
+
 -- Takings, added in 0011. The commercially expensive leak: one shop reading
 -- another's day, or writing itself a sale that never happened.
 select is(
@@ -1121,6 +1580,63 @@ select throws_ok(
        1000, 'count', null, null, null) $$,
   '42501', null,
   'tenant user cannot call private.move_stock'
+);
+
+-- =============================================================================
+-- Tenant B's owner — the restaurant, and the other half of every assertion
+-- above it.
+--
+-- Tenant A reads an empty floor, which is the right answer for a kiryana and
+-- also the answer a policy that returned nothing to anybody would give. This
+-- block is what tells the two apart: B's own session must read exactly its own
+-- two tables, its one open bill and its own kitchen ticket, and none of A's
+-- catalog.
+-- =============================================================================
+set local request.jwt.claims = '{"sub":"22222222-0000-4000-8000-000000000001","role":"authenticated","tenant_id":"bbbbbbbb-0000-4000-8000-000000000001","tenant_role":"owner","platform_role":null}';
+
+select is(
+  (select count(*) from public.dining_tables), 2::bigint,
+  'tenant B reads its own two tables'
+);
+
+select is(
+  (select count(*) from public.table_orders where status = 'open'), 1::bigint,
+  'tenant B reads the one bill open on its floor'
+);
+
+select is(
+  (select count(*) from public.table_order_lines), 1::bigint,
+  'tenant B reads what that table ordered'
+);
+
+select is(
+  (select count(*) from public.kots), 1::bigint,
+  'tenant B reads its own kitchen ticket'
+);
+
+select is(
+  (select price_delta from public.item_modifiers limit 1), 80::numeric,
+  'tenant B reads what its own add-on costs'
+);
+
+select is_empty(
+  $$ select 1 from public.items
+     where tenant_id = 'aaaaaaaa-0000-4000-8000-000000000001' $$,
+  'the restaurant cannot read the kiryana''s catalog'
+);
+
+-- Rule 3 holds on this side too. Owner is the widest role there is, and it is
+-- still select-only.
+select throws_ok(
+  $$ update public.table_orders set status = 'settled' $$,
+  '42501', null,
+  'even the owner cannot settle a table by hand'
+);
+
+select throws_ok(
+  $$ delete from public.kots $$,
+  '42501', null,
+  'even the owner cannot delete a kitchen ticket'
 );
 
 -- =============================================================================

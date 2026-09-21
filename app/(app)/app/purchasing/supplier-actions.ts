@@ -67,6 +67,8 @@ type SupplierRow = {
   tax_number: string | null;
   payment_terms_days: number;
   notes: string | null;
+  opening_balance: number;
+  opening_balance_on: string | null;
   is_active: boolean;
 };
 
@@ -80,6 +82,7 @@ type SupplierRow = {
  */
 function readSupplier(formData: FormData): SupplierRow | string {
   const terms = Number(text(formData.get("payment_terms_days")));
+  const opening = Number(text(formData.get("opening")).replace(/,/g, ""));
 
   const draft = {
     name: text(formData.get("name")),
@@ -95,6 +98,11 @@ function readSupplier(formData: FormData): SupplierRow | string {
       Number.isFinite(terms) && terms >= 0 && terms <= TERMS_MAX_DAYS
         ? Math.trunc(terms)
         : 0,
+    // Signed, and a blank box is nought rather than a refusal — most suppliers
+    // start level. `checkSupplier` still bounds it, because a crafted body can
+    // carry any number and this one is what the shop believes it owes.
+    opening: Number.isFinite(opening) ? Math.round(opening * 100) / 100 : 0,
+    openingOn: text(formData.get("opening_on")),
     // Not collapsed like the rest: a note is the one field somebody writes two
     // lines in, and flattening it would join them mid-sentence.
     notes:
@@ -118,6 +126,10 @@ function readSupplier(formData: FormData): SupplierRow | string {
     tax_number: draft.taxNumber || null,
     payment_terms_days: draft.paymentTermsDays,
     notes: draft.notes || null,
+    opening_balance: draft.opening,
+    // Nought needs no date: starting level is not a claim about any particular
+    // morning, and a date beside a zero is noise on the statement.
+    opening_balance_on: draft.opening === 0 ? null : draft.openingOn,
     // An unchecked box is absent from the body altogether, so absent is off.
     is_active: text(formData.get("is_active")) === "on",
   };
@@ -149,7 +161,7 @@ async function ownSupplier(tenantId: string, supplierId: unknown) {
   const { data } = await createAdminClient()
     .from("suppliers")
     .select(
-      "id, name, contact_name, phone, email, address, tax_number, payment_terms_days, notes, is_active",
+      "id, name, contact_name, phone, email, address, tax_number, payment_terms_days, notes, opening_balance, opening_balance_on, is_active",
     )
     .eq("tenant_id", tenantId)
     .eq("id", supplierId)

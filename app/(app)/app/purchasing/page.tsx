@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { IconBox, IconTag, IconTruck } from "@/components/pos/icons";
+import { notFound } from "next/navigation";
+
+import { IconBox, IconCash, IconTag, IconTruck } from "@/components/pos/icons";
 import { requireModule } from "@/lib/pos/access";
-import { moneyFormatter } from "@/lib/pos/counter";
+import { currentBusinessDay, moneyFormatter } from "@/lib/pos/counter";
 import { listProducts } from "@/lib/pos/items";
 import { getShopSettings } from "@/lib/pos/shop";
-import { listSuppliers } from "@/lib/pos/suppliers";
+import { foldName } from "@/lib/pos/supplier";
+import { getSupplier, listSuppliers } from "@/lib/pos/suppliers";
+import { balanceState, type SupplierBalance } from "@/lib/pos/ledger";
+import { getSupplierStatement, listSupplierBalances, listSupplierPayments } from "@/lib/pos/ledgers";
 import type { GoodsReceipt, PurchaseOrder } from "@/lib/pos/purchase";
 import {
   listGoodsReceipts,
@@ -15,7 +20,9 @@ import {
   purchaseTotals,
 } from "@/lib/pos/purchases";
 import { OrdersPanel } from "./orders-panel";
+import { PaymentsPanel } from "./payments-panel";
 import { ReceiptsPanel } from "./receipts-panel";
+import { SupplierRecord } from "./supplier-record";
 import { SuppliersPanel } from "./suppliers-panel";
 
 export const metadata: Metadata = {
@@ -28,8 +35,11 @@ export const metadata: Metadata = {
  *
  * `?tab=orders` — the default — is asked with a distributor on the phone: what
  * am I still owed. `?tab=deliveries` is asked when a margin looks wrong: what
- * did this actually cost me, carriage and all. `?tab=suppliers` is asked when
- * the shelf is empty on a Friday: who do I ring.
+ * did this actually cost me, carriage and all. `?tab=payments` is asked with a
+ * bank statement in the other hand: what went out this month. `?tab=suppliers`
+ * is asked when the shelf is empty on a Friday: who do I ring — and
+ * `&supplier=<id>` is one distributor's account, the way `?customer=<id>` is
+ * one person's record.
  *
  * The section lives in the URL the same way Settings' and the item list's do:
  * the page stays a server component, the tables are HTML on first paint, and
@@ -44,6 +54,7 @@ export const metadata: Metadata = {
 const TABS = [
   { id: "orders", label: "Orders", icon: IconBox },
   { id: "deliveries", label: "Deliveries", icon: IconTruck },
+  { id: "payments", label: "Payments", icon: IconCash },
   { id: "suppliers", label: "Suppliers", icon: IconTag },
 ] as const;
 
@@ -57,11 +68,17 @@ export default async function PurchasingPage({
 }: PageProps<"/app/purchasing">) {
   const session = await requireModule("purchasing");
 
-  const raw = (await searchParams).tab;
-  const tab: TabId = isTab(raw) ? raw : "orders";
+  const params = await searchParams;
+  const tab: TabId = isTab(params.tab) ? params.tab : "orders";
+  const asked = typeof params.supplier === "string" ? params.supplier : null;
 
   if (!session.tenantId) return <NotAttached />;
   const tenantId = session.tenantId;
+
+  // One distributor's account is its own screen behind the same route, the way
+  // `?customer=<id>` is on the customer list. It needs none of the lists below,
+  // so it returns before they are read.
+  if (asked) return <Account tenantId={tenantId} supplierId={asked} />;
 
   const [suppliers, orders, receipts, settings] = await Promise.all([
     listSuppliers(tenantId),
@@ -71,12 +88,28 @@ export default async function PurchasingPage({
   ]);
 
   const money = moneyFormatter(settings);
+  const today = currentBusinessDay(settings);
+
+  // One call for every supplier's balance, grouped in Postgres. It feeds the
+  // Suppliers column, the payment sheet's picker and the tile above them — and
+  // it is one read rather than three, so those three cannot disagree.
+  const balances = await listSupplierBalances(
+    tenantId,
+    suppliers.map((supplier) => ({
+      id: supplier.id,
+      opening: supplier.opening,
+      openingOn: supplier.openingOn,
+    })),
+  );
+
+  const payments = tab === "payments" ? await listSupplierPayments(tenantId) : [];
 
   // The catalog feeds both sheets' line search, and the open orders feed the
   // delivery sheet's picker. Read only for the tabs that draw them: the
   // suppliers tab has no line editor on it, and the item list is the single
   // biggest read on this page.
-  const products = tab === "suppliers" ? [] : await listProducts(tenantId);
+  const products =
+    tab === "orders" || tab === "deliveries" ? await listProducts(tenantId) : [];
 
   const openOrders =
     tab === "deliveries"
@@ -105,7 +138,12 @@ export default async function PurchasingPage({
         </p>
       </header>
 
-      <BuyingStats orders={orders} receipts={receipts} money={money} />
+      <BuyingStats
+        orders={orders}
+        receipts={receipts}
+        balances={balances}
+        money={money}
+      />
 
       {/* The count rides in the tab so the switcher answers "is there anything
           in there" without a visit — the same call the item list makes. */}
@@ -116,7 +154,12 @@ export default async function PurchasingPage({
               ? orders.length
               : item.id === "deliveries"
                 ? receipts.length
-                : suppliers.length;
+                : item.id === "payments"
+                  ? // Not read unless the tab is open, so the count would be a
+                    // nought that lies. Left off instead: an absent count says
+                    // "go and look", a wrong one says "nothing in here".
+                    undefined
+                  : suppliers.length;
 
           return (
             <Link
@@ -128,7 +171,9 @@ export default async function PurchasingPage({
             >
               <item.icon className="pos-tab-icon h-4 w-4" />
               {item.label}
-              <span className="pos-tab-count">{count.toLocaleString("en-PK")}</span>
+              {count === undefined ? null : (
+                <span className="pos-tab-count">{count.toLocaleString("en-PK")}</span>
+              )}
             </Link>
           );
         })}
@@ -149,8 +194,16 @@ export default async function PurchasingPage({
           openOrders={openOrders}
           money={money}
         />
+      ) : tab === "payments" ? (
+        <PaymentsPanel
+          payments={payments}
+          suppliers={pickable}
+          balances={balances}
+          today={today}
+          money={money}
+        />
       ) : (
-        <SuppliersPanel suppliers={suppliers} />
+        <SuppliersPanel suppliers={suppliers} balances={balances} money={money} />
       )}
     </div>
   );
@@ -167,10 +220,12 @@ export default async function PurchasingPage({
 function BuyingStats({
   orders,
   receipts,
+  balances,
   money,
 }: {
   orders: PurchaseOrder[];
   receipts: GoodsReceipt[];
+  balances: Map<string, SupplierBalance>;
   money: (value: number) => string;
 }) {
   const totals = purchaseTotals(receipts);
@@ -179,18 +234,33 @@ function BuyingStats({
     (order) => order.status === "placed" && order.receivedLines < order.lines,
   );
 
-  const owed = awaiting.reduce((total, order) => total + order.total, 0);
+  const onOrder = awaiting.reduce((total, order) => total + order.total, 0);
+
+  const debits = [...balances.values()].filter(
+    (balance) => balanceState(balance.balance) === "owed",
+  );
+
+  const owed = debits.reduce((total, balance) => total + balance.balance, 0);
+  const inDebit = debits.length;
 
   const tiles = [
     {
       label: "Orders still open",
       value: awaiting.length.toLocaleString("en-PK"),
-      note: awaiting.length === 0 ? "Nothing on its way" : `${money(owed)} of goods`,
+      note:
+        awaiting.length === 0 ? "Nothing on its way" : `${money(onOrder)} of goods`,
     },
     {
-      label: "Deliveries taken in",
-      value: totals.deliveries.toLocaleString("en-PK"),
-      note: "Every one on record",
+      // The one figure an owner opens this screen for, and the reason `0029`
+      // exists. Only the accounts actually in debit are added up: a shop in
+      // advance with one distributor is not owed money by them, and netting it
+      // off would understate what has to be found on Friday.
+      label: "Owed to suppliers",
+      value: money(owed),
+      note:
+        inDebit === 0
+          ? "Every account is square"
+          : `Across ${inDebit} ${inDebit === 1 ? "supplier" : "suppliers"}`,
     },
     {
       label: "Spent on stock",
@@ -229,6 +299,71 @@ function BuyingStats({
         </article>
       ))}
     </section>
+  );
+}
+
+/**
+ * One supplier's account.
+ *
+ * `notFound()` for an id that is not this shop's, rather than a message — the
+ * same call `requireModule` and the customer record make, and for the same
+ * reason: a screen that says "that supplier is not yours" has confirmed the
+ * supplier exists.
+ *
+ * The balance is read through the same `listSupplierBalances` the list uses, so
+ * the figure on this screen and the figure in that column come from one place
+ * and cannot disagree.
+ */
+async function Account({
+  tenantId,
+  supplierId,
+}: {
+  tenantId: string;
+  supplierId: string;
+}) {
+  const [supplier, settings] = await Promise.all([
+    getSupplier(tenantId, supplierId),
+    getShopSettings(tenantId),
+  ]);
+
+  if (!supplier) notFound();
+
+  const [balances, statement, everyone] = await Promise.all([
+    listSupplierBalances(tenantId, [
+      { id: supplier.id, opening: supplier.opening, openingOn: supplier.openingOn },
+    ]),
+    getSupplierStatement(tenantId, supplier.id, {
+      amount: supplier.opening,
+      on: supplier.openingOn,
+    }),
+    // Only so the edit sheet can warn on a name that clashes with somebody
+    // else's. It is the same courtesy the list gives; the unique index is still
+    // the control.
+    listSuppliers(tenantId),
+  ]);
+
+  const balance = balances.get(supplier.id) ?? {
+    supplierId: supplier.id,
+    opening: supplier.opening,
+    openingOn: supplier.openingOn,
+    invoiced: 0,
+    paid: 0,
+    balance: supplier.opening,
+    deliveries: 0,
+    payments: 0,
+    lastInvoicedOn: null,
+    lastPaidOn: null,
+  };
+
+  return (
+    <SupplierRecord
+      supplier={supplier}
+      balance={balance}
+      statement={statement}
+      today={currentBusinessDay(settings)}
+      money={moneyFormatter(settings)}
+      taken={everyone.map((one) => foldName(one.name))}
+    />
   );
 }
 

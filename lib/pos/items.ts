@@ -45,7 +45,7 @@ import { createClient } from "@/utils/supabase/server";
  * would compile just as well and would be a lie about what comes back.
  */
 const COLUMNS =
-  "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, supplier:suppliers(name), tax_rate, variant_count, is_active";
+  "id, name, name_urdu, sku, barcode, department, category, unit, tracking, cost_price, selling_price, stock, low_at, supplier_id, supplier:suppliers(name), tax_rate, variant_count, variant_axes, tracks_batches, is_active";
 
 type Row = {
   id: string;
@@ -67,6 +67,8 @@ type Row = {
   supplier: { name: string } | { name: string }[] | null;
   tax_rate: number | string;
   variant_count: number | null;
+  variant_axes: string[] | null;
+  tracks_batches: boolean;
   is_active: boolean;
 };
 
@@ -94,6 +96,8 @@ function toProduct(row: Row): Product {
     unit: (row.unit === "kilo" ? "kg" : row.unit) as UnitId,
     tracking: row.tracking as TrackingMode,
     variants: row.variant_count ?? undefined,
+    variantAxes: row.variant_axes ?? [],
+    tracksBatches: row.tracks_batches,
     cost: money(row.cost_price),
     price: money(row.selling_price),
     stock: money(row.stock),

@@ -47,6 +47,13 @@ export type DraftLine = {
    *  Shown beside the quantity so somebody counting boxes off a van can see
    *  what was expected without opening the order. */
   expected?: number;
+  /** Whether this item is counted by batch. Off the catalog row, so the line
+   *  only asks for a date where a date exists to be read. */
+  tracksBatches?: boolean;
+  /** Off the carton, captured here because this is the one moment somebody is
+   *  holding it. Only ever filled for a batch-tracked item. */
+  batchNo?: string;
+  expiresOn?: string;
 };
 
 let serial = 0;
@@ -59,6 +66,9 @@ export const lineFromProduct = (product: Product): DraftLine => ({
   orderLineId: null,
   name: product.name,
   unit: product.unit,
+  tracksBatches: product.tracksBatches,
+  batchNo: "",
+  expiresOn: "",
   quantity: 1,
   // The last cost, as a starting point rather than a claim. The whole reason
   // this screen exists is that the number is usually out of date — but it is a
@@ -86,12 +96,16 @@ export function PurchaseLines({
   onChange,
   /** "What one costs" reads differently on an order and on an invoice. */
   costLabel = "Cost each",
+  /** The delivery sheet asks for the batch and the date; the order sheet does
+   *  not. An order is an intention and nobody knows which carton will come. */
+  askBatch = false,
   disabled = false,
 }: {
   lines: DraftLine[];
   products: Product[];
   onChange: (next: DraftLine[]) => void;
   costLabel?: string;
+  askBatch?: boolean;
   disabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -311,6 +325,48 @@ export function PurchaseLines({
                     })}
                   </p>
                 </div>
+
+                {/* ---------------- The date off the carton ----------------
+                    Only for a tracked item, and only while receiving. This is
+                    the one moment the date is readable — every later screen is
+                    somebody typing it from memory.
+
+                    Neither field is required. The person at the door has a
+                    queue behind them, and a delivery recorded without a batch
+                    is worth more than a delivery not recorded: it lands in the
+                    item's plain stock and the Products screen says so. */}
+                {askBatch && line.tracksBatches ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2 border-t border-orchid-100 pt-2">
+                    <label className="block">
+                      <span className="pos-label">Batch no.</span>
+                      <input
+                        className="pos-field font-mono"
+                        value={line.batchNo ?? ""}
+                        disabled={disabled}
+                        maxLength={60}
+                        placeholder="Off the carton"
+                        onChange={(event) =>
+                          update(line.key, { batchNo: event.target.value })
+                        }
+                        aria-label={`Batch number for ${line.name}`}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="pos-label">Expires</span>
+                      <input
+                        type="date"
+                        className="pos-field"
+                        value={line.expiresOn ?? ""}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          update(line.key, { expiresOn: event.target.value })
+                        }
+                        aria-label={`Expiry date for ${line.name}`}
+                      />
+                    </label>
+                  </div>
+                ) : null}
 
                 {/* Said, not refused. A supplier who sends thirty-two against
                     an order for thirty has over-delivered, and that is a

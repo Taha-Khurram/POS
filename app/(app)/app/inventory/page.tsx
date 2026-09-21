@@ -14,6 +14,7 @@ import { currentBusinessDay } from "@/lib/pos/counter";
 import { listProducts } from "@/lib/pos/items";
 import { getShopSettings } from "@/lib/pos/shop";
 import { listActiveSuppliers } from "@/lib/pos/suppliers";
+import { batchSummaries } from "@/lib/pos/batches";
 import { listTree } from "@/lib/pos/tree";
 import { CatalogPanel } from "./catalog-panel";
 import { CategoriesPanel } from "./categories-panel";
@@ -69,6 +70,11 @@ export default async function InventoryPage({
   // Active only: a distributor who has shut down should not be offered on a new
   // item, though an item already pointing at one keeps saying so.
   const suppliers = await listActiveSuppliers(session.tenantId);
+  const today = currentBusinessDay(settings);
+  // What each tracked item's batches come to. One read of the shop's live
+  // batches rather than one per row — and nothing at all for a shop that
+  // tracks none, because the index behind it is itself partial.
+  const batches = await batchSummaries(session.tenantId, today);
 
   return (
     <div className="space-y-4">
@@ -121,8 +127,9 @@ export default async function InventoryPage({
             items={items}
             tree={tree}
             suppliers={suppliers.map((one) => ({ id: one.id, name: one.name }))}
+            batches={batches}
             nextSerial={nextSerial(items)}
-            today={currentBusinessDay(settings)}
+            today={today}
           />
         </>
       ) : tab === "tree" ? (

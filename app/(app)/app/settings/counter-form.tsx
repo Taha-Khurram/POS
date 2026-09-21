@@ -6,7 +6,12 @@ import { useActionState, useState } from "react";
 import { ChartCard } from "@/components/pos/chart-card";
 import { IconCheck, IconRegister, IconTrash } from "@/components/pos/icons";
 import { useSubmissionKey } from "@/components/pos/use-submission-key";
-import { RECEIPT_FOOTER_MAX, TENDERS, type Counter } from "@/lib/pos/counter";
+import {
+  RECEIPT_FOOTER_MAX,
+  TENDERS,
+  type Counter,
+  type TenderId,
+} from "@/lib/pos/counter";
 import { deleteCounter, saveCounter } from "./actions";
 import { IDLE, SaveBar } from "./save-bar";
 
@@ -54,8 +59,7 @@ export function CounterForm({
   const locked = readOnly || pending;
 
   const [open, setOpen] = useState(counter.isActive);
-  const [cash, setCash] = useState(counter.acceptsCash);
-  const [card, setCard] = useState(counter.acceptsCard);
+  const [tenders, setTenders] = useState<TenderId[]>(counter.acceptedTenders);
 
   // Re-seed from the row the server just sent, the way React documents
   // adjusting state when a prop changes: set it during the render rather than
@@ -65,13 +69,12 @@ export function CounterForm({
   if (seed !== counter) {
     setSeed(counter);
     setOpen(counter.isActive);
-    setCash(counter.acceptsCash);
-    setCard(counter.acceptsCard);
+    setTenders(counter.acceptedTenders);
   }
 
   const submission = useSubmissionKey(state);
 
-  const noTender = open && !cash && !card;
+  const noTender = open && tenders.length === 0;
 
   return (
     <div className="space-y-4">
@@ -182,8 +185,7 @@ export function CounterForm({
 
               <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                 {TENDERS.map((tender) => {
-                  const on = tender.id === "cash" ? cash : card;
-                  const set = tender.id === "cash" ? setCash : setCard;
+                  const on = tenders.includes(tender.id);
 
                   return (
                     <label
@@ -193,9 +195,15 @@ export function CounterForm({
                       <input
                         key={submission}
                         type="checkbox"
-                        name={`accepts_${tender.id}`}
+                        name={`tender_${tender.id}`}
                         checked={on}
-                        onChange={(event) => set(event.target.checked)}
+                        onChange={(event) =>
+                          setTenders((current) =>
+                            event.target.checked
+                              ? [...current, tender.id]
+                              : current.filter((id) => id !== tender.id),
+                          )
+                        }
                         className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
                       />
 
@@ -215,13 +223,16 @@ export function CounterForm({
               <p className="pos-hint">
                 {noTender ? (
                   <span className="font-medium text-signal-bad">
-                    An open counter has to take cash, card, or both — otherwise
-                    the register has a Charge button that cannot finish a sale.
+                    An open counter has to take at least one kind of payment —
+                    otherwise the register has a Charge button that cannot
+                    finish a sale.
                   </span>
                 ) : (
                   <>
-                    Raast, Easypaisa and JazzCash are not here yet. A
-                    button that cannot settle is worse than no button.
+                    Flo records how the money came and the reference beside it;
+                    it does not talk to a card machine, a bank or a wallet. Tick
+                    the ones this till really takes — each one is a line on the
+                    payment sheet.
                   </>
                 )}
               </p>

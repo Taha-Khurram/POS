@@ -55,6 +55,12 @@ export type NoticeFacts = {
   /** How many catalog rows are at zero, and how many are under their own
    *  `lowAt`. Counted by the caller so this stays a pure function. */
   stock: { out: number; low: number };
+  /** Batch-tracked items with stock past its date or nearly there. Counted by
+   *  `expiryCounts`, which decides "going off" with the same `expiryState` the
+   *  badges use — a second definition written as a date predicate in SQL is the
+   *  copy that drifts from the one the shopkeeper is looking at. Zeroes for a
+   *  shop that tracks nothing, which is most of them. */
+  expiry: { expired: number; critical: number; expiredUnits: number };
 };
 
 const plural = (count: number, one: string, many: string) =>
@@ -66,7 +72,7 @@ const RANK: Record<NoticeTone, number> = { bad: 0, warn: 1, info: 2 };
 
 export function buildNotices(facts: NoticeFacts): Notice[] {
   const notices: Notice[] = [];
-  const { subscription, counters, stock } = facts;
+  const { subscription, counters, stock, expiry } = facts;
 
   /* ---------------- The shop's standing with us ---------------- */
 
@@ -171,6 +177,33 @@ export function buildNotices(facts: NoticeFacts): Notice[] {
   }
 
   /* ---------------- The shelf ---------------- */
+
+  // Above the stock notices, and deliberately: expired stock is the only one
+  // of these the till has already refused to sell. It is not a reorder
+  // decision, it is stock that has to come off the shelf today.
+  if (expiry.expired > 0) {
+    notices.push({
+      id: "stock-expired",
+      title: `${plural(expiry.expired, "item has", "items have")} expired stock`,
+      detail: `${expiry.expiredUnits.toLocaleString("en-PK")} on the shelf the till will not sell. Write it off so the count and the stock value stop including it.`,
+      at: "Now",
+      tone: "bad",
+      href: "/app/inventory",
+      module: "inventory",
+    });
+  }
+
+  if (expiry.critical > 0) {
+    notices.push({
+      id: "stock-going-off",
+      title: `${plural(expiry.critical, "item is", "items are")} going off soon`,
+      detail: "Within a fortnight. Front of the shelf, or marked down.",
+      at: "Now",
+      tone: "warn",
+      href: "/app/inventory",
+      module: "inventory",
+    });
+  }
 
   if (stock.out > 0) {
     notices.push({

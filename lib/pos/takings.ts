@@ -40,8 +40,16 @@ export type CounterTakings = {
    *  are already net of it — this is here so the day-end screen can say why
    *  the drawer is lighter than the receipts suggest. */
   refunded: number;
+  /** Notes in the drawer. The only one a shift's expected figure counts, and
+   *  the only one a cashier can be short of. */
   cash: number;
   card: number;
+  /** Raast, the wallets, a bank transfer — everything the counter took that is
+   *  neither cash nor card. Zero for most shops, and a column rather than a
+   *  silence since `0032`: a JazzCash bill counted into neither of the two
+   *  above would leave `cash + card` short of `total` with nothing on the
+   *  screen to explain the gap. */
+  other: number;
   total: number;
   /** The last receipt this counter issued that day, for the cashier checking
    *  their own drawer against the screen. */
@@ -56,6 +64,7 @@ export type DayTakings = {
   refunded: number;
   cash: number;
   card: number;
+  other: number;
   total: number;
 };
 
@@ -107,6 +116,7 @@ export async function getDayTakings(
         refunded: 0,
         cash: 0,
         card: 0,
+        other: 0,
         total: 0,
         lastReceiptNo: null,
       },
@@ -128,6 +138,7 @@ export async function getDayTakings(
         refunded: 0,
         cash: 0,
         card: 0,
+        other: 0,
         total: 0,
         lastReceiptNo: null,
       };
@@ -152,15 +163,21 @@ export async function getDayTakings(
     // receipt it issued.
     entry.lastReceiptNo ??= row.receipt_number;
 
-    // One tender per sale today — the payment sheet takes cash or card and
-    // does not split. Written as a loop anyway because `sale_tenders` is a
-    // one-to-many by design, and a split bill must not silently count once.
+    // A bill can carry more than one tender since `0032`, and this has always
+    // been written as a loop because `sale_tenders` was one-to-many by design.
+    //
+    // The `else` is what matters: every tender lands in exactly one of the
+    // three buckets, so `cash + card + other` is `total` by construction. A
+    // method that fell through to nothing — which is what a wallet used to do —
+    // is a day where the columns do not add up to the figure beside them, and
+    // nobody would know which bill did it.
     const tenders = row.sale_tenders ?? [];
 
     for (const tender of tenders) {
       const amount = round2(Number(tender.amount));
       if (tender.method === "cash") entry.cash = round2(entry.cash + amount);
       else if (tender.method === "card") entry.card = round2(entry.card + amount);
+      else entry.other = round2(entry.other + amount);
     }
   }
 
@@ -176,6 +193,7 @@ export async function getDayTakings(
     refunded: round2(all.reduce((sum, entry) => sum + entry.refunded, 0)),
     cash: round2(all.reduce((sum, entry) => sum + entry.cash, 0)),
     card: round2(all.reduce((sum, entry) => sum + entry.card, 0)),
+    other: round2(all.reduce((sum, entry) => sum + entry.other, 0)),
     total: round2(all.reduce((sum, entry) => sum + entry.total, 0)),
   };
 }

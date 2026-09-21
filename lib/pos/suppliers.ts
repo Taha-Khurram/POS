@@ -26,7 +26,7 @@ import { createClient } from "@/utils/supabase/server";
  */
 
 const COLUMNS =
-  "id, name, contact_name, phone, email, address, tax_number, payment_terms_days, notes, is_active, created_at";
+  "id, name, contact_name, phone, email, address, tax_number, payment_terms_days, notes, opening_balance, opening_balance_on, is_active, created_at";
 
 type Row = {
   id: string;
@@ -38,6 +38,8 @@ type Row = {
   tax_number: string | null;
   payment_terms_days: number | string;
   notes: string | null;
+  opening_balance: number | string;
+  opening_balance_on: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -55,6 +57,8 @@ const toSupplier = (row: Row, items: number): Supplier => ({
   taxNumber: row.tax_number ?? "",
   paymentTermsDays: Number(row.payment_terms_days) || 0,
   notes: row.notes ?? "",
+  opening: Number(row.opening_balance) || 0,
+  openingOn: row.opening_balance_on,
   isActive: row.is_active,
   createdAt: row.created_at,
   items,

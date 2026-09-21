@@ -9,6 +9,7 @@ import { getTillAccess } from "@/lib/pos/access";
 import { listActiveCustomers } from "@/lib/pos/customers";
 import { listHeldBills } from "@/lib/pos/held-bills";
 import { listSellableProducts } from "@/lib/pos/items";
+import { variantsByItem } from "@/lib/pos/variants";
 import { getShopProfile, getShopSettings, listCounters } from "@/lib/pos/shop";
 import { getOpenShift } from "@/lib/pos/shifts";
 import { getAssignedCounterId, listStaff } from "@/lib/pos/staff";
@@ -125,7 +126,7 @@ export default async function RegisterPage() {
   const staff = await listStaff(session.tenantId);
   const names = staff.map((person) => ({ id: person.id, name: person.name }));
 
-  const [held, shift] = await Promise.all([
+  const [held, shift, variants] = await Promise.all([
     listHeldBills(session.tenantId, counter.id, names),
     // Whichever shift this till is in, or null — which is the ordinary case for
     // a shop that does not use them and is never an error. The strip says so
@@ -134,6 +135,11 @@ export default async function RegisterPage() {
       counters: open.map((entry) => ({ id: entry.id, name: entry.name })),
       staff: names,
     }),
+    // Every live variant in the shop, by item. Read whole for the reason the
+    // catalog is: a cloth house's cashier picks a size from a grid and a round
+    // trip per tap is a grid nobody uses. A shop that sells nothing by variant
+    // reads nothing — the table is empty for them.
+    variantsByItem(session.tenantId),
   ]);
 
   return (
@@ -169,6 +175,7 @@ export default async function RegisterPage() {
 
       <Till
         items={items}
+        variants={variants}
         customers={customers}
         counter={counter}
         shop={shop}

@@ -24,8 +24,9 @@ export type Counter = {
   /** Off until the owner says the prices are right. */
   isActive: boolean;
   receiptPrefix: string;
-  acceptsCash: boolean;
-  acceptsCard: boolean;
+  /** What this till may be paid with, since `0032`. One list rather than a
+   *  boolean per method — two of them were on the way to becoming six. */
+  acceptedTenders: TenderId[];
   /** A line at the foot of the roll — a return policy, or the WhatsApp number
    *  to ring. Null for the shop that prints neither. */
   receiptFooter: string | null;
@@ -59,8 +60,10 @@ export const newCounterDefaults = (position: number) => ({
   name: `Counter ${position}`,
   receiptPrefix: position === 1 ? "INV" : `INV${position}`,
   isActive: false,
-  acceptsCash: true,
-  acceptsCard: false,
+  // Cash and nothing else. A new till takes notes on the day it is created;
+  // anything the shop has a machine or an account for is switched on
+  // deliberately, because each one is a line on the payment sheet.
+  acceptedTenders: ["cash"] as TenderId[],
   receiptFooter: null,
   autoPrint: true,
   sortOrder: position,
@@ -69,43 +72,201 @@ export const newCounterDefaults = (position: number) => ({
 /* ---------------- Tenders ---------------- */
 
 /**
- * The two the counter can take today. `sale_tenders` also allows raast,
- * easypaisa and jazzcash, and those need a wallet integration — so offering
- * them here would be a button that cannot settle. `udhaar` was a fourth and is
- * gone: 0018 took it off the column with the rest of the khata, because a
+ * `udhaar` is not here and is not coming back: 0018 took it off the column with
+ * the rest of the khata, because a
  * tender meaning "not paid" with no ledger under it is a sale the shop cannot
  * account for.
+ */
+/**
+ * How money arrives.
+ *
+ * **None of these is an integration.** Nothing in Flo talks to a card machine,
+ * a bank or a wallet: a tender is the cashier saying how the money came, with
+ * its transaction id beside it. That is exactly what a shop already writes in
+ * the margin, and it is what makes a day reconcile against a JazzCash statement
+ * — which is worth having long before any integration exists. The day one does,
+ * it writes these same rows.
+ *
+ * `drawer` is the property that matters downstream: only cash lands in a till
+ * somebody counts, so only cash belongs in a shift's expected figure. A card
+ * swipe never went into the drawer, and `close_shift` has said so since `0026`.
  */
 export const TENDERS = [
   {
     id: "cash",
     label: "Cash",
     description: "Notes in the drawer. The register works out the change.",
+    drawer: true,
   },
   {
     id: "card",
     label: "Card",
     description: "Swiped on the shop's own machine, then confirmed here.",
+    drawer: false,
   },
-] as const satisfies readonly Option<string>[];
+  {
+    id: "raast",
+    label: "Raast",
+    description: "Instant bank transfer. Put the reference on the bill.",
+    drawer: false,
+  },
+  {
+    id: "easypaisa",
+    label: "Easypaisa",
+    description: "Wallet transfer. The TID is what you quote if it is disputed.",
+    drawer: false,
+  },
+  {
+    id: "jazzcash",
+    label: "JazzCash",
+    description: "Wallet transfer. The TID is what you quote if it is disputed.",
+    drawer: false,
+  },
+  {
+    id: "bank",
+    label: "Bank transfer",
+    description: "Straight to the shop's account. Slower to clear, never in the drawer.",
+    drawer: false,
+  },
+] as const satisfies readonly (Option<string> & { drawer: boolean })[];
 
 export type TenderId = (typeof TENDERS)[number]["id"];
 
 export const isTender = (value: unknown): value is TenderId =>
   TENDERS.some((tender) => tender.id === value);
 
-/** The tenders this counter is switched on for, in the order they are offered. */
-export const tendersOn = (counter: Pick<Counter, "acceptsCash" | "acceptsCard">) =>
-  TENDERS.filter((tender) =>
-    tender.id === "cash" ? counter.acceptsCash : counter.acceptsCard,
-  );
+export const tender = (id: TenderId) =>
+  TENDERS.find((entry) => entry.id === id) ?? TENDERS[0];
+
+/** Whether this one lands in a drawer somebody counts. The single place that
+ *  decides it, so the shift's expected figure and the payment sheet's change
+ *  box cannot come to different answers. */
+export const inDrawer = (id: TenderId) => tender(id).drawer;
+
+/** The tenders this counter is switched on for, in the order they are offered —
+ *  which is `TENDERS`' own order, not the order they were stored in, so cash is
+ *  always first on every till in the shop. */
+export const tendersOn = (counter: Pick<Counter, "acceptedTenders">) =>
+  TENDERS.filter((entry) => counter.acceptedTenders.includes(entry.id));
+
+/* ---------------- A bill settled more than one way ---------------- */
+
+/** One part of what the customer handed over. */
+export type TenderPart = {
+  method: TenderId;
+  amount: number;
+  /** The wallet TID, the card approval code. Empty on cash, and optional on
+   *  everything else — a shop that does not write them down is not stopped from
+   *  taking the money. */
+  reference: string;
+};
+
+/** What the parts come to. Rounded once at the end, for the reason `balanceOf`
+ *  is: three roundings of a two-decimal column is how a split ends up a paisa
+ *  away from the bill it is settling. */
+export const tenderedTotal = (parts: TenderPart[]) =>
+  round2(parts.reduce((sum, part) => sum + (Number(part.amount) || 0), 0));
+
+/**
+ * What is still owed on a part-settled bill. Never negative: more than the bill
+ * is change on the cash part, not a shortfall, and `changeDue` is what says so.
+ */
+export const stillOwed = (parts: TenderPart[], total: number) =>
+  round2(Math.max(0, total - tenderedTotal(parts)));
+
+/**
+ * The complaint about a split, or null.
+ *
+ * `record_sale` refuses anything whose parts do not sum to the bill exactly, so
+ * the sheet has to reach the same verdict — a Charge button that submits a
+ * split the database will bounce is a button that loses a queue.
+ */
+export function checkTenders(
+  parts: TenderPart[],
+  total: number,
+  accepted: readonly TenderId[],
+): string | null {
+  if (parts.length === 0) return "How was this paid?";
+  if (parts.length > 4) {
+    return "Four ways is as many as one bill takes. Anything more is a mistype.";
+  }
+
+  for (const part of parts) {
+    if (!accepted.includes(part.method)) {
+      return `This counter does not take ${tender(part.method).label.toLowerCase()}.`;
+    }
+    if (!(Number(part.amount) > 0)) {
+      return `How much of it was ${tender(part.method).label.toLowerCase()}?`;
+    }
+  }
+
+  // Cash is allowed to be over — that is change, and the drawer gives it back.
+  // Everything else has to be exact: a card swiped for more than the bill is a
+  // customer overcharged, and there is no drawer to hand the difference from.
+  const cash = parts
+    .filter((part) => inDrawer(part.method))
+    .reduce((sum, part) => sum + part.amount, 0);
+
+  const rest = round2(tenderedTotal(parts) - cash);
+
+  if (rest > total + 0.004) {
+    return "The card and wallet parts come to more than the bill. Only cash can be over — that is change.";
+  }
+
+  if (tenderedTotal(parts) + 0.004 < total) {
+    return `Still ${round2(total - tenderedTotal(parts))} to settle.`;
+  }
+
+  return null;
+}
+
+/**
+ * What actually gets written down, once the cash part has had its change taken
+ * off it.
+ *
+ * A customer handing over a 1,000 note on a 940 bill paid half by card has
+ * tendered 500 in cash and been given 60 back — so the cash *tender* is 440,
+ * not 500. Recording the note would overstate the drawer by the change, and the
+ * shift would be short by exactly that every time.
+ */
+export function settleTenders(parts: TenderPart[], total: number): TenderPart[] {
+  const over = round2(tenderedTotal(parts) - total);
+  if (over <= 0) return parts;
+
+  // Taken off the cash, which is the only part change can come out of.
+  let left = over;
+
+  return parts
+    .map((part) => {
+      if (left <= 0 || !inDrawer(part.method)) return part;
+      const off = Math.min(left, part.amount);
+      left = round2(left - off);
+      return { ...part, amount: round2(part.amount - off) };
+    })
+    .filter((part) => part.amount > 0);
+}
 
 /* ---------------- The bill ---------------- */
 
 export type CartLine = {
-  /** The catalog item's id. One line per item — scanning the same bottle twice
-   *  raises the quantity rather than opening a second row. */
+  /**
+   * The line's own key, and since `0031` no longer the item's id.
+   *
+   * `cartKey` builds it: the item id for an ordinary line, `item:variant` for
+   * one. That is what lets a bill carry a medium blue and a large blue as two
+   * rows while a bottle scanned twice stays one — the identity of a line is
+   * what the customer is buying, and for a variant item that is not the item.
+   */
   id: string;
+  /** The catalog row. What `sale_lines.item_id` stores and what every report
+   *  groups by. */
+  itemId: string;
+  /** Which size or colour, or null for an item that has none. */
+  variantId: string | null;
+  /** "Medium / Blue". Empty for a line with no variant. Shown after the name
+   *  on the bill and on the roll, so a customer disputing a receipt can see
+   *  which one they were charged for. */
+  variantLabel: string;
   name: string;
   urdu: string;
   /** The catalog unit, stored as-is on `sale_lines.unit`. Shortened to "pc" or
@@ -134,6 +295,17 @@ export type CartLine = {
 /** What is left on the shelf once this line is rung up. Negative is a bill the
  *  Charge button refuses — it means the count and the shelf disagree, and the
  *  screen names the item and both numbers rather than failing silently. */
+/**
+ * A cart line's key.
+ *
+ * One function, because the till, the hold, the resume and the sale payload all
+ * have to agree about when two things are the same line — and a bill that
+ * merged a medium with a large because one of them keyed differently is a bill
+ * the shop cannot pick from the shelf.
+ */
+export const cartKey = (itemId: string, variantId?: string | null) =>
+  variantId ? `${itemId}:${variantId}` : itemId;
+
 export const stockLeft = (line: CartLine) => round3(line.stock - line.quantity);
 
 export const lineTotal = (line: CartLine) => round2(line.price * line.quantity);

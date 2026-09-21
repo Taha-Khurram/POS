@@ -493,10 +493,181 @@ rule. The marketing site still says purchase orders are not built (`/pricing`,
 `/products`, `/roadmap`) — that copy is now the wrong way round, and like the
 Reports copy it is a product-announcement decision rather than a code one.
 
-**Still not built here:** the supplier ledger. There is no opening balance, no
-supplier payment, and no "what do I owe him" — `goods_receipts.total` is what a
-delivery came to and nothing yet totals it against anything paid. No tile on
-the Buying screen claims otherwise.
+### The supplier ledger
+
+`0029` answers the one question a shopkeeper actually asks about a distributor —
+*kitna dena hai*. `?tab=payments` is what went out this month, with a bank
+statement in the other hand; `?tab=suppliers&supplier=<id>` is one account, the
+way `?customer=<id>` is one person's record.
+
+**It is a running account, not invoice matching.** `supplier_payments` has no
+link to a delivery and never will: Ravi Trading's man takes fifty thousand on a
+Thursday against the account, not against invoice 4821. Allocation would mean a
+join table, a screen for it, and a shopkeeper reconciling line by line for a
+figure they already keep in their head as one number.
+
+**Ageing is a walk, not a table.** `ageOf` in `lib/pos/ledger.ts` sorts the
+deliveries oldest first and spends the payments against them until they run out;
+whatever is left is aged by its delivery's date. Nothing is stored, so it cannot
+drift from the payments it came from — and the screen states the assumption out
+loud, because a figure an owner cannot account for is one they stop believing.
+The buckets sum to the balance by construction.
+
+**The balance is defined once**, in `balanceOf`: opening + invoiced − paid.
+Three screens quote it — the Suppliers column, the account, and the Buying tile
+— off one `listSupplierBalances` read, so they cannot disagree.
+`public.supplier_balances` is `security invoker` like `dashboard_summary`, so
+`p_tenant` is a filter and RLS is the gate; it is the third function granted to
+`authenticated`, and `rls.test.sql` proves naming another shop returns nothing.
+
+**The opening balance is what makes day one believable**, and it carries a date
+(`opening_balance_on`) because a balance with no date is a figure nobody can
+check against their own book. Zero needs no date.
+
+`suppliers.opening_balance` is **signed** — negative is an advance the shop has
+paid — and `balanceState` is the one place that decides what a negative balance
+is called, so nothing draws "owed" in red at a shop that is in credit.
+`ageOf` leaves an advance out of the walk entirely: it is not a debt and has no
+age. The owed tile sums only the accounts actually in debit, because netting an
+advance off would understate what has to be found on Friday.
+
+A payment is a **real delete**, unlike a refunded sale in `0024`. A sale is a
+thing that happened to a customer holding a receipt; a payment row is the shop's
+own note about its own account, and the commonest reason to remove one is a typo
+two minutes old. `audit_log` keeps it either way.
+
+`plans.features` gains nothing here — `purchase_orders` already covers Buying,
+and a flag per tab is a flag nobody reads.
+
+## Batches and expiry
+
+`0030` makes a pharmacy and half a grocery possible. `items.stock` is one
+number, which is the whole truth for a bag of flour and no truth at all for
+forty strips of Panadol across three expiry dates.
+
+**Tracking is per item and off by default.** `items.tracks_batches` is opt-in,
+and everything in `0030` is a no-op for an item that has not opted in — a second
+dropdown between a shopkeeper and a saved item is the mistake `0016` undid when
+it dropped `subcategory`.
+
+**`items.stock` stays the running total; `item_batches` is the sub-ledger under
+it.** They cannot disagree, because `private.move_stock` writes both in one call
+and is still the only writer of either. Making the batches the only truth and
+`items.stock` a view would have been cleaner on paper and would have rewritten
+every reader, report and stock gate that already answers correctly.
+
+**Sold first-expired-first, not FIFO.** `private.take_from_batches` orders on
+`expires_on` and breaks ties on arrival: a carton received in March expiring in
+June must go before one received in April expiring in December. `byFefo` in
+`lib/pos/batch.ts` is the same ordering for the browser, so the batch panel
+lists them in the order the till will actually take them.
+
+**An expired batch cannot be sold.** This is the one hard refusal in the
+product — harder than the stock gate, which concerns a number somebody can go
+and count. The allocation skips expired stock and `record_sale` fails with the
+item named and the in-date figure. The way through is a write-off, which is
+`adjust_batch` with a target of nought and reason `'expired'` — a deliberate,
+recorded act, and its own ledger reason because "how much did we throw away last
+quarter" has to be a `sum()` rather than a text search.
+
+**A return goes back into the batches that sale took it from**, never a fresh
+FEFO pick — that would put June's stock into December's batch and extend its
+life by six months, the precise failure this migration prevents.
+Of those batches, **soonest-expiring first**: the obvious rule (unwind newest
+movement first) is not available, because every movement one sale writes shares
+a single `created_at` — `now()` is transaction-start time — so ordering on it
+within a sale is undefined. That was caught by a partial return landing in the
+wrong batch. The conservative rule is deterministic and better anyway.
+
+**A whole-item stocktake is refused for a tracked item.** `set_stock` raises and
+the product sheet's stock box is dead rather than a control that bounces: one
+figure cannot say which batch it belonged to, and guessing would shorten or
+extend something's life by the difference. `adjust_batch` counts one batch, the
+same absolute-in relative-down adapter under a row lock.
+
+**The expiry date is captured on the delivery line**, because that is the one
+moment somebody is holding the carton — every later screen is typing from
+memory. It is *not* required even for a tracked item: the person at the door has
+a queue behind them, and a delivery recorded without a batch is worth more than
+a delivery not recorded. It lands in the item's plain stock and the batch panel
+says how much is untracked.
+
+`expiryState` in `lib/pos/batch.ts` is the single definition of expired /
+critical / soon, taking the shop's own `today` and never the browser's — a
+tablet on the wrong date would mark good stock expired. `expiryCounts` counts
+the bell's notices through that same function rather than a date predicate in
+SQL, because a second definition is the copy that drifts from the badge the
+shopkeeper is looking at. A batch that expires *today* is not expired, in both
+TypeScript and `take_from_batches` — the two have to agree or the till refuses
+stock the screen calls fine.
+
+`lib/pos/batch.ts` carries no `server-only`; `lib/pos/batches.ts` is its reader
+and, like every other reader in `lib/pos/`, **may not be wrapped in React
+`cache()`**. Writes are `app/(app)/app/inventory/batch-actions.ts` on the service
+role, gated by `can_edit_items` — not `can_manage_purchasing`, because writing
+expired stock off is a stocktake decision made by whoever is at the shelf
+holding it.
+
+## Variants
+
+`0031` makes a cloth house and a shoe shop possible. `items.tracking =
+'variant'` has existed since `0008` and meant nothing — the product sheet drew
+the SKUs a matrix *would* generate and said so, because `item_variants` did not
+exist.
+
+**This is the batch problem one shape over, solved the same way on purpose.**
+Stock lives in rows under the item, `private.move_stock` writes the row and
+`items.stock` together and is still the only writer of either, and `items.stock`
+stays the running total every reader already asks. What differs is who chooses:
+a batch is picked by the till, a variant by the customer.
+
+**Two axes, not a jsonb bag.** `option_a` and `option_b` are what a grid can
+draw and a thumb can tap; the axis *names* live on `items.variant_axes` so one
+item's rows cannot disagree about what its columns mean. A third axis is a
+matrix nobody can find a size in.
+
+**An item is variant-tracked or batch-tracked, never both** — a check
+constraint, because batches-per-variant is a third level for a shop that does
+not exist.
+
+**A barcode means exactly one thing.** Item codes and variant codes live in two
+tables, so no single unique index can say it; `private.one_barcode_per_code` is
+a trigger on both that refuses a code the other holds. Scanning something that
+could be two things is the one failure a till cannot recover from. The honest
+caveat is in the migration: two simultaneous inserts could both pass, which is
+unreachable through the product since every write is one service-role Server
+Action.
+
+**`selling_price` and `cost_price` are nullable and null means the item's.**
+Most of a cloth house's sizes are one price and the XXL is not, so the exception
+is stored and the rule is an absence. `priceOf`/`costOf` in `lib/pos/variant.ts`
+resolve it, and `recordSale` resolves it again server-side — the browser never
+decides what anything costs, variants included, and a crafted body pairing a
+cheap variant with a dear item is refused because the variant must belong to
+that item.
+
+**`CartLine.id` is no longer the item's id.** It is `cartKey(itemId, variantId)`
+— the item id alone for an ordinary line, `item:variant` for one. That is what
+lets a bill carry a medium blue and a large blue as two rows while a bottle
+scanned twice stays one. `itemId` and `variantId` ride beside it and are what
+the sale payload sends, because `sale_lines` has two columns and a composite key
+in one of them is a value nothing can join on.
+
+**Rows are switched off, never deleted.** `save_variants` writes the grid whole
+and switches off what the grid no longer names — a combination may be on last
+month's receipts and may still have stock, and stock that vanished with a row is
+stock `items.stock` still counts.
+
+**A whole-item stocktake is refused** once a grid exists, exactly as it is for a
+batch-tracked item: one figure cannot say which colour it is. `adjust_variant`
+counts one row under a lock. `variant_count` is written by `save_variants` alone
+— the product sheet deliberately does not post it, or correcting a price on an
+item whose grid nobody opened would null it.
+
+`lib/pos/variant.ts` carries no `server-only`; `lib/pos/variants.ts` is its
+reader and, like every reader in `lib/pos/`, **may not be wrapped in React
+`cache()`**. The till reads `variantsByItem` whole for the reason it reads the
+catalog whole — a grid behind a round trip per tap is a grid nobody uses.
 
 ## Customers
 
@@ -532,6 +703,126 @@ pointed at it rather than leaving it standing: `role_permissions.can_sell_on_kha
 and `khata_ceiling` (replaced by `can_manage_customers`, carrying the old
 value), the `udhaar` tender on `sale_tenders`, and the `udhaar_khata` flag on
 both plans. Don't add a balance to `Customer`.
+
+## Tenders
+
+`sale_tenders` has been one-to-many since `0001` and `record_sale` wrote exactly
+one row into it until `0032`. The table was right and the code was not: a
+customer who puts two thousand on a card and hands over the rest in notes is an
+ordinary Saturday.
+
+**The sum of the tenders is the bill, to the paisa.** `record_sale` refuses
+anything else. Every takings figure, every shift variance and the whole of
+`/app/sales` is a `sum()` over these rows, so a bill whose parts do not add up
+is a day that will not reconcile and nobody will know which bill did it.
+
+**Nothing here is an integration.** Raast, Easypaisa, JazzCash and bank transfer
+are ways of *recording* how the money arrived, typed by the cashier, with
+`sale_tenders.reference` for the TID or approval code. Nothing in Flo talks to a
+wallet or a bank. That is worth having before any integration exists, because it
+is what makes a day reconcile against a JazzCash statement — and the day one
+ships, it writes these same rows.
+
+**Cash covers the remainder; it is never typed.** The payment sheet takes an
+explicit amount for each non-cash part and gives cash whatever is left, which is
+how a counter works: the customer says "two thousand on the card" and hands over
+notes, and nobody types the cash figure. The recorded cash tender is what it
+*covers*, not the note handed over — recording the note would overstate the
+drawer by the change and every shift would be short by exactly that.
+
+**`counters.accepted_tenders` is a list, not a flag per method.**
+`accepts_cash`/`accepts_card` were two booleans on the way to becoming six;
+`0032` backfilled an array and dropped both, the same call `0027` made about
+`items.supplier`. `tendersOn` orders it by `TENDERS`' own order, so cash is
+first on every till whatever order the array was stored in.
+
+**`inDrawer` is the one place that decides what lands in a drawer**, and only
+cash does. `close_shift` still filters `method = 'cash'` for `expected_cash`;
+what changed in `0032` is its other half — it summed `method = 'card'` and now
+sums everything that is not cash, because a JazzCash bill counted as neither
+went missing from both figures on the Shifts tab. `shifts.card_total` keeps its
+name and now means "took, but not into the drawer".
+
+`takings.ts` gained an `other` bucket for the same reason and with an `else`, so
+`cash + card + other` equals `total` by construction — a method falling through
+to nothing is a day whose columns do not add up to the figure beside them. The
+day-close screen draws that column only when there is something in it.
+
+## Restaurant mode
+
+`/app/tables` is real since `0033`, and it is the one module a shop switches on
+rather than earns: `tenant_settings.restaurant_mode` is a checkbox on Settings →
+Shop & currency, `moduleAccess` reads it, and a kiryana that types the path gets
+the same `notFound()` every other module gate gives. A permission decides who
+may reach a screen; this decides whether the screen exists for that shop at all,
+which is why it is a setting and not a `role_permissions` column. The Settings
+tab that lays the floor out appears from the same flag, on the same screen as
+the switch — a tab that opens on "you have no tables and never will" is one more
+thing between a shopkeeper and the setting they came for.
+
+**A table order is not a sale, and must never look like one.** `table_orders`
+carries `order_number` off `document_series` — `T-00042` — and claims no receipt
+number until it settles. That is the same call `held_bills` made in `0025` and
+for the same reason: a number claimed before anybody pays is a hole in the
+shop's series. The link to the money is `table_orders.sale_id`, null while open,
+and every figure a restaurant reports still comes off `sales`. Nothing on the
+dashboard, the reports or `/app/sales` reads `table_orders` at all.
+
+**Occupancy is derived, never stored.** A table is busy because an open order
+points at it, and `table_orders_one_open_per_table_idx` — partial on
+`status = 'open'` — is what guarantees one bill per table. Two waiters opening
+T1 in the same second is the ordinary way a restaurant charges one party twice,
+and a `dining_tables.status` column is the second copy that drifts the first
+time a settle fails halfway.
+
+`table_orders_seated` ties the other half together: a dine-in is at a table and
+a parcel is not. An order with neither is one nobody can find; an order with
+both is one two waiters will serve.
+
+**The KOT is one row per *send*, not per order.** A table that orders starters
+at eight and mains at half past has two tickets, and the kitchen works the
+second without re-reading the first — which is also what makes a reprint
+meaningful, because "KOT-00114, sent 20:31" is a thing a cook can be asked
+about. `send_to_kitchen` mints the ticket and stamps `kot_id` on exactly the
+lines that were `new`, in one transaction, so a line can never be on two tickets
+or on none. `printed_at` is when the browser drew it: Flo does not route to a
+printer at the grill, and the honest record is when somebody pressed print.
+
+**A voided line is kept, not deleted.** "Who cancelled the mutton after it was
+fired" is the question a restaurant asks at the end of a bad night, and a
+deleted row cannot answer it. `void_order_line` sets the status and stamps who
+and why; `orderTotal` skips it.
+
+**Prices are snapshotted when the line is added** — the opposite of a held bill,
+which re-prices on resume. A restaurant quotes off a menu the customer is
+holding, and a rate that moved between the order and the bill is an argument at
+the table. Modifiers snapshot the same way in `table_order_line_modifiers`.
+
+**Modifiers are two different things and only one of them is a row.** "No
+onions" changes the cooking and nothing else, so it is `table_order_lines.note`,
+free text, because no closed list survives contact with a kitchen. "Extra
+cheese" changes the bill, so it is an `item_modifiers` row with a signed
+`price_delta` — signed, because "no raita" should be able to take money off as
+easily as cheese puts it on. Deliberately not a min/max selection engine: a
+required single-choice group with a default pays off for a chain with a menu
+team, and a dhaba needs a list of things you can add, each with a price.
+
+**Settling folds the modifiers into the line.** `settle_table_order` builds one
+`sale_line` per order line at `unit_price + sum(price_delta)` and hands the lot
+to `record_sale`, in one transaction, under the same discount ceiling, shift
+gate and stock gate the register charges under. A modifier printed as a line of
+its own is a receipt with "Extra raita … 80" under a karahi, which is not what
+the customer ordered and not what the kitchen cooked. Settling an already
+settled order **returns the receipt rather than raising**, so a retry after a
+dropped connection shows the cashier the bill instead of an error against money
+the customer has already handed over.
+
+`lib/pos/restaurant.ts` carries no `server-only` — `lineTotalOf`, `orderTotal`
+and `byCourse` are what the order screen draws with and what the Server Actions
+re-check against, the same split `counter.ts` makes — with `lib/pos/tables.ts`
+as its `server-only` reader. `listTables` is the floor with its bills on it and
+pays three reads for them; `listDiningTables` is the Settings list and pays one,
+because a form of four text boxes per row cannot show an order anyway.
 
 ## Notifications
 

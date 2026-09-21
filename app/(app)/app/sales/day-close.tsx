@@ -146,6 +146,15 @@ function ShopTotal({
     { label: "All counters took", value: money(takings.total), lead: true },
     { label: "Cash in the drawers", value: money(takings.cash), icon: IconCash },
     { label: "On card", value: money(takings.card), icon: IconCard },
+    ...(takings.other > 0
+      ? [
+          {
+            label: "Raast and wallets",
+            value: money(takings.other),
+            icon: IconCard,
+          },
+        ]
+      : []),
     {
       label: "Bills rung up",
       value: takings.bills.toLocaleString("en-PK"),
@@ -240,6 +249,9 @@ function CounterTable({
               <th className="text-end">Bills</th>
               <th className="text-end">Cash</th>
               <th className="text-end">Card</th>
+              {takings.other > 0 ? (
+                <th className="text-end">Wallets</th>
+              ) : null}
               <th className="text-end">Took</th>
             </tr>
           </thead>
@@ -273,6 +285,9 @@ function CounterTable({
                 <td className="pos-num">{row.bills}</td>
                 <td className="pos-num">{money(row.cash)}</td>
                 <td className="pos-num">{money(row.card)}</td>
+                {takings.other > 0 ? (
+                  <td className="pos-num">{money(row.other)}</td>
+                ) : null}
                 <td className="pos-num font-semibold">{money(row.total)}</td>
               </tr>
             ))}
@@ -287,6 +302,9 @@ function CounterTable({
               <td className="pos-num font-semibold">{takings.bills}</td>
               <td className="pos-num font-semibold">{money(takings.cash)}</td>
               <td className="pos-num font-semibold">{money(takings.card)}</td>
+              {takings.other > 0 ? (
+                <td className="pos-num font-semibold">{money(takings.other)}</td>
+              ) : null}
               <td className="pos-num font-display text-[1rem] font-bold text-orchid-800">
                 {money(takings.total)}
               </td>

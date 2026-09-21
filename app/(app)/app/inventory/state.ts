@@ -85,3 +85,50 @@ export const TREE_IDLE: TreeState = {
   savedAt: null,
   saved: null,
 };
+
+/**
+ * What the batch panel gets back from `batch-actions.ts`.
+ *
+ * Here and not beside those actions for the reason `ProductState` is here: a
+ * `"use server"` file may only export async functions, and `IDLE_BATCH` is an
+ * object — the type would survive the compile and Next would refuse the whole
+ * module at runtime.
+ */
+export type BatchState = {
+  error: string | null;
+  savedAt: number | null;
+  saved: { action: "opened" | "counted" | "written-off"; detail: string } | null;
+  /** The item's batches as they now stand, so the panel redraws without a
+   *  second round trip. Null on a refusal. */
+  batches: import("@/lib/pos/batch").Batch[] | null;
+};
+
+export const IDLE_BATCH: BatchState = {
+  error: null,
+  savedAt: null,
+  saved: null,
+  batches: null,
+};
+
+/**
+ * What the variant grid editor gets back from `variant-actions.ts`.
+ *
+ * Here and not beside those actions for the reason `BatchState` is here: a
+ * `"use server"` file may only export async functions, and `IDLE_VARIANT` is an
+ * object.
+ */
+export type VariantState = {
+  error: string | null;
+  savedAt: number | null;
+  saved: { action: "grid" | "counted"; detail: string } | null;
+  /** The item's rows as they now stand, so the editor redraws without a second
+   *  round trip. Null on a refusal. */
+  variants: import("@/lib/pos/variant").Variant[] | null;
+};
+
+export const IDLE_VARIANT: VariantState = {
+  error: null,
+  savedAt: null,
+  saved: null,
+  variants: null,
+};

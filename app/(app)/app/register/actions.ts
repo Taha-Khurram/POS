@@ -8,13 +8,18 @@ import { UNITS } from "@/lib/pos/catalog";
 import {
   billOf,
   businessDayOf,
+  cartKey,
   discountOf,
   isTender,
+  round2,
   round3,
+  tender,
   type CartLine,
   type Discount,
   type TenderId,
+  type TenderPart,
 } from "@/lib/pos/counter";
+import { writeVariant } from "@/lib/pos/variant";
 import { getTillAccess } from "@/lib/pos/access";
 import { getShopSettings } from "@/lib/pos/shop";
 import { createAdminClient } from "@/utils/supabase/admin";
@@ -44,8 +49,21 @@ import { createAdminClient } from "@/utils/supabase/admin";
 export type SaleInput = {
   saleId: string;
   counterId: string;
-  tender: TenderId;
-  lines: { id: string; quantity: number }[];
+  /**
+   * How the customer settled it, in parts. One on the overwhelming majority of
+   * bills; more when somebody puts two thousand on a card and hands over the
+   * rest in notes, which is an ordinary Saturday and until `0032` could only be
+   * recorded as one of the two.
+   *
+   * Change is already off these figures — `settleTenders` on the till takes it
+   * out of the cash part, because recording the note a customer handed over
+   * would overstate the drawer by exactly the change every time.
+   */
+  tenders: TenderPart[];
+  /** What the browser asks for: a catalog id, which size or colour of it, and
+   *  how many. Nothing about price — the server decides that, which is the
+   *  whole of the trust boundary here. */
+  lines: { id: string; variantId: string | null; quantity: number }[];
   /** Who the bill is for. Null is a walk-in, which is most bills. */
   customerId: string | null;
   /**
@@ -74,7 +92,9 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     return { ok: false, error: "That sale is malformed. Start it again." };
   }
 
-  if (!isTender(input.tender)) {
+  const tenders = (input.tenders ?? []).filter((part) => Number(part.amount) > 0);
+
+  if (tenders.length === 0 || !tenders.every((part) => isTender(part.method))) {
     return { ok: false, error: "That is not a payment method this counter takes." };
   }
 
@@ -105,6 +125,31 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     .in("id", [...new Set(wanted.map((line) => line.id))]);
 
   const priced = new Map((catalog ?? []).map((row) => [row.id, row]));
+
+  // The variants named, re-read on the same terms and for the same reason. A
+  // variant carries its own stock and may carry its own price, so a bill that
+  // took the item's numbers for a medium blue would be wrong twice over.
+  const askedVariants = [
+    ...new Set(wanted.map((line) => line.variantId).filter(Boolean)),
+  ] as string[];
+
+  const variants = new Map<
+    string,
+    { id: string; item_id: string; option_a: string; option_b: string | null;
+      selling_price: number | string | null; quantity: number | string }
+  >();
+
+  if (askedVariants.length > 0) {
+    const { data } = await supabase
+      .from("item_variants")
+      .select("id, item_id, option_a, option_b, selling_price, quantity")
+      .eq("tenant_id", session.tenantId)
+      .eq("is_active", true)
+      .in("id", askedVariants);
+
+    for (const row of data ?? []) variants.set(row.id as string, row);
+  }
+
   const lines: CartLine[] = [];
 
   for (const line of wanted) {
@@ -129,7 +174,30 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
       return { ok: false, error: `${item.name} is sold in whole ${unit}s.` };
     }
 
-    const stock = Number(item.stock) || 0;
+    // The variant, where the line named one. It has to belong to this item:
+    // a crafted body pairing a cheap variant with a dear item is the one way
+    // this endpoint could be made to sell at the wrong price.
+    const variant = line.variantId ? variants.get(line.variantId) : undefined;
+
+    if (line.variantId && (!variant || variant.item_id !== item.id)) {
+      return {
+        ok: false,
+        error: `That size or colour of ${item.name} is no longer on the list.`,
+      };
+    }
+
+    const label = variant ? writeVariant({
+      optionA: variant.option_a,
+      optionB: variant.option_b ?? "",
+    }) : "";
+
+    // The variant's own shelf where there is one — eight mediums and no larges
+    // is not "eight in stock" for somebody asking for a large.
+    const stock = variant
+      ? Number(variant.quantity) || 0
+      : Number(item.stock) || 0;
+
+    const what = label ? `${item.name} (${label})` : item.name;
 
     // The shelf count is a gate, not a warning. The till refuses to put an
     // item at zero on a bill and refuses to step one past what is counted;
@@ -144,18 +212,26 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
         ok: false,
         error:
           stock <= 0
-            ? `${item.name} is out of stock, so it cannot be sold. Count it in on Products & stock first.`
-            : `Flo counts ${stock} ${unit} of ${item.name} and this bill has ${quantity}. Lower it, or count the shelf in on Products & stock.`,
+            ? `${what} is out of stock, so it cannot be sold. Count it in on Products & stock first.`
+            : `Flo counts ${stock} ${unit} of ${what} and this bill has ${quantity}. Lower it, or count the shelf in on Products & stock.`,
       };
     }
 
     lines.push({
-      id: item.id,
+      id: cartKey(item.id, variant?.id),
+      itemId: item.id,
+      variantId: variant?.id ?? null,
+      variantLabel: label,
       name: item.name,
       urdu: item.name_urdu ?? "",
       unit,
       quantity,
-      price: Number(item.selling_price) || 0,
+      // The variant's own price where it has one, the item's otherwise — the
+      // same rule `priceOf` states for the browser, resolved here because this
+      // is the side that decides.
+      price: variant
+        ? Number(variant.selling_price ?? item.selling_price) || 0
+        : Number(item.selling_price) || 0,
       taxRate: Number(item.tax_rate) || 0,
       fractional,
       stock,
@@ -200,7 +276,7 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
   // open, and willing to take the tender the sheet chose.
   const { data: counter } = await supabase
     .from("counters")
-    .select("id, name, is_active, accepts_cash, accepts_card")
+    .select("id, name, is_active, accepted_tenders")
     .eq("id", input.counterId)
     .eq("tenant_id", session.tenantId)
     .maybeSingle();
@@ -212,9 +288,17 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     };
   }
 
-  const takes = input.tender === "cash" ? counter.accepts_cash : counter.accepts_card;
-  if (!takes) {
-    return { ok: false, error: `${counter.name} is not set up to take ${input.tender}.` };
+  // Every part has to be something this till takes. `record_sale` checks it
+  // again against the same column inside the transaction — this one is here so
+  // the refusal is a sentence rather than a failed write.
+  const accepted = (counter.accepted_tenders ?? []) as TenderId[];
+  const refused = tenders.find((part) => !accepted.includes(part.method));
+
+  if (refused) {
+    return {
+      ok: false,
+      error: `${counter.name} is not set up to take ${tender(refused.method).label.toLowerCase()}.`,
+    };
   }
 
   // No drawer, no sale. `record_sale` stamps whichever shift the counter is in
@@ -273,7 +357,11 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     p_created_by: session.userId,
     p_subtotal: bill.subtotal,
     p_total: bill.total,
-    p_tender: input.tender,
+    p_tenders: tenders.map((part) => ({
+      method: part.method,
+      amount: round2(Number(part.amount)),
+      reference: (part.reference ?? "").trim().slice(0, 60) || null,
+    })),
     p_discount: bill.discount,
     // The floor under the check above. `record_sale` raises rather than
     // clamps, so this being wrong is a failed sale and not a silent giveaway.
@@ -281,9 +369,15 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
     p_lines: lines.map((line) => ({
       // The catalog row this line came off, so a report can group by item.
       // `name_snapshot` beside it is what the receipt was printed from, and it
-      // is what survives the item being deleted.
-      item_id: line.id,
-      name: line.name,
+      // is what survives the item being deleted. `line.id` is the *cart* key
+      // since `0031` and is deliberately not sent — the item and the variant
+      // are two columns on `sale_lines`, and a composite key in one of them
+      // would be a value nothing could join on.
+      item_id: line.itemId,
+      variant_id: line.variantId,
+      name: line.variantLabel
+        ? `${line.name} — ${line.variantLabel}`
+        : line.name,
       unit: line.unit,
       quantity: line.quantity,
       unit_price: line.price,
@@ -323,7 +417,13 @@ export async function recordSale(input: SaleInput): Promise<SaleResult> {
         counter_id: counter.id,
         customer_id: customerId,
         receipt_number: receiptNo,
-        tender: input.tender,
+        // Every part by name. "Which bills were settled by JazzCash" is the
+        // question a shop asks the day a wallet statement disagrees with the
+        // takings, and it has to be answerable from the log as well as the row.
+        tenders: tenders.map((part) => ({
+          method: part.method,
+          amount: round2(Number(part.amount)),
+        })),
         total: bill.total,
         // Audited by name because it is the one figure on a bill the person
         // entering it benefits from getting wrong. A shop asking "who has been

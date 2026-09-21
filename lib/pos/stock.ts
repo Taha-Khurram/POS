@@ -52,6 +52,12 @@ export const STOCK_REASONS = [
     label: "Delivered",
     blurb: "Came in on a delivery and went on the shelf.",
   },
+  {
+    id: "expired",
+    label: "Written off — expired",
+    blurb:
+      "Taken off the shelf past its date. The one reason stock leaves without anybody paying for it.",
+  },
 ] as const;
 
 export type StockReason = (typeof STOCK_REASONS)[number]["id"];

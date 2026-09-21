@@ -16,6 +16,7 @@ import {
   IconSales,
   IconSettings,
   IconSignOut,
+  IconTables,
   IconTruck,
   type IconProps,
 } from "./icons";
@@ -45,6 +46,11 @@ const GROUPS: { label: string; items: Item[] }[] = [
     items: [
       { id: "dashboard", href: "/app", label: "Dashboard", icon: IconDashboard },
       { id: "register", href: "/app/register", label: "Register", icon: IconRegister },
+      // Between the register and the history, which is where it sits in the
+      // day: you take an order, you settle it, you look it up. Drawn only for a
+      // shop that seats people — `moduleAccess` reads `restaurant_mode` for
+      // that, and it is the one rail row that is not about the person.
+      { id: "tables", href: "/app/tables", label: "Tables", icon: IconTables },
       { id: "sales", href: "/app/sales", label: "Sales history", icon: IconSales },
     ],
   },

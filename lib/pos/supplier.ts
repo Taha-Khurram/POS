@@ -42,6 +42,12 @@ export type Supplier = {
   /** Days to pay. Zero is cash on delivery, which is most kiryana buying. */
   paymentTermsDays: number;
   notes: string;
+  /** What the shop already owed them before Flo, and the day it was owed as at
+   *  (`0029`). A balance with no date on it is a figure nobody can check
+   *  against their own book. Zero and null is the honest start for a supplier
+   *  `0027` lifted out of the item list. */
+  opening: number;
+  openingOn: string | null;
   /** Off takes them out of every picker and keeps every order they are on. */
   isActive: boolean;
   createdAt: string;
@@ -64,6 +70,10 @@ export const ADDRESS_MAX = 200;
 export const TAX_NUMBER_MAX = 40;
 export const NOTES_MAX = 500;
 export const TERMS_MAX_DAYS = 365;
+/** The same ceiling `checkPayment` uses, for the same reason: well above any
+ *  real account, low enough that a mis-keyed opening balance is refused rather
+ *  than quietly becoming what the shop thinks it owes. */
+export const OPENING_MAX = 99_999_999;
 
 /**
  * A supplier name as the unique index compares it.
@@ -141,6 +151,10 @@ export type SupplierDraft = {
   taxNumber: string;
   paymentTermsDays: number;
   notes: string;
+  /** Signed: positive is owed to them, negative is an advance the shop has
+   *  already paid. Both happen. */
+  opening: number;
+  openingOn: string;
 };
 
 export const EMPTY_SUPPLIER: SupplierDraft = {
@@ -152,6 +166,8 @@ export const EMPTY_SUPPLIER: SupplierDraft = {
   taxNumber: "",
   paymentTermsDays: 0,
   notes: "",
+  opening: 0,
+  openingOn: "",
 };
 
 /** The complaint, or null when there is nothing to complain about. */
@@ -199,6 +215,17 @@ export function checkSupplier(draft: SupplierDraft): string | null {
 
   if (draft.notes.trim().length > NOTES_MAX) {
     return `That note is too long. ${NOTES_MAX} characters is the margin of the order book.`;
+  }
+
+  if (!Number.isFinite(draft.opening) || Math.abs(draft.opening) > OPENING_MAX) {
+    return "That opening balance is not an amount. Check for a stray digit.";
+  }
+
+  // The date is what makes the figure checkable, so a figure without one is
+  // refused rather than filed against no day at all. Nought needs no date —
+  // starting level is not a claim about any particular morning.
+  if (draft.opening !== 0 && !/^\d{4}-\d{2}-\d{2}$/.test(draft.openingOn)) {
+    return "Say which day that opening balance was as at — it is what makes it checkable against your own book.";
   }
 
   return null;

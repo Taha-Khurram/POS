@@ -99,19 +99,30 @@ export async function listHeldBills(
  * crashing the register — the cashier gets a bill with an item missing, which
  * they can see and correct, instead of a screen that will not open.
  */
-function readLines(raw: unknown): { itemId: string; quantity: number }[] {
+function readLines(
+  raw: unknown,
+): { itemId: string; variantId: string | null; quantity: number }[] {
   if (!Array.isArray(raw)) return [];
 
   return raw.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
 
     const itemId = (entry as { item_id?: unknown }).item_id;
+    const variantId = (entry as { variant_id?: unknown }).variant_id;
     const quantity = Number((entry as { quantity?: unknown }).quantity);
 
     if (typeof itemId !== "string" || !Number.isFinite(quantity) || quantity <= 0) {
       return [];
     }
 
-    return [{ itemId, quantity }];
+    return [
+      {
+        itemId,
+        // Absent on every bill parked before `0031`, which is the honest
+        // reading: those bills were for items that had no sizes.
+        variantId: typeof variantId === "string" && variantId ? variantId : null,
+        quantity,
+      },
+    ];
   });
 }

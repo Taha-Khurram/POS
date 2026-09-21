@@ -10,6 +10,7 @@ import {
   RECEIPT_FOOTER_MAX,
   RECEIPT_PREFIX_RE,
   newCounterDefaults,
+  TENDERS,
 } from "@/lib/pos/counter";
 import {
   ACCESS_LEVELS,
@@ -185,6 +186,10 @@ export async function saveCurrencyClock(
     day_ends_at: dayEndsAt,
     week_starts_on: weekStartsOn,
     fiscal_year_starts: fiscalYearStarts,
+    // The one setting on this form that changes which *modules* the shop has
+    // rather than how one behaves — `moduleAccess` reads it, and switching it
+    // on is what makes the Tables rail row and `/app/tables` exist.
+    restaurant_mode: checked(formData, "restaurant_mode"),
   };
 
   const supabase = createAdminClient();
@@ -192,7 +197,7 @@ export async function saveCurrencyClock(
   const { data: before } = await supabase
     .from("tenant_settings")
     .select(
-      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts",
+      "currency, currency_format, timezone, day_ends_at, week_starts_on, fiscal_year_starts, restaurant_mode",
     )
     .eq("tenant_id", session.tenantId)
     .maybeSingle();
@@ -340,23 +345,30 @@ export async function saveCounter(
     );
   }
 
-  const acceptsCash = checked(formData, "accepts_cash");
-  const acceptsCard = checked(formData, "accepts_card");
+  // One checkbox per method since `0032`, read off the same `TENDERS` list the
+  // payment sheet offers — so a method this form can switch on is a method the
+  // till can settle with, by construction.
+  const accepted = TENDERS.filter((entry) =>
+    checked(formData, `tender_${entry.id}`),
+  ).map((entry) => entry.id);
+
   const isActive = checked(formData, "is_active");
 
-  // An open counter that can take neither cash nor card is a register with a
-  // Charge button that cannot finish a sale. Refused here rather than
-  // discovered by a cashier with a queue.
-  if (isActive && !acceptsCash && !acceptsCard) {
-    return fail("An open counter has to take cash, card, or both.");
+  // An open counter that takes nothing is a register with a Charge button that
+  // cannot finish a sale. Refused here rather than discovered by a cashier with
+  // a queue.
+  if (isActive && accepted.length === 0) {
+    return fail("An open counter has to take at least one kind of payment.");
   }
 
   const after = {
     name,
     is_active: isActive,
     receipt_prefix: receiptPrefix,
-    accepts_cash: acceptsCash,
-    accepts_card: acceptsCard,
+    // Cash on a shut counter with nothing ticked, so the column's own check
+    // constraint is never the thing that refuses a save — it is a floor, not a
+    // rule anybody should meet.
+    accepted_tenders: accepted.length > 0 ? accepted : ["cash"],
     receipt_footer: footer || null,
     auto_print: checked(formData, "auto_print"),
   };
@@ -366,7 +378,7 @@ export async function saveCounter(
   const { data: before } = await supabase
     .from("counters")
     .select(
-      "name, is_active, receipt_prefix, accepts_cash, accepts_card, receipt_footer, auto_print",
+      "name, is_active, receipt_prefix, accepted_tenders, receipt_footer, auto_print",
     )
     .eq("id", counterId)
     .maybeSingle();
@@ -446,8 +458,7 @@ export async function addCounter(): Promise<void> {
       name: seed.name,
       receipt_prefix: seed.receiptPrefix,
       is_active: seed.isActive,
-      accepts_cash: seed.acceptsCash,
-      accepts_card: seed.acceptsCard,
+      accepted_tenders: seed.acceptedTenders,
       auto_print: seed.autoPrint,
       sort_order: seed.sortOrder,
       // Inherits the shop's branch. Nothing picks one yet — there is one per

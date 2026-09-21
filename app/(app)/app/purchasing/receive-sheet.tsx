@@ -114,6 +114,12 @@ export function ReceiveSheet({
           quantity: outstanding(line),
           unitCost: line.unitCost,
           expected: outstanding(line),
+          // Off the catalog, not off the order: an order does not know which
+          // carton will come, and whether the item is tracked is a fact about
+          // the item now rather than when the order was raised.
+          tracksBatches: products.find((p) => p.id === line.itemId)?.tracksBatches,
+          batchNo: "",
+          expiresOn: "",
         })),
     );
   };
@@ -157,6 +163,8 @@ export function ReceiveSheet({
           unit: line.unit,
           quantity: line.quantity,
           unitCost: line.unitCost,
+          batchNo: line.batchNo ?? "",
+          expiresOn: line.expiresOn ?? "",
         })),
       });
 
@@ -287,6 +295,7 @@ export function ReceiveSheet({
                 products={products}
                 onChange={setLines}
                 costLabel="Invoice cost each"
+                askBatch
               />
             </div>
           </div>

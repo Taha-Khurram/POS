@@ -236,9 +236,10 @@ export async function recordReturn(input: ReturnInput): Promise<ReturnResult> {
     };
   }
 
-  const gives = input.tender === "cash" ? counter.acceptsCash : counter.acceptsCard;
-
-  if (!gives) {
+  // Money going back leaves the same way it came in, and the counter has to be
+  // set up for it — a refund to a card the till never takes is a refund nobody
+  // can make.
+  if (!counter.acceptedTenders.includes(input.tender)) {
     return { ok: false, error: `${counter.name} is not set up for ${input.tender}.` };
   }
 

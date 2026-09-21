@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 
 import { BarcodeScanner } from "@/components/pos/barcode-scanner";
 import {
@@ -41,6 +41,8 @@ import {
   type Movement,
 } from "@/lib/pos/stock";
 import { rupees } from "@/lib/format";
+import { BatchPanel } from "./batch-panel";
+import { VariantGrid } from "./variant-grid";
 import { deleteProduct, loadMovements, saveProduct } from "./actions";
 import { IDLE } from "./state";
 
@@ -79,38 +81,12 @@ type LookupState = "idle" | "searching" | "hit" | "miss";
 /** Quick ways to land on a round margin instead of doing the division. */
 const MARGIN_STEPS = [15, 20, 25, 30];
 
-type Option = { id: string; name: string; values: string };
-
-const NEW_OPTIONS: Option[] = [
-  { id: "opt-1", name: "Size", values: "Small, Medium, Large" },
-  { id: "opt-2", name: "Colour", values: "" },
-];
-
-/** Every combination of every option, in the order the rows were typed. */
-function matrixOf(options: Option[]) {
-  const lists = options
-    .map((option) => ({
-      name: option.name.trim(),
-      values: option.values
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
-    }))
-    .filter((option) => option.name && option.values.length > 0);
-
-  if (lists.length === 0) return [];
-
-  return lists.reduce<string[][]>(
-    (rows, list) => rows.flatMap((row) => list.values.map((value) => [...row, value])),
-    [[]],
-  );
-}
-
 export function ProductSheet({
   item,
   tree,
   suppliers,
   nextSerial,
+  today,
   onClose,
 }: {
   /** The row being corrected, or null for a new product. */
@@ -123,6 +99,9 @@ export function ProductSheet({
    *  made this a row and the form posts the id. */
   suppliers: { id: string; name: string }[];
   nextSerial: number;
+  /** The shop's own trading day, for the batch panel's expiry states. Resolved
+   *  on the server: a tablet on the wrong date would mark good stock expired. */
+  today: string;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -168,8 +147,8 @@ export function ProductSheet({
   const [unit, setUnit] = useState<UnitId>(item?.unit ?? "piece");
   const [stock, setStock] = useState(item ? String(item.stock) : "");
   const [lowAt, setLowAt] = useState(String(item?.lowAt ?? 12));
-  const [options, setOptions] = useState<Option[]>(NEW_OPTIONS);
   const [onSale, setOnSale] = useState(item?.isActive ?? true);
+  const [tracksBatches, setTracksBatches] = useState(item?.tracksBatches ?? false);
 
   // The serial the next in-store code and the suggested SKU are cut from. It is
   // a suggestion and not a claim: the unique index on `(tenant_id, barcode)` is
@@ -249,7 +228,6 @@ export function ProductSheet({
   const money = marginOf(num(cost), num(price));
   const losing = money !== null && money.profit < 0;
 
-  const combos = useMemo(() => matrixOf(options), [options]);
   const fractional = isFractional(unit);
   const locked = pending || removing;
 
@@ -339,15 +317,6 @@ export function ProductSheet({
     setPrice(String(Math.round(base / (1 - percent / 100))));
   };
 
-  const setOption = (id: string, patch: Partial<Option>) =>
-    setOptions((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-
-  const addOption = () =>
-    setOptions((rows) => [
-      ...rows,
-      { id: `opt-${rows.length + 1}-${Date.now()}`, name: "", values: "" },
-    ]);
-
   return (
     <div
       className="pos-modal"
@@ -371,17 +340,15 @@ export function ProductSheet({
           <input type="hidden" name="department" value={department} />
           <input type="hidden" name="category" value={category} />
           <input type="hidden" name="supplier_id" value={supplierId} />
+          {tracksBatches ? (
+            <input type="hidden" name="tracks_batches" value="on" />
+          ) : null}
           {/* The tax rate and the unit joined these when their dropdowns
               stopped being `<select name=…>`. They sit above the fieldset
               rather than inside it on purpose: a disabled fieldset posts
               nothing, and these two are never the field being switched off. */}
           <input type="hidden" name="tax_rate" value={taxRate} />
           <input type="hidden" name="unit" value={unit} />
-          <input
-            type="hidden"
-            name="variant_count"
-            value={tracking === "variant" ? combos.length : ""}
-          />
 
           <header className="sticky top-0 z-10 flex items-start gap-3 border-b border-orchid-100 bg-paper-50 px-4 py-3.5 sm:px-5">
             <span className="mt-0.5 grid h-9 w-9 flex-none place-items-center rounded-xl bg-orchid-200 text-orchid-800">
@@ -841,19 +808,27 @@ export function ProductSheet({
                     className="pos-field"
                     inputMode="decimal"
                     value={stock}
+                    disabled={Boolean(item) && tracksBatches}
                     onChange={(event) => setStock(event.target.value)}
                     placeholder={fractional ? "84.5" : "24"}
                   />
                   <p className="pos-hint">
-                    {item
-                      ? // Said here because it changes what the box means. It
-                        // is not a figure to keep up to date by hand any more
-                        // — the till moves it — so typing in it is a
-                        // stocktake, and it is recorded as one.
-                        "The till takes this down with every sale. Change it only when you have counted the shelf."
-                      : fractional
-                        ? "Decimals allowed — 84.5 kg is a legitimate count."
-                        : "Whole units. Leave it empty to start at nothing."}
+                    {item && tracksBatches
+                      ? // `set_stock` refuses a batch-tracked item outright, so
+                        // the box is dead rather than being a control that
+                        // bounces. One figure cannot say which batch expires
+                        // when, and guessing would extend or shorten something's
+                        // life by the difference.
+                        "Counted by batch below — one figure here could not say which batch it belonged to."
+                      : item
+                        ? // Said here because it changes what the box means. It
+                          // is not a figure to keep up to date by hand any more
+                          // — the till moves it — so typing in it is a
+                          // stocktake, and it is recorded as one.
+                          "The till takes this down with every sale. Change it only when you have counted the shelf."
+                        : fractional
+                          ? "Decimals allowed — 84.5 kg is a legitimate count."
+                          : "Whole units. Leave it empty to start at nothing."}
                   </p>
                 </label>
 
@@ -873,19 +848,81 @@ export function ProductSheet({
                 </label>
               </div>
 
+              {/* ---------------- Counted by batch ----------------
+                  Opt-in per item, and off for everything until somebody says
+                  otherwise. A kiryana's flour has no batch, and a second
+                  dropdown between a shopkeeper and a saved item is the mistake
+                  `0016` undid when it dropped `subcategory`. */}
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-orchid-100 bg-orchid-50/60 p-3.5">
+                <input
+                  type="checkbox"
+                  checked={tracksBatches}
+                  onChange={(event) => setTracksBatches(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
+                />
+
+                <span className="min-w-0">
+                  <span className="block font-display text-[0.875rem] font-semibold text-graphite-900">
+                    Count this by batch and expiry
+                  </span>
+                  <span className="mt-1 block text-[0.8125rem] leading-relaxed text-graphite-700">
+                    {tracksBatches ? (
+                      <>
+                        The till sells the soonest date first and will not sell
+                        anything past its date. Put the batch and expiry on the
+                        line when a delivery comes in.
+                      </>
+                    ) : (
+                      <>
+                        For medicines, milk, bread — anything with a date on the
+                        box. Leave it off for everything else: one number is the
+                        whole truth for a bag of flour.
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              {item && tracksBatches ? (
+                <div className="mt-4">
+                  <BatchPanel
+                    itemId={item.id}
+                    itemName={item.name}
+                    itemStock={item.stock}
+                    today={today}
+                  />
+                </div>
+              ) : null}
+
               {item ? <StockHistory item={item} /> : null}
 
+              {/* ---------------- Sold by variant ----------------
+                  Until `0031` this drew the SKUs a matrix *would* generate and
+                  said so, because `item_variants` did not exist. It exists now,
+                  so the grid is the thing: each row is a sellable line with its
+                  own stock, code and optionally its own price.
+
+                  Only on a saved item. A grid has to hang off a row, and the
+                  sheet has no id to hang one off until the first save — which
+                  is the same reason the stock ledger below is `item ? …`. */}
               {tracking === "variant" ? (
-                <VariantMatrix
-                  options={options}
-                  combos={combos}
-                  sku={effectiveSku}
-                  onChange={setOption}
-                  onAdd={addOption}
-                  onRemove={(id) =>
-                    setOptions((rows) => rows.filter((row) => row.id !== id))
-                  }
-                />
+                item ? (
+                  <div className="mt-4">
+                    <VariantGrid
+                      itemId={item.id}
+                      itemName={item.name}
+                      itemPrice={num(price)}
+                      itemStock={item.stock}
+                      axes={item.variantAxes}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-2xl border border-dashed border-orchid-200 px-4 py-4 text-[0.8125rem] leading-relaxed text-graphite-500">
+                    Save the item first, then build its grid — sizes, colours,
+                    and a barcode for each one. Until then this is one line with
+                    one stock figure.
+                  </p>
+                )
               ) : null}
             </section>
 
@@ -1300,121 +1337,4 @@ function LabelPreview({
  * a shop prints its labels from, and it says so rather than offering a per-row
  * stock box that would go nowhere.
  */
-const MATRIX_CAP = 60;
 
-function VariantMatrix({
-  options,
-  combos,
-  sku,
-  onChange,
-  onAdd,
-  onRemove,
-}: {
-  options: Option[];
-  combos: string[][];
-  sku: string;
-  onChange: (id: string, patch: Partial<Option>) => void;
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-}) {
-  const shown = combos.slice(0, MATRIX_CAP);
-
-  return (
-    <div className="mt-4">
-      <div className="space-y-2">
-        {options.map((option, index) => (
-          <div key={option.id} className="flex flex-wrap items-end gap-2">
-            <label className="w-[9rem] flex-none">
-              <span className="pos-label">{index === 0 ? "Option" : "And"}</span>
-              <input
-                className="pos-field"
-                value={option.name}
-                onChange={(event) => onChange(option.id, { name: event.target.value })}
-                placeholder="Size"
-              />
-            </label>
-
-            <label className="min-w-[12rem] flex-1">
-              <span className="pos-label">Values, separated by commas</span>
-              <input
-                className="pos-field"
-                value={option.values}
-                onChange={(event) => onChange(option.id, { values: event.target.value })}
-                placeholder="Small, Medium, Large"
-              />
-            </label>
-
-            {options.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => onRemove(option.id)}
-                className="pos-icon-btn mb-1"
-                aria-label={`Remove ${option.name || "this option"}`}
-              >
-                <IconTrash className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onAdd}
-        disabled={options.length >= 3}
-        className="pos-btn pos-btn-quiet pos-btn-sm mt-2 disabled:opacity-45"
-      >
-        <IconPlus className="h-3.5 w-3.5" />
-        Another option
-      </button>
-
-      {shown.length > 0 ? (
-        <div className="mt-3 overflow-x-auto rounded-xl border border-orchid-100">
-          <table className="pos-table">
-            <thead>
-              <tr>
-                <th>Variant</th>
-                <th>SKU it would carry</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((combo) => (
-                <tr key={combo.join("-")}>
-                  <td className="font-medium text-graphite-900">{combo.join(" · ")}</td>
-                  <td className="font-mono text-[0.75rem] text-graphite-500">
-                    {sku}-
-                    {combo.map((value) => value.slice(0, 2).toUpperCase()).join("")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="pos-hint">
-          Name an option and give it values — the rows below build themselves.
-        </p>
-      )}
-
-      {combos.length > 0 ? (
-        <p className="pos-hint flex items-start gap-1.5">
-          {combos.length > MATRIX_CAP ? (
-            <>
-              <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
-              {combos.length} combinations — only the first {MATRIX_CAP} are
-              shown. That is a lot of rows to count at stock-take; consider
-              splitting the colours into their own items.
-            </>
-          ) : (
-            <>
-              <IconCheck className="mt-0.5 h-3.5 w-3.5 flex-none text-orchid-600" />
-              {combos.length} {combos.length === 1 ? "row" : "rows"}. The count
-              is saved with the item; stock and a barcode per row arrive with the
-              variants table.
-            </>
-          )}
-        </p>
-      ) : null}
-    </div>
-  );
-}

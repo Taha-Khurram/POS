@@ -1,17 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import {
-  IconChevron,
   IconClose,
+  IconPencil,
   IconPlus,
   IconSearch,
 } from "@/components/pos/icons";
 import { Select, type SelectOption } from "@/components/pos/select-field";
 import { initialsOf, writePhone } from "@/lib/pos/customer";
+import { balanceState, type SupplierBalance } from "@/lib/pos/ledger";
 import {
   foldName,
   matchesSupplier,
@@ -78,14 +80,21 @@ const filterBy = (id: FilterId) =>
  * opens the editor. The button is the name itself: a row with one small pencil
  * at the end of it is a target nobody hits on a tablet.
  */
-const columnsFor = (onEdit: (supplier: Supplier) => void): Column<Supplier>[] => [
+const columnsFor = (
+  onEdit: (supplier: Supplier) => void,
+  balances: Map<string, SupplierBalance>,
+  money: (value: number) => string,
+): Column<Supplier>[] => [
   {
     key: "supplier",
     header: "Supplier",
+    // The name goes to their account rather than opening the editor, for the
+    // reason a customer's name does: the question asked of this screen is
+    // nearly always "what do I owe them" and only occasionally "fix their
+    // number". The pencil at the end of the row is the editor.
     cell: (supplier) => (
-      <button
-        type="button"
-        onClick={() => onEdit(supplier)}
+      <Link
+        href={`/app/purchasing?tab=suppliers&supplier=${supplier.id}`}
         className="flex w-full items-center gap-2.5 text-left"
       >
         <span
@@ -105,8 +114,34 @@ const columnsFor = (onEdit: (supplier: Supplier) => void): Column<Supplier>[] =>
             {writePhone(supplier.phone) || "no number"}
           </span>
         </span>
-      </button>
+      </Link>
     ),
+  },
+  {
+    key: "balance",
+    header: "Balance",
+    align: "end",
+    cell: (supplier) => {
+      const balance = balances.get(supplier.id);
+      const value = balance?.balance ?? 0;
+      const state = balanceState(value);
+
+      // A square account reads as a dash rather than Rs 0. A column of noughts
+      // is a column the eye stops reading, and the whole job of this one is to
+      // make the handful of rows that owe money findable at a glance.
+      if (state === "clear") return <span className="text-graphite-500">—</span>;
+
+      return (
+        <span
+          className={`font-semibold tabular-nums ${
+            state === "advance" ? "text-signal-good" : "text-graphite-900"
+          }`}
+          title={state === "advance" ? "You have paid them ahead" : undefined}
+        >
+          {state === "advance" ? `+${money(Math.abs(value))}` : money(value)}
+        </span>
+      );
+    },
   },
   {
     key: "contact",
@@ -160,13 +195,23 @@ const columnsFor = (onEdit: (supplier: Supplier) => void): Column<Supplier>[] =>
         className="pos-icon-btn"
         aria-label={`Edit ${supplier.name}`}
       >
-        <IconChevron className="h-4 w-4 -rotate-90" />
+        <IconPencil className="h-4 w-4" />
       </button>
     ),
   },
 ];
 
-export function SuppliersPanel({ suppliers }: { suppliers: Supplier[] }) {
+export function SuppliersPanel({
+  suppliers,
+  balances,
+  money,
+}: {
+  suppliers: Supplier[];
+  /** What each one is owed, by id. Read once for the page by
+   *  `listSupplierBalances`, so this column costs no round trip of its own. */
+  balances: Map<string, SupplierBalance>;
+  money: (value: number) => string;
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
 
@@ -194,7 +239,10 @@ export function SuppliersPanel({ suppliers }: { suppliers: Supplier[] }) {
     [suppliers, query, filter],
   );
 
-  const columns = useMemo(() => columnsFor(setEditing), []);
+  const columns = useMemo(
+    () => columnsFor(setEditing, balances, money),
+    [balances, money],
+  );
 
   const filterOptions: SelectOption[] = useMemo(
     () =>
@@ -289,6 +337,44 @@ export function SuppliersPanel({ suppliers }: { suppliers: Supplier[] }) {
 
       {editing ? (
         <SupplierSheet supplier={open} taken={taken} onClose={() => setEditing(null)} />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The editor, opened from the supplier's own record rather than the table.
+ *
+ * A component of its own rather than lifting the sheet's state into the record
+ * screen, because that screen is a server component and the sheet is a modal:
+ * this is the smallest client leaf that can hold "is it open".
+ */
+export function EditSupplierButton({
+  supplier,
+  taken,
+}: {
+  supplier: Supplier;
+  taken: string[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="pos-btn pos-btn-soft pos-btn-sm"
+      >
+        <IconPencil className="h-4 w-4" />
+        Edit details
+      </button>
+
+      {open ? (
+        <SupplierSheet
+          supplier={supplier}
+          taken={taken}
+          onClose={() => setOpen(false)}
+        />
       ) : null}
     </>
   );

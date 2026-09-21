@@ -38,7 +38,7 @@ export type HoldInput = {
   counterId: string;
   label: string;
   customerId: string | null;
-  lines: { id: string; quantity: number }[];
+  lines: { id: string; variantId: string | null; quantity: number }[];
   discount: Discount;
 };
 
@@ -140,6 +140,11 @@ export async function holdBill(input: HoldInput): Promise<HoldResult> {
       customer_id: customerId,
       lines: lines.map((line) => ({
         item_id: line.id,
+        // Null for everything a shop does not sell by variant. Stored as the
+        // id rather than as "Medium / Blue": resuming re-reads the row, so a
+        // colour renamed while the bill was down comes back under its new name
+        // — the same reason no price is stored here.
+        variant_id: UUID.test(line.variantId ?? "") ? line.variantId : null,
         quantity: round3(Number(line.quantity)),
       })),
       discount_kind: discount.kind,
