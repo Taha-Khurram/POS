@@ -11,13 +11,18 @@ import { Cta } from "@/components/site/cta";
 export const metadata: Metadata = {
   title: "Products",
   description:
-    "The six screens of Flo: the register, sales history, products and stock, customers, staff and permissions, and the dashboard. Everything on this page is photographed from the working software.",
+    "The screens of Flo: the register, sales history, products and stock, buying, customers, staff and permissions, reports and the dashboard. Everything on this page is photographed from the working software.",
 };
 
 /**
- * Six modules, and they are the six a signed-in shop actually sees in the rail.
- * The seventh card names what is not built rather than leaving a shopkeeper to
- * find out on the day they tap it.
+ * The modules a signed-in shop actually sees in its rail, in that order — and
+ * the count is not decoration: the rail is visible down the left of every
+ * screenshot on this page, so a module missing from here is a card a
+ * shopkeeper can see in the picture and not read about. Buying and Reports
+ * were exactly that for several migrations.
+ *
+ * The last card names what is not built rather than leaving somebody to find
+ * out on the day they tap it.
  */
 const MODULES = [
   {
@@ -57,6 +62,18 @@ const MODULES = [
     ],
   },
   {
+    name: "Buying",
+    tag: "From the distributor",
+    copy: "What you ordered, what actually turned up, and what it cost you once the carriage is in — plus a running account per distributor, so “kitna dena hai” is a figure and not a memory.",
+    points: [
+      "An order to a supplier, and how much of it has arrived",
+      "A delivery recorded even when no order came before it",
+      "Carriage spread across the lines, into what each carton cost",
+      "The last landed cost becomes the item's cost price",
+      "What you owe each distributor, and how old it is",
+    ],
+  },
+  {
     name: "Customers",
     tag: "For regulars",
     copy: "The register book, kept properly. A name, a number, and every bill they have been on — so you can tell a regular from a walk-in without remembering a face.",
@@ -74,6 +91,18 @@ const MODULES = [
       "Assign somebody to a counter",
       "Suspend an account the day somebody leaves",
       "One owner per shop, and this screen cannot make a second",
+    ],
+  },
+  {
+    name: "Reports",
+    tag: "On the owner's phone",
+    copy: "Five tabs over one period: what the shop took, which items made it, which half of the shop made it, how it was paid for and by whose till, and what is sitting on the shelves.",
+    points: [
+      "Profit and margin by item, worked out from what each one cost when it sold",
+      "Both levels of your own tree — departments and categories",
+      "Cash against card, counter by counter, cashier by cashier",
+      "Every figure explains how it was worked out, on screen and in the file",
+      "Exported as CSV with those same words as the headings",
     ],
   },
   {
@@ -99,7 +128,7 @@ export default function ProductsPage() {
             <span className="text-gradient">and nothing it doesn&rsquo;t</span>
           </>
         }
-        lede="Six screens sharing one item list, one customer list, and one set of numbers — so the register, the store room and the owner&rsquo;s phone never disagree."
+        lede="Every screen sharing one item list, one customer list, and one set of numbers — so the register, the store room and the owner&rsquo;s phone never disagree."
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo

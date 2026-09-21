@@ -80,6 +80,12 @@ const SHOTS = [
   { name: "customers", theme: "light", path: "/app/customers" },
   { name: "sales-history", theme: "light", path: "/app/sales?tab=history" },
   { name: "day-close", theme: "light", path: "/app/sales?tab=day" },
+  // 30 days rather than the default, because a quarter's worth of rows is what
+  // the tab is for and a week of them reads like an empty screen.
+  { name: "reports", theme: "light", path: "/app/reports?tab=summary&range=30d" },
+  // The orders tab: what the shop is still owed, which is the question asked
+  // with a distributor on the phone. `npm run demo:shop` seeds five of them.
+  { name: "purchasing", theme: "light", path: "/app/purchasing?tab=orders" },
   { name: "staff", theme: "light", path: "/app/employees" },
   { name: "settings", theme: "light", path: "/app/settings?tab=store" },
   { name: "permissions", theme: "light", path: "/app/settings?tab=roles" },

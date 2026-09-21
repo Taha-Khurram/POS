@@ -15,6 +15,14 @@ export const metadata: Metadata = {
  * Every line below is a thing the software does today. The plan rows in
  * `0020_plans_tell_the_truth.sql` say the same, because a feature flag is a
  * promise the console can be held to and the two must not drift.
+ *
+ * Reports and Buying are on the Standard list rather than held back for
+ * Premium, because nothing in the console gates either by plan — Reports is
+ * reached through `can_view_reports`, which is a permission an owner grants a
+ * cashier. `0035` raised the `advanced_reports` flag on Standard to match, so
+ * what Premium actually buys is counters and people: four tills, priority in
+ * the queue, a named person, and the rate list imported for you. A tier has to
+ * be sold on what it is.
  */
 const PLANS = [
   {
@@ -33,6 +41,9 @@ const PLANS = [
       "Every bill findable, and reprintable marked DUPLICATE",
       "Day close per counter, and CSV export",
       "Dashboard: sales, profit, cost of goods, margin",
+      "Reports: profit by item, by department, by counter and by cashier — for any period, exported with the same words on screen",
+      "Buying: suppliers, orders, deliveries with the carriage in the cost, and what you owe each distributor",
+      "Batch numbers and expiry on the lines that need them — sold soonest-expiring first, and expired stock cannot be billed",
       "WhatsApp support in Urdu and English",
     ],
   },
@@ -40,11 +51,11 @@ const PLANS = [
     name: "Premium",
     price: "Rs 10,000",
     cadence: "per month",
-    pitch: "For a busy floor that needs more than two tills — and wants each new module the week it ships.",
+    pitch: "For a busy floor that needs more than two tills, and somebody of ours on the end of the phone.",
     cta: { label: "Get started", href: "/checkout" },
     featured: true,
     features: [
-      "Everything in Standard",
+      "Every screen in Standard — no module is held back for this tier",
       "Up to 4 counters",
       "New modules the week they land, at no extra cost",
       "Your rate list imported and checked for you",

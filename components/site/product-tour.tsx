@@ -65,6 +65,18 @@ const SCREENS: Screen[] = [
     alt: "Flo's product list: fifty-two items with Urdu names, categories, cost, price, margin and stock on hand, with three items flagged as running low.",
   },
   {
+    src: "/shots/purchasing.png",
+    eyebrow: "The other side of the counter",
+    title: "What you ordered, what came in, and what it really cost",
+    copy: "An order is what you asked for and a delivery is what turned up — and how much of an order has arrived is counted off the deliveries against it rather than stored in a column, so “one of two in” cannot drift from what is on the shelf.",
+    points: [
+      "Carriage spread across the lines, so a Rs 2,400 bhaara is in what the carton cost",
+      "What you owe, across every distributor, on one line",
+      "A delivery is recorded even when no order came before it — which is most of them",
+    ],
+    alt: "Flo's buying screen: three orders still open worth Rs 179,950, Rs 196,070 owed across four suppliers, Rs 4,200 of carriage on Rs 183,570 of stock, and five purchase orders listed with how much of each has been delivered.",
+  },
+  {
     src: "/shots/customers.png",
     eyebrow: "The regulars",
     title: "The register book, kept properly",
@@ -87,6 +99,18 @@ const SCREENS: Screen[] = [
       "Export what is on screen to CSV — money as numbers a spreadsheet can add",
     ],
     alt: "Flo's day close: Rs 129,305 taken across two counters, split into cash and card, with each counter's bill count and last receipt number.",
+  },
+  {
+    src: "/shots/reports.png",
+    eyebrow: "The accountant's question",
+    title: "Every figure says where it came from",
+    copy: "Five tabs over one period: what the shop took, which items made it, which half of the shop made it, how it was paid for, and what is on the shelves. Hover any figure and it explains itself in the shop's own words — the same sentence the exported file carries.",
+    points: [
+      "Sales, cost of goods, profit and margin, each against the period before it",
+      "An item you never costed reads as pure profit, and the screen says so rather than quietly flattering the total",
+      "Bills, the average bill, lines per bill, and the best day in the period",
+    ],
+    alt: "Flo's reports: Rs 2,988,889 of sales over 30 trading days against Rs 2,567,868 of cost, leaving Rs 421,021 of profit at a 14.1% margin, with each line captioned by where its figure came from and a note that an item with no cost price reads as pure profit.",
   },
   {
     src: "/shots/permissions.png",

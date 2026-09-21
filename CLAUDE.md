@@ -21,12 +21,23 @@ npm run demo:shop     # seed (or --drop) the demo shop the site is photographed 
 npm run shots         # photograph the running console into public/shots/
 ```
 
-`npm run shots` drives a live `npm run dev` and writes eleven PNGs of the real
-console. **Re-run it after any change to how `/app` looks**, or the marketing
-site starts showing a product that no longer exists. It signs in as the demo
-shop `npm run demo:shop` builds — a self-contained tenant, deletable in one
-command, so no screenshot ever carries a real person's email or a development
-account's "Test Product".
+`npm run shots` drives a live `npm run dev` and writes thirteen PNGs of the real
+console. The `SHOTS` list in `scripts/shots.mjs` is the contract: a screen not
+on it has no photograph, and a claim on the site with no photograph behind it is
+copy nobody has checked against the product. **Re-run it after any change to how
+`/app` looks**, or the marketing site starts showing a product that no longer
+exists. It signs in as the demo shop `npm run demo:shop` builds — a
+self-contained tenant, deletable in one command, so no screenshot ever carries a
+real person's email or a development account's "Test Product".
+
+That shop has to carry a floor under every photographed screen, which is why
+`demo-shop.mjs` seeds five purchase orders, three deliveries with carriage on
+them and four supplier payments beside the sales: `/app/purchasing` photographed
+empty is a claim with a picture of nothing beside it. Those rows are inserted
+directly, like the sales — **no stock moves and no `cost_price` is rewritten by
+seeding**, so the counts in `ITEMS` stay the counts on the shelf. The freight
+apportioning is restated there a third time (after `record_receipt` and
+`receiptTotals`) and has to keep matching them to the paisa.
 
 There are no tests and no CI. `npm run lint` and `npm run build` are the only
 verification gates, and both must be green at the end of every part. `tsc` has
@@ -506,10 +517,10 @@ the shelf on Products & stock, which writes its own movement and says why.
 rule. The marketing site said purchase orders were not built for several
 migrations after that; `/pricing`, `/products`, `/roadmap` and `/solutions` were
 corrected when the console screenshots were re-taken and Buying became visible
-in the rail of every one of them. **What is still a packaging decision rather
-than a code one** is the per-plan feature lists on `/pricing`, which name
-neither Buying nor Reports — nothing gates either by plan today, so a tier that
-claims them is a decision about what Standard is sold as.
+in the rail of every one of them. `/app/purchasing?tab=orders` is now one of the
+photographs (`public/shots/purchasing.png`) and has a panel of its own in
+`product-tour.tsx`, which is what the claim rests on. Buying is on the
+**Standard** plan's list, because nothing gates it by plan.
 
 ### The supplier ledger
 
@@ -1146,6 +1157,12 @@ stands today — the same mistake as costing last month's sales from today's
 The marketing site said for several migrations that the reports module was not
 built. `/pricing`, `/products` and `/roadmap` were corrected when the
 screenshots were re-taken — Reports is in the rail of every light shot, so the
-old copy was being contradicted by the picture beside it. The `/pricing` plan
-lists still do not name Reports, which is packaging rather than staleness: the
-module is reached through `can_view_reports` and nothing gates it by plan.
+old copy was being contradicted by the picture beside it. It is now photographed
+in its own right (`public/shots/reports.png`, `?range=30d`) with a panel in
+`product-tour.tsx`.
+
+**It is on both plans.** `0035` raised `advanced_reports` on Standard rather
+than gating the module, because nothing has ever read that flag — `/app/reports`
+is reached through `can_view_reports`, a permission an owner grants a cashier,
+not a tier. What Premium buys is four counters and a named person, and
+`/pricing` now says so.

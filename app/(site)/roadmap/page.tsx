@@ -159,16 +159,17 @@ export default function RoadmapPage() {
             <h2 className="heading">Running today</h2>
           </Reveal>
           <Reveal as="p" className="lede mt-3 max-w-xl" delay={100}>
-            Every one of these is on a real counter, and the screens they live
-            on are photographed from the working software on the{" "}
+            Every one of these is on a real counter, photographed from the
+            working software on the{" "}
             <Link
               href="/products"
               className="text-iris-600 transition-colors duration-300 hover:text-iris-500"
             >
               products page
             </Link>
-            . The two newest are shown there on the screen they belong to
-            rather than in a panel of their own.
+            . Two are not pictured: batch expiry and the variant grid open in a
+            sheet on Products &amp; stock, and a photograph of a sheet is a
+            photograph of a form.
           </Reveal>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

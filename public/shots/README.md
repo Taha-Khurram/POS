@@ -16,6 +16,8 @@ figures in them are one real shop's own rows.
 - `customers.png` — `/app/customers`
 - `sales-history.png` — `/app/sales?tab=history`
 - `day-close.png` — `/app/sales?tab=day`
+- `reports.png` — `/app/reports?tab=summary&range=30d`
+- `purchasing.png` — `/app/purchasing?tab=orders`
 - `staff.png` — `/app/employees`
 - `settings.png` — `/app/settings?tab=store`
 - `permissions.png` — `/app/settings?tab=roles`

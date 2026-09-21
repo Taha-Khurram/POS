@@ -187,6 +187,91 @@ const CUSTOMERS = [
   ["Adnan Tariq", "+923002211998", "Bahria Town, Sector C", null],
 ];
 
+/* ----------------------------------------------------------------- buying -- */
+
+/**
+ * What the shop has bought, so the Buying screen is photographed with a floor
+ * under it rather than an empty state.
+ *
+ * Openings first, because a supplier ledger with no opening balance is a
+ * ledger that starts the day Flo was installed — which is not what the shop's
+ * own book says. Dated, like `suppliers.opening_balance_on` insists.
+ */
+const OPENINGS = [
+  ["Ravi Traders", 85000],
+  ["Shalimar Pulses", 32500],
+];
+
+/**
+ * Orders. `status` is the human lifecycle only — how much of one has arrived is
+ * counted off the deliveries below and never stored, so these rows cannot
+ * disagree with them.
+ *
+ * [supplier, status, placedDaysAgo, expectedInDaysAfterPlacing, note, [[item, qty, unitCost], …]]
+ */
+const ORDERS = [
+  ["Sunridge", "placed", 3, 5, "Month-end atta. Ring before the van leaves.", [
+    ["Sunridge Chakki Atta 10 kg", 40, 1180],
+  ]],
+  ["Shalimar Pulses", "placed", 5, 6, null, [
+    ["Chana Daal — loose", 60, 235],
+    ["Masoor Daal — loose", 40, 310],
+    ["Moong Daal — loose", 50, 320],
+  ]],
+  ["Ravi Traders", "placed", 9, 3, "Sella came in full; basmati is short 80 kg.", [
+    ["Basmati Super Kernel — loose", 200, 290],
+    ["Sella Rice — loose", 150, 215],
+  ]],
+  ["Unilever", "closed", 16, 2, null, [
+    ["Surf Excel 1 kg", 60, 690],
+    ["Lifebuoy Soap 130 g", 240, 110],
+    ["Sunsilk Shampoo 185 ml", 36, 420],
+  ]],
+  ["Tapal", "draft", 1, 5, "Waiting on their new rate list.", [
+    ["Tapal Danedar 475 g", 48, 1050],
+  ]],
+];
+
+/**
+ * Deliveries. `order` is the index in `ORDERS`, or null for the van that turned
+ * up with no paperwork in front of it — which is most kiryana buying, and the
+ * reason `goods_receipts.purchase_order_id` is nullable.
+ *
+ * The freight is the point: it is apportioned across the lines here exactly as
+ * `receiptTotals` does it in the browser and `record_receipt` does it in
+ * Postgres, remainder on the last line, so `sum(landed × qty)` is the total.
+ *
+ * [supplier, order, daysAgo, invoiceNo, freight, otherCost, note, [[item, qty, unitCost], …]]
+ */
+const DELIVERIES = [
+  ["Unilever", 3, 14, "UL-2026-44817", 1800, 0, null, [
+    ["Surf Excel 1 kg", 60, 690],
+    ["Lifebuoy Soap 130 g", 240, 110],
+    ["Sunsilk Shampoo 185 ml", 36, 420],
+  ]],
+  ["Ravi Traders", 2, 6, "RT-1142", 2400, 0, "Bhaara paid at the shop. 80 kg basmati still to come.", [
+    ["Basmati Super Kernel — loose", 120, 290],
+    ["Sella Rice — loose", 150, 215],
+  ]],
+  ["Engro Foods", null, 2, "EF-90231", 0, 0, "Van turned up. No order against it.", [
+    ["Olpers Milk 1 L", 120, 245],
+  ]],
+];
+
+/**
+ * What went out. A running account, not invoice matching — the man takes fifty
+ * thousand on a Thursday against the account, which is why no payment points at
+ * a delivery.
+ *
+ * [supplier, daysAgo, amount, method, reference, note]
+ */
+const PAYMENTS = [
+  ["Unilever", 12, 40000, "bank", "IBFT 884201773", null],
+  ["Ravi Traders", 5, 30000, "cash", null, "Given to Akram at the shop."],
+  ["Shalimar Pulses", 4, 15000, "cheque", "MCB 0041182", "Against the opening balance."],
+  ["Engro Foods", 1, 20000, "bank", "IBFT 884319006", null],
+];
+
 /* ----------------------------------------------------------------- dates -- */
 
 /** How many trading days of history the shop has. */
@@ -458,7 +543,19 @@ async function seed() {
     ),
   );
 
-  /* -- the catalog -------------------------------------------------------- */
+  /* -- the catalog --------------------------------------------------------
+
+     Buying goes first, and not beside the rest of the buying further down:
+     `purchase_orders.supplier_id`, `goods_receipts.supplier_id` and
+     `supplier_payments.supplier_id` are all `on delete restrict`, so the
+     suppliers below cannot be cleared while an order still names one. That is
+     the right rule for the product — a distributor with a ledger is not
+     something a stray click removes — and it decides the order here. */
+
+  await db.from("purchase_orders").delete().eq("tenant_id", TENANT);
+  await db.from("goods_receipts").delete().eq("tenant_id", TENANT);
+  await db.from("supplier_payments").delete().eq("tenant_id", TENANT);
+  await db.from("document_series").delete().eq("tenant_id", TENANT);
 
   await db.from("items").delete().eq("tenant_id", TENANT);
 
@@ -669,6 +766,204 @@ async function seed() {
   await insert("sale_lines", lines);
   await insert("sale_tenders", tenders);
 
+  /* -- buying -------------------------------------------------------------
+     Orders, deliveries and payments, so the Buying screen is photographed with
+     a floor under it. Rows rather than calls to `record_receipt`, the same
+     bargain the sales above strike — the screens and the arithmetic are the
+     product's own and only the rows are seeded. Which means **no stock moves
+     and no cost price is rewritten here**: the counts in ITEMS stay the counts
+     on the shelf, and a delivery below is a piece of paper, not a movement. */
+
+  const itemByName = new Map(items.map((row) => [row.name, row]));
+
+  const supplierBy = (name) => {
+    const id = supplierId.get(fold(name).toLowerCase());
+    if (!id) die(`buying: no supplier called ${name} — it has to appear in ITEMS`);
+    return id;
+  };
+
+  const lineOf = ([name, quantity, unitCost]) => {
+    const item = itemByName.get(name);
+    if (!item) die(`buying: no item called ${name}`);
+    return { item, quantity, unitCost, lineTotal: round2(quantity * unitCost) };
+  };
+
+  // The opening balance is what makes day one believable, and it is dated to
+  // the first trading day rather than to today — a balance with no date is a
+  // figure nobody can check against their own book.
+  for (const [name, opening] of OPENINGS) {
+    const { error } = await db
+      .from("suppliers")
+      .update({
+        opening_balance: opening,
+        opening_balance_on: dayString(shiftDays(today, -DAYS)),
+      })
+      .eq("id", supplierBy(name));
+
+    if (error) die(`supplier opening: ${error.message}`);
+  }
+
+  // Numbered in the order they were placed rather than the order they are
+  // written above: `document_series` is a running count, and an accountant
+  // asking for PO-00003 means the third one this shop ever raised.
+  const placedFirst = ORDERS
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => b.row[2] - a.row[2]);
+
+  const orderRows = [];
+  const orderLineRows = [];
+  const orderIdOf = new Map();
+  const orderLineIdOf = new Map();
+
+  placedFirst.forEach(({ row, index }, at) => {
+    const [supplier, status, placedDaysAgo, expectedInDays, note, lines] = row;
+    const id = crypto.randomUUID();
+    const placedOn = shiftDays(today, -placedDaysAgo);
+    const priced = lines.map(lineOf);
+    const subtotal = round2(priced.reduce((sum, line) => sum + line.lineTotal, 0));
+
+    orderIdOf.set(index, id);
+
+    orderRows.push({
+      id,
+      tenant_id: TENANT,
+      branch_id: BRANCH,
+      supplier_id: supplierBy(supplier),
+      order_number: `PO-${String(at + 1).padStart(5, "0")}`,
+      status,
+      expected_on: dayString(shiftDays(placedOn, expectedInDays)),
+      note,
+      subtotal,
+      // An order carries no freight. What a delivery actually cost is settled
+      // on the delivery, which is the whole point of the two being two things.
+      total: subtotal,
+      created_by: ids.owner,
+      created_at: placedOn.toISOString(),
+      updated_at: placedOn.toISOString(),
+    });
+
+    for (const line of priced) {
+      const lineId = crypto.randomUUID();
+      orderLineIdOf.set(`${index}:${line.item.name}`, lineId);
+
+      orderLineRows.push({
+        id: lineId,
+        tenant_id: TENANT,
+        purchase_order_id: id,
+        item_id: line.item.id,
+        name_snapshot: line.item.name,
+        unit: line.item.unit,
+        quantity: line.quantity,
+        unit_cost: line.unitCost,
+        line_total: line.lineTotal,
+        created_at: placedOn.toISOString(),
+      });
+    }
+  });
+
+  await insert("purchase_orders", orderRows);
+  await insert("purchase_order_lines", orderLineRows);
+
+  const receiptRows = [];
+  const receiptLineRows = [];
+
+  DELIVERIES.forEach(
+    ([supplier, order, daysAgo, invoiceNo, freight, otherCost, note, lines], at) => {
+      const id = crypto.randomUUID();
+      const receivedOn = shiftDays(today, -daysAgo);
+      const priced = lines.map(lineOf);
+      const subtotal = round2(priced.reduce((sum, line) => sum + line.lineTotal, 0));
+      const extra = round2(freight + otherCost);
+
+      receiptRows.push({
+        id,
+        tenant_id: TENANT,
+        branch_id: BRANCH,
+        supplier_id: supplierBy(supplier),
+        purchase_order_id: order === null ? null : orderIdOf.get(order),
+        grn_number: `GRN-${String(at + 1).padStart(5, "0")}`,
+        received_on: dayString(receivedOn),
+        supplier_invoice_no: invoiceNo,
+        note,
+        subtotal,
+        freight,
+        other_cost: otherCost,
+        total: round2(subtotal + extra),
+        created_by: ids.owner,
+        created_at: receivedOn.toISOString(),
+      });
+
+      // `receiptTotals` in `lib/pos/purchase.ts` and `record_receipt` in
+      // Postgres, restated once more: pro rata on the line total, remainder
+      // onto the last line, so the landed costs add up to the total exactly.
+      // A third copy of this arithmetic that rounded differently would be a
+      // demo shop a rupee out from what the product itself would have written.
+      let spread = 0;
+
+      priced.forEach((line, index) => {
+        const share =
+          index === priced.length - 1
+            ? round2(extra - spread)
+            : subtotal > 0
+              ? round2((extra * line.lineTotal) / subtotal)
+              : 0;
+
+        spread = round2(spread + share);
+
+        const landedLineTotal = round2(line.lineTotal + share);
+
+        receiptLineRows.push({
+          tenant_id: TENANT,
+          goods_receipt_id: id,
+          // Pointed at the order line it answers, because how much of an order
+          // has arrived is counted off these and never stored.
+          purchase_order_line_id:
+            order === null
+              ? null
+              : orderLineIdOf.get(`${order}:${line.item.name}`) ?? null,
+          item_id: line.item.id,
+          name_snapshot: line.item.name,
+          unit: line.item.unit,
+          quantity: line.quantity,
+          unit_cost: line.unitCost,
+          line_total: line.lineTotal,
+          landed_unit_cost:
+            Math.round((landedLineTotal / line.quantity) * 10_000) / 10_000,
+          created_at: receivedOn.toISOString(),
+        });
+      });
+    },
+  );
+
+  await insert("goods_receipts", receiptRows);
+  await insert("goods_receipt_lines", receiptLineRows);
+
+  await insert(
+    "supplier_payments",
+    PAYMENTS.map(([supplier, daysAgo, amount, method, reference, note]) => {
+      const paidOn = shiftDays(today, -daysAgo);
+
+      return {
+        tenant_id: TENANT,
+        supplier_id: supplierBy(supplier),
+        paid_on: dayString(paidOn),
+        amount,
+        method,
+        reference,
+        note,
+        created_by: ids.owner,
+        created_at: paidOn.toISOString(),
+      };
+    }),
+  );
+
+  // Where the two series got to, so the next real order on this shop continues
+  // the numbering instead of colliding with PO-00001.
+  await insert("document_series", [
+    { tenant_id: TENANT, kind: "purchase_order", last_number: orderRows.length },
+    { tenant_id: TENANT, kind: "goods_receipt", last_number: receiptRows.length },
+  ]);
+
   // The counters carry where their series got to, so the next real sale on this
   // shop continues the numbering rather than starting the day again.
   for (const [counterId, counter] of Object.entries(serials)) {
@@ -684,6 +979,7 @@ async function seed() {
   ✓ ${items.length} items across ${saved.length} departments
   ✓ ${customers.length} customers
   ✓ ${sales.length} sales over ${DAYS} trading days — Rs ${Math.round(takings).toLocaleString("en-PK")}
+  ✓ ${orderRows.length} purchase orders, ${receiptRows.length} deliveries, ${PAYMENTS.length} supplier payments
 
   Sign in as  ${PEOPLE[0].email}
   Password    ${PASSWORD}
