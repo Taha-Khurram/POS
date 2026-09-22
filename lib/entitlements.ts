@@ -38,10 +38,12 @@ const DAY_MS = 86_400_000;
 /**
  * The only authority on what a shop may do.
  *
- * Resolution order — plan defaults, then the per-client override, then the
- * subscription's own ceiling columns, which win because that is where a haggled
- * "bhai teen branch kar do" is recorded. Layouts and Server Actions call this;
- * client-side gating is UX and never a control (§4.3).
+ * Resolution order — the plan's own flags, then the subscription's ceiling
+ * columns, which win because that is where a haggled "bhai teen branch kar do"
+ * is recorded. There is no per-shop flag layer any more: `0040` dropped
+ * `subscriptions.feature_overrides`, which was merged in here and read by
+ * nothing at all. Layouts and Server Actions call this; client-side gating is
+ * UX and never a control (§4.3).
  *
  * Reads with the service role on purpose: `plans` is not readable by a tenant's
  * own JWT, which is what stops a Standard client from discovering — let alone
@@ -61,7 +63,6 @@ export async function getEntitlements(
         agreed_price,
         max_branches,
         max_registers,
-        feature_overrides,
         trial_ends_at,
         current_period_end,
         plans ( code, name, features )
@@ -77,10 +78,7 @@ export async function getEntitlements(
     | null
     | undefined;
 
-  const features: FeatureFlags = {
-    ...(plan?.features ?? {}),
-    ...((data.feature_overrides as FeatureFlags | null) ?? {}),
-  };
+  const features: FeatureFlags = { ...(plan?.features ?? {}) };
 
   const status = data.status as SubscriptionStatus;
   const currentPeriodEnd = data.current_period_end as string;

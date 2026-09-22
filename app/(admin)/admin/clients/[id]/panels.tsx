@@ -5,20 +5,23 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { InviteCard } from "@/components/admin/invite-card";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
-import { IconAlert, IconTrash } from "@/components/pos/icons";
+import { IconTrash } from "@/components/pos/icons";
+import { InfoTip } from "@/components/pos/info-tip";
 import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
 import { rupees } from "@/lib/format";
 import {
   BILLING_CYCLES,
+  HELP,
   PAYMENT_METHODS,
-  PLAN_FEATURES,
   SUB_STATUSES,
+  type SubscriptionStatus,
   dateInput,
   methodLabel,
   monthlyValue,
   standingOf,
   writeDay,
+  writeExpiry,
   writeWhen,
 } from "@/lib/platform/admin";
 import type {
@@ -37,7 +40,6 @@ import {
   extendPeriod,
   regenerateInvite,
   revokeInvite,
-  setFeatureOverride,
   setPeriodEnd,
   setSubscriptionStatus,
   updateClient,
@@ -273,6 +275,7 @@ export function LifecycleCard({
           ? "The till is charging."
           : "The till will not charge. Reading and export stay open."
       }
+      actions={<InfoTip label="Standing" explain={HELP.standing} align="end" />}
     >
       <div className="space-y-4">
         <p className={`pos-note ${now.operable ? "pos-note-good" : "pos-note-bad"}`}>
@@ -310,93 +313,108 @@ export function LifecycleCard({
                   className={`pos-btn pos-btn-sm ${entry.id === "active" ? "pos-btn-primary" : "pos-btn-soft"}`}
                   title={entry.description}
                 >
-                  {entry.id === "active"
-                    ? "Put back in business"
-                    : entry.id === "suspended"
-                      ? "Suspend"
-                      : entry.id === "cancelled"
-                        ? "Cancel"
-                        : entry.id === "past_due"
-                          ? "Mark past due"
-                          : "Back to trial"}
+                  {STANDING_BUTTON[entry.id]}
                 </button>
               ))}
             </form>
 
-            <form
-              action={extendAction}
-              className="flex flex-wrap items-end gap-2 border-t border-orchid-100 pt-4"
-            >
-              <input type="hidden" name="tenant_id" value={client.tenantId} />
+            {/* One section over one column, rather than two forms with a
+                paragraph of prose under each.
 
-              <label className="block">
-                <span className="pos-label">Give days</span>
-                <input
-                  name="days"
-                  className="pos-field w-24"
-                  defaultValue="7"
-                  inputMode="numeric"
-                />
-              </label>
+                Giving days and correcting the date both write
+                `current_period_end` and mean two different things, so they stay
+                two actions with two audit rows — but they were drawn as two
+                unrelated blocks, each explaining itself in grey text, and the
+                buttons that matter ended up below the fold. The heading says
+                what the date is, the tips say what each control does, and the
+                only sentence left on the card is the one that is conditional
+                and actionable. */}
+            <section className="space-y-3 border-t border-orchid-100 pt-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <h3 className="pos-label mb-0 flex items-center gap-1">
+                  Renewal date
+                  <InfoTip label="Renewal date" explain={HELP.renewalDate} />
+                </h3>
 
-              <button type="submit" className="pos-btn pos-btn-soft" disabled={extending}>
-                {extending ? "Adding…" : "Add to the period"}
-              </button>
-
-              <p className="w-full text-[0.75rem] text-graphite-500">
-                Goodwill, with no payment behind it — a week lost to a dead
-                printer. Money taken goes in Payments, which moves the date by
-                itself.
-              </p>
+                <p className="text-[0.75rem] tabular-nums text-graphite-500">
+                  {writeDay(client.currentPeriodEnd)} ·{" "}
+                  {writeExpiry(client.daysUntilExpiry)}
+                </p>
+              </div>
 
               {/* Days on the period do not reopen a shut till: `getEntitlements`
                   reads the standing and never the date. An operator promising a
                   week to a suspended shopkeeper has to put them back in business
                   too, and would otherwise hear about it from the shopkeeper. */}
               {!now.operable ? (
-                <p className="pos-note pos-note-warn w-full">
+                <p className="pos-note pos-note-warn">
                   Days on their own will not start the till again — this shop is{" "}
                   {now.label.toLowerCase()}. Put them back in business as well.
                 </p>
               ) : null}
-            </form>
 
-            <form
-              action={dateAction}
-              className="flex flex-wrap items-end gap-2 border-t border-orchid-100 pt-4"
-            >
-              <input type="hidden" name="tenant_id" value={client.tenantId} />
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <form action={extendAction} className="flex items-center gap-2">
+                  <input type="hidden" name="tenant_id" value={client.tenantId} />
 
-              <label className="block">
-                <span className="pos-label">Paid up to</span>
-                <input
-                  type="date"
-                  name="current_period_end"
-                  className="pos-field"
-                  value={periodEnd}
-                  onChange={(event) => setPeriodEndValue(event.target.value)}
-                />
-              </label>
+                  <input
+                    name="days"
+                    className="pos-field w-16 text-center"
+                    defaultValue="7"
+                    inputMode="numeric"
+                    aria-label="Days to give"
+                  />
 
-              <button
-                type="submit"
-                className="pos-btn pos-btn-quiet"
-                disabled={dating || periodEnd === stored || !periodEnd}
-              >
-                {dating ? "Saving…" : "Correct the date"}
-              </button>
+                  <button
+                    type="submit"
+                    className="pos-btn pos-btn-soft pos-btn-sm"
+                    disabled={extending}
+                  >
+                    {extending ? "Adding…" : "Give days"}
+                  </button>
 
-              <p className="w-full text-[0.75rem] text-graphite-500">
-                Only to fix a date that is wrong. Recording a payment moves it by
-                itself.
-              </p>
-            </form>
+                  <InfoTip label="Give days" explain={HELP.giveDays} />
+                </form>
+
+                <form action={dateAction} className="flex items-center gap-2">
+                  <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+                  <input
+                    type="date"
+                    name="current_period_end"
+                    className="pos-field"
+                    value={periodEnd}
+                    onChange={(event) => setPeriodEndValue(event.target.value)}
+                    aria-label="Paid up to"
+                  />
+
+                  <button
+                    type="submit"
+                    className="pos-btn pos-btn-quiet pos-btn-sm"
+                    disabled={dating || periodEnd === stored || !periodEnd}
+                  >
+                    {dating ? "Saving…" : "Correct"}
+                  </button>
+                </form>
+              </div>
+            </section>
           </>
         )}
       </div>
     </ChartCard>
   );
 }
+
+/** The lifecycle buttons say what pressing them does, not what the row will
+ *  then be called: "Suspend", never "Suspended". Out here as a lookup so the
+ *  card is not a five-deep ternary in the middle of a form. */
+const STANDING_BUTTON: Record<SubscriptionStatus, string> = {
+  active: "Put back in business",
+  suspended: "Suspend",
+  cancelled: "Cancel",
+  past_due: "Mark past due",
+  trialing: "Back to trial",
+};
 
 /* -------------------------------------------------------------------------- */
 /* Money in                                                                   */
@@ -632,6 +650,7 @@ export function InvitePanel({
             ? `${signedIn} ${signedIn === 1 ? "account" : "accounts"} on this shop.`
             : "Nobody has made an account yet."
         }
+        actions={<InfoTip label="Signing in" explain={HELP.signIn} align="end" />}
       >
         <div className="space-y-3">
           {signedIn === 0 && !live ? (
@@ -642,10 +661,10 @@ export function InvitePanel({
           ) : null}
 
           {live ? (
+            // What happens to it — shown once, killed by the next one — is in
+            // the tip on the header now. Here it only has to say there is one.
             <p className="pos-note">
               A link is live and expires {writeWhen(live.expiresAt).toLowerCase()}.
-              Nothing can show it again — regenerating makes a new one and kills
-              this.
             </p>
           ) : null}
 
@@ -715,141 +734,6 @@ export function InvitePanel({
         </div>
       </ChartCard>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* One-off deals                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A feature flipped for this shop alone.
- *
- * `feature_overrides` is merged over the plan's own JSON by `getEntitlements`,
- * so this is "Premium price, but throw in X" without inventing a plan per
- * customer. Only the overrides that exist are listed — a table of thirty rows,
- * twenty-nine of which say "same as the plan", is a table nobody reads.
- *
- * The card states the uncomfortable truth at the bottom: nothing in the console
- * reads these flags yet. They describe the plan on `/pricing`, and
- * `max_registers` on the card above is the one entitlement that actually bites.
- * Saying so is the difference between a console an operator trusts and one they
- * quietly stop believing.
- */
-export function OverridesCard({
-  client,
-  planFeatures,
-  readOnly,
-}: {
-  client: Client;
-  planFeatures: Record<string, unknown>;
-  readOnly: boolean;
-}) {
-  const [state, action, pending] = useActionState(setFeatureOverride, IDLE);
-  const [feature, setFeature] = useState<string>(PLAN_FEATURES[0].key);
-
-  useActionToast(state, {
-    saved: state.saved?.label ?? "Override saved",
-    failed: "That override did not save",
-  });
-
-  const overrides = Object.entries(client.featureOverrides);
-
-  return (
-    <ChartCard
-      title="One-off deals"
-      caption={
-        overrides.length === 0
-          ? "This shop gets exactly what its plan says."
-          : `${overrides.length} ${overrides.length === 1 ? "feature differs" : "features differ"} from the plan.`
-      }
-    >
-      <div className="space-y-4">
-        {overrides.length > 0 ? (
-          <ul className="space-y-2">
-            {overrides.map(([key, value]) => {
-              const known = PLAN_FEATURES.find((entry) => entry.key === key);
-              return (
-                <li
-                  key={key}
-                  className="flex flex-wrap items-center gap-2 rounded-xl border border-orchid-100 px-3 py-2"
-                >
-                  <span className="min-w-0 flex-1 text-[0.8125rem] text-graphite-900">
-                    {known?.label ?? key}
-                    <span className="block text-[0.6875rem] text-graphite-500">
-                      Plan says {planFeatures[key] === true ? "on" : "off"}
-                    </span>
-                  </span>
-
-                  <span
-                    className={`pos-badge ${value === true ? "pos-badge-good" : "pos-badge-bad"}`}
-                  >
-                    {value === true ? "On for them" : "Off for them"}
-                  </span>
-
-                  {readOnly ? null : (
-                    <form action={action}>
-                      <input type="hidden" name="tenant_id" value={client.tenantId} />
-                      <input type="hidden" name="feature" value={key} />
-                      <input type="hidden" name="value" value="clear" />
-                      <button type="submit" className="pos-btn pos-btn-quiet pos-btn-sm">
-                        Follow the plan
-                      </button>
-                    </form>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-
-        {readOnly ? null : (
-          <form action={action} className="flex flex-wrap items-end gap-2">
-            <input type="hidden" name="tenant_id" value={client.tenantId} />
-
-            <div className="min-w-48 flex-1">
-              <SelectRow
-                label="Feature"
-                value={feature}
-                onChange={setFeature}
-                options={PLAN_FEATURES.map((entry) => ({
-                  id: entry.key,
-                  label: entry.label,
-                  description: entry.kind === "wired" ? "The product honours this" : "Copy for /pricing",
-                }))}
-              />
-            </div>
-            <input type="hidden" name="feature" value={feature} />
-
-            <button
-              type="submit"
-              name="value"
-              value="on"
-              className="pos-btn pos-btn-soft"
-              disabled={pending}
-            >
-              Give it
-            </button>
-            <button
-              type="submit"
-              name="value"
-              value="off"
-              className="pos-btn pos-btn-quiet"
-              disabled={pending}
-            >
-              Take it away
-            </button>
-          </form>
-        )}
-
-        <p className="flex items-start gap-2 text-[0.75rem] leading-snug text-graphite-500">
-          <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
-          Nothing in the console gates a screen on these yet — they are what
-          `/pricing` says a plan includes. The counter limit on the plan card is
-          the one entitlement that is actually enforced.
-        </p>
-      </div>
-    </ChartCard>
   );
 }
 

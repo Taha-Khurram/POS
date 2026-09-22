@@ -1029,6 +1029,32 @@ migration that lands the feature. The one entitlement that bites is
 subscription rather than the plan precisely so a haggled "teen counter kar do"
 is a one-row update.
 
+**There are no per-shop flags.** `0040` dropped
+`subscriptions.feature_overrides` and the "One-off deals" card that wrote it.
+The column was the one-off deal — Premium price, throw in X — merged over
+`plans.features` by `getEntitlements` and read by nothing: `hasFeature` is
+called from nowhere, no screen in `/app` is gated on a flag, and `/pricing`
+writes its plan lists by hand, so an override could not reach the marketing site
+either. The card admitted as much in a warning under its own buttons, and a
+control that ships with a note saying it does nothing is how an operator
+promises a feature on a call that the shop never gets. It is deleted rather than
+left standing — the call `0034` made about the restaurant tables — and it cost
+nothing, because every row's overrides were `{}`. If per-shop flags are wanted
+again they come back in the migration that lands the first screen gated on one.
+
+**`HELP` in `lib/platform/admin.ts` is `EXPLAIN` one shape over**: `EXPLAIN`
+says how a figure was reached, `HELP` says what happens when a button is
+pressed, and both are drawn by `InfoTip`. It exists because the client record
+was explaining itself in prose — the Standing card stacked three forms with a
+grey paragraph under each, which pushed the buttons that matter below the fold
+and is a wall nobody reads at 11 pm with a shopkeeper on the phone. Giving days
+and correcting the date are still two actions with two audit rows, because they
+mean two different things, but they sit under one **Renewal date** heading that
+states the date and the days left. Only a control whose effect is genuinely not
+obvious gets an entry — a tip on every control is a screen with no tips at all —
+and the one sentence left on the card is the conditional, actionable one: days
+on the period do not reopen a shut till.
+
 `lib/platform/admin.ts` carries no `server-only` — the activation form and the
 plan editor are client components and the actions validate against the same
 lists. Note that `SelectRow` is a listbox the page owns and not an `<input>`:

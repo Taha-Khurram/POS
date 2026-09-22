@@ -199,7 +199,6 @@ export type Client = {
   agreedPrice: number;
   maxBranches: number;
   maxRegisters: number;
-  featureOverrides: FeatureFlags;
   trialEndsAt: string | null;
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
@@ -241,7 +240,6 @@ function toClient(row: Record<string, unknown>): Client {
     agreedPrice: num(row.agreed_price),
     maxBranches: num(row.max_branches),
     maxRegisters: num(row.max_registers),
-    featureOverrides: (row.feature_overrides as FeatureFlags | null) ?? {},
     trialEndsAt: (row.trial_ends_at as string | null) ?? null,
     currentPeriodStart: (row.current_period_start as string | null) ?? null,
     currentPeriodEnd: (row.current_period_end as string | null) ?? null,

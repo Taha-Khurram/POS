@@ -72,8 +72,16 @@ export function DataTable<Row>({
     );
   }
 
+  // A tip opens *downward* out of the heading, and a scroll container clips it:
+  // `overflow-x: auto` computes the other axis to `auto` as well. `.pos-table-wrap`
+  // is the pairing `ReportTable` already uses — the same scroll, plus the
+  // min-height that gives the bubble somewhere to open into. It is only worth
+  // that floor on a table that actually has tips, so a two-row list without
+  // them keeps its natural height.
+  const tipped = columns.some((column) => column.explain);
+
   return (
-    <div className="overflow-x-auto">
+    <div className={tipped ? "pos-table-wrap" : "overflow-x-auto"}>
       <table className="pos-table">
         <thead>
           <tr>

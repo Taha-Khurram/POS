@@ -33,7 +33,6 @@ import {
   InvitePanel,
   LifecycleCard,
   NotesCard,
-  OverridesCard,
   PaymentsCard,
   PlanCard,
 } from "./panels";
@@ -75,8 +74,6 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
 
   const readOnly = session.platformRole !== "super_admin";
   const status = standingOf(client.status);
-  const planFeatures =
-    plans.find((plan) => plan.id === client.planId)?.features ?? {};
 
   return (
     <div className="space-y-4">
@@ -179,11 +176,6 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
             client={client}
             invites={invites}
             users={users}
-            readOnly={readOnly}
-          />
-          <OverridesCard
-            client={client}
-            planFeatures={planFeatures}
             readOnly={readOnly}
           />
           <NotesCard tenantId={client.tenantId} notes={notes} />

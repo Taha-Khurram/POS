@@ -1961,6 +1961,31 @@
   .pos-info-bubble[data-align="start"] { left: -0.5rem; }
   .pos-info-bubble[data-align="end"] { right: -0.5rem; }
 
+  /* On a KPI card the bubble spans the card instead of hanging off the icon.
+     Anchored to the icon it opens rightward from wherever the label ends, so
+     the last card in a row — which sits against the right edge of the canvas —
+     pushed two thirds of its own text off the screen, and no `data-align` a
+     caller could pass would fix it: which card is last changes with every
+     breakpoint, from two columns to five.
+
+     Neutralising `position` on `.pos-info` hands the bubble the next positioned
+     ancestor, which is the card's own `<header>` — so `left: 0; right: 0` is
+     the card's content box and `top: 100%` is still just under the label, where
+     it already appeared. A tip can then never leave the card, and a card is
+     never off screen. Narrower and taller on a five-across row, which is the
+     right way to lose that trade.
+
+     The `[data-align]` is only there to outrank the two rules above it, which
+     match with the same specificity and would otherwise win on order. */
+  .pos-kpi .pos-info { position: static; }
+
+  .pos-kpi .pos-info-bubble[data-align] {
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+  }
+
   .pos-info:hover .pos-info-bubble,
   .pos-info:focus-within .pos-info-bubble {
     opacity: 1;

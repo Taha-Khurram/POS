@@ -438,71 +438,13 @@ export async function extendPeriod(
   return done(`${days} days added`, "No payment recorded against it.");
 }
 
-/**
- * One feature, flipped for one client.
- *
- * `subscriptions.feature_overrides` is merged over the plan's own JSON by
- * `getEntitlements`, so this is the one-off deal — "Premium price, but throw in
- * X" — without a plan per customer.
- *
- * Clearing an override is not the same as setting it false, and the form offers
- * all three: false is a promise that the shop does not get it, and clear means
- * the plan decides, which is what should happen when the plan changes later.
- */
-export async function setFeatureOverride(
-  _previous: AdminState,
-  formData: FormData,
-): Promise<AdminState> {
-  const gate = await requireBilling();
-  if (!gate.ok) return fail(gate.error);
-
-  const tenantId = text(formData.get("tenant_id"));
-  const key = text(formData.get("feature"));
-  const value = text(formData.get("value"));
-
-  if (!tenantId || !key) return fail("Pick a feature.");
-  if (!["on", "off", "clear"].includes(value)) return fail("Pick on, off or plan default.");
-
-  const supabase = createAdminClient();
-
-  const { data: before } = await supabase
-    .from("subscriptions")
-    .select("feature_overrides")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-
-  if (!before) return fail("That shop has no subscription.");
-
-  const overrides = { ...((before.feature_overrides as Record<string, unknown>) ?? {}) };
-
-  if (value === "clear") delete overrides[key];
-  else overrides[key] = value === "on";
-
-  const { error } = await supabase
-    .from("subscriptions")
-    .update({ feature_overrides: overrides })
-    .eq("tenant_id", tenantId);
-
-  if (error) {
-    console.error("[admin] override failed for %s: %s", tenantId, writeReadError(error));
-    return fail("That override did not save. Please try again.");
-  }
-
-  await recordAudit(gate.session, {
-    action: "subscription.override",
-    tenantId,
-    subjectType: "subscription",
-    subjectId: tenantId,
-    before: before.feature_overrides,
-    after: overrides,
-  });
-
-  revalidateClient(tenantId);
-
-  return done(
-    value === "clear" ? `${key} follows the plan again` : `${key} is ${value}`,
-  );
-}
+/* There is no `setFeatureOverride` any more. `0040` dropped
+ * `subscriptions.feature_overrides` and the "One-off deals" card that wrote it:
+ * nothing in the product has ever called `hasFeature`, so the buttons flipped a
+ * column no screen reads and the card carried a warning saying so. A control
+ * that ships with a note explaining that it does nothing is how an operator
+ * promises a feature on a call that the shop never gets. The one entitlement
+ * that bites is `subscriptions.max_registers`, written by the plan form above. */
 
 /* -------------------------------------------------------------------------- */
 /* The invite                                                                 */

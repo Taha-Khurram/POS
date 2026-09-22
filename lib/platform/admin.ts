@@ -500,6 +500,44 @@ export const EXPLAIN = {
 } as const satisfies Record<string, { formula?: string; plain: string }>;
 
 /* -------------------------------------------------------------------------- */
+/* What a control does, for the operator about to press it                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The same bargain as `EXPLAIN`, one shape over: `EXPLAIN` says how a figure was
+ * reached, and this says what happens when a button is pressed.
+ *
+ * It exists because the client record was explaining itself in prose — three
+ * grey paragraphs stacked under three forms on one card, which is a wall
+ * nobody reads at 11 pm with a shopkeeper on the phone, and which pushed the
+ * buttons that matter below the fold. The sentences are the same sentences;
+ * they now live behind `InfoTip`, where an operator can reach them on the one
+ * occasion they need them.
+ *
+ * Only the controls whose effect is genuinely not obvious get an entry. A
+ * button whose label is the whole truth ("Add the note") does not need one, and
+ * a tip on every control is a screen with no tips at all.
+ */
+export const HELP = {
+  standing: {
+    plain:
+      "Whether this shop's till charges. Trial, active and past due all trade; suspended and cancelled do not. Suspension only stops new sales — the shop still signs in, still reads every bill it ever rang up, still exports it and still closes the drawer it opened this morning. It is a decision somebody takes, never a date arriving: a period that has run out does not shut a till by itself.",
+  },
+  renewalDate: {
+    plain:
+      "The date this shop has paid up to. Three things move it: recording a payment in Payments, which is the usual one and moves it by itself; giving goodwill days here; and correcting a date that is simply wrong. It drives the renewal call list on the Overview and the shop's own reminder — it does not start or stop the till, which is what Standing above is for.",
+  },
+  giveDays: {
+    plain:
+      "Days with no payment behind them — a week lost to a dead printer, or a trial you agreed to stretch on the phone. From today if the period has already run out, so a week means a week from now. Money taken goes in Payments instead, which moves the date itself and records what arrived.",
+  },
+  signIn: {
+    plain:
+      "A shop needs one link to make its first account. Make it, send it on WhatsApp, and it works once and expires. Nothing can show it again — if it is lost, make a new one, which kills the old. Once somebody has signed in, they are listed here and no link is needed.",
+  },
+} as const satisfies Record<string, { formula?: string; plain: string }>;
+
+/* -------------------------------------------------------------------------- */
 /* Reaching the shopkeeper                                                    */
 /* -------------------------------------------------------------------------- */
 
