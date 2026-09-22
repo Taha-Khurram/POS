@@ -1,6 +1,15 @@
+import type { Explainer } from "@/lib/pos/report";
+
+import { ColumnHead } from "./info-tip";
+
 export type Column<Row> = {
   key: string;
   header: string;
+  /** The hover tip on the heading — how this column is worked out. Left off for
+   *  a column that needs no explaining: a shop's name is a shop's name. The
+   *  same field `ReportColumn` carries, so the two tables explain a figure the
+   *  one way. */
+  explain?: Explainer;
   /** Money and counts go right, so a column can be scanned down. */
   align?: "start" | "end";
   cell: (row: Row) => React.ReactNode;
@@ -79,7 +88,11 @@ export function DataTable<Row>({
                   .filter(Boolean)
                   .join(" ")}
               >
-                {column.header}
+                <ColumnHead
+                  label={column.header}
+                  explain={column.explain}
+                  align={column.align === "end" ? "end" : "start"}
+                />
               </th>
             ))}
           </tr>

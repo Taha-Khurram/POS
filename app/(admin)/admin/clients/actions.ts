@@ -143,17 +143,22 @@ export async function updateClient(
 /* -------------------------------------------------------------------------- */
 
 /**
- * The entitlement editor: plan, cycle, price, ceilings and the period itself.
+ * The commercial deal: plan, cycle, price and the ceilings. Nothing else.
  *
  * `max_registers` here is the only ceiling in the product that actually bites —
  * Settings reads it through `getEntitlements` when a shop adds a counter. It
  * lives on the subscription rather than on the plan precisely so a haggled
  * "bhai teen counter kar do" is a one-row update and not a release.
  *
- * The period end is a date input rather than a set of buttons, because the
- * commonest reason to touch it is that somebody paid on the 3rd for a month
- * that should have started on the 1st, and no amount of "+1 month" buttons
- * expresses that.
+ * **It deliberately writes neither the standing nor the period.** Both used to
+ * be fields on this same form, and both are also written by the controls
+ * beside it — `setSubscriptionStatus` from the standing buttons, and
+ * `extendPeriod` and `record_subscription_payment` from the goodwill and the
+ * payment forms. A form is built from the values it was rendered with, so
+ * recording a payment and then pressing Save here posted the standing and the
+ * renewal date *as they were before the payment* — silently re-suspending a
+ * shop that had just paid and winding its period back. One writer per field is
+ * the fix; `setPeriodEnd` below is where a date correction goes now.
  */
 export async function updateSubscription(
   _previous: AdminState,
@@ -165,16 +170,13 @@ export async function updateSubscription(
   const tenantId = text(formData.get("tenant_id"));
   const planId = text(formData.get("plan_id"));
   const cycle = text(formData.get("billing_cycle"));
-  const status = text(formData.get("status"));
   const price = number(formData.get("agreed_price"));
   const registers = number(formData.get("max_registers"));
   const branches = number(formData.get("max_branches"));
   const grace = number(formData.get("grace_days"));
-  const periodEnd = text(formData.get("current_period_end"));
 
   if (!tenantId || !planId) return fail("Pick a plan.");
   if (!isCycle(cycle)) return fail("Pick how often they are billed.");
-  if (!isStatus(status)) return fail("That is not a standing we have.");
   if (!Number.isFinite(price) || price < 0) return fail("The price has to be a number.");
   if (!Number.isInteger(registers) || registers < 1) {
     return fail("A shop has at least one counter.");
@@ -189,46 +191,20 @@ export async function updateSubscription(
   const { data: before } = await supabase
     .from("subscriptions")
     .select(
-      "plan_id, status, billing_cycle, agreed_price, max_branches, max_registers, grace_days, current_period_start, current_period_end, suspended_at, cancelled_at",
+      "plan_id, billing_cycle, agreed_price, max_branches, max_registers, grace_days",
     )
     .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (!before) return fail("That shop has no subscription to edit.");
 
-  const end = periodEnd ? new Date(`${periodEnd}T23:59:59`) : null;
-  if (periodEnd && (!end || Number.isNaN(end.getTime()))) {
-    return fail("That renewal date is not a date.");
-  }
-
-  // `subscriptions_period_ordered` refuses an end on or before the start, and a
-  // constraint violation is a sentence nobody can act on — so the refusal is
-  // written here, where it can name the date the operator just typed.
-  if (end && new Date(before.current_period_start as string) >= end) {
-    return fail("The period has to end after it starts. Pick a later date.");
-  }
-
-  // Both stamps follow the standing rather than being typed, so nothing can
-  // show a suspended shop with no date against it. A shop that was already
-  // suspended keeps the date it was suspended on — re-saving the form is not a
-  // second suspension, and the original date is what somebody argues from.
-  const was = before.status as SubscriptionStatus;
-  const now = new Date().toISOString();
-
-  const stamp = (state: SubscriptionStatus, held: unknown) =>
-    status === state ? (was === state ? ((held as string | null) ?? now) : now) : null;
-
   const row = {
     plan_id: planId,
-    status,
     billing_cycle: cycle,
     agreed_price: price,
     max_branches: branches,
     max_registers: registers,
     grace_days: grace,
-    ...(end ? { current_period_end: end.toISOString() } : {}),
-    suspended_at: stamp("suspended", before.suspended_at),
-    cancelled_at: stamp("cancelled", before.cancelled_at),
   };
 
   const { error } = await supabase
@@ -253,6 +229,75 @@ export async function updateSubscription(
   revalidateClient(tenantId);
 
   return done("Plan saved");
+}
+
+/**
+ * Correct the renewal date, and nothing else.
+ *
+ * Its own action because the period has three legitimate writers and they mean
+ * three different things: `record_subscription_payment` moves it because money
+ * arrived, `extendPeriod` moves it as goodwill, and this one moves it because
+ * the date on file is simply wrong — somebody paid on the 3rd for a month that
+ * should have started on the 1st, and no number of "+1 month" buttons says
+ * that. Keeping it out of the plan form is what stops a stale form from
+ * quietly undoing the other two.
+ */
+export async function setPeriodEnd(
+  _previous: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const gate = await requireBilling();
+  if (!gate.ok) return fail(gate.error);
+
+  const tenantId = text(formData.get("tenant_id"));
+  const periodEnd = text(formData.get("current_period_end"));
+
+  if (!tenantId) return fail("That shop is not on the list any more.");
+  if (!periodEnd) return fail("Pick the date the period should run to.");
+
+  // End of the chosen day, so "runs to the 30th" includes the 30th.
+  const end = new Date(`${periodEnd}T23:59:59`);
+  if (Number.isNaN(end.getTime())) return fail("That renewal date is not a date.");
+
+  const supabase = createAdminClient();
+
+  const { data: before } = await supabase
+    .from("subscriptions")
+    .select("current_period_start, current_period_end")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (!before) return fail("That shop has no subscription.");
+
+  // `subscriptions_period_ordered` refuses an end on or before the start, and a
+  // constraint violation is a sentence nobody can act on — so the refusal is
+  // written here, where it can name the date the operator just typed.
+  if (new Date(before.current_period_start as string) >= end) {
+    return fail("The period has to end after it starts. Pick a later date.");
+  }
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ current_period_end: end.toISOString() })
+    .eq("tenant_id", tenantId);
+
+  if (error) {
+    console.error("[admin] period correction failed for %s: %s", tenantId, writeReadError(error));
+    return fail("That date did not save. Please try again.");
+  }
+
+  await recordAudit(gate.session, {
+    action: "subscription.period_corrected",
+    tenantId,
+    subjectType: "subscription",
+    subjectId: tenantId,
+    before,
+    after: { current_period_end: end.toISOString() },
+  });
+
+  revalidateClient(tenantId);
+
+  return done("Renewal date corrected", "No payment was recorded against it.");
 }
 
 /**

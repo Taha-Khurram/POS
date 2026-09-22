@@ -17,7 +17,7 @@ import {
   dateInput,
   methodLabel,
   monthlyValue,
-  statusOf,
+  standingOf,
   writeDay,
   writeWhen,
 } from "@/lib/platform/admin";
@@ -28,6 +28,7 @@ import type {
   Payment,
   Plan,
   ShopDetails,
+  ShopUser,
 } from "@/lib/platform/console";
 
 import {
@@ -37,6 +38,7 @@ import {
   regenerateInvite,
   revokeInvite,
   setFeatureOverride,
+  setPeriodEnd,
   setSubscriptionStatus,
   updateClient,
   updateSubscription,
@@ -82,10 +84,7 @@ export function PlanCard({
 
   const [planId, setPlanId] = useState(client.planId ?? plans[0]?.id ?? "");
   const [cycle, setCycle] = useState(client.billingCycle);
-  const [status, setStatus] = useState(client.status ?? "active");
   const [price, setPrice] = useState(String(client.agreedPrice));
-
-  const chosen = SUB_STATUSES.find((entry) => entry.id === status);
 
   return (
     <form action={action}>
@@ -93,7 +92,7 @@ export function PlanCard({
 
       <ChartCard
         title="Plan and what it buys"
-        caption={`${rupees(monthlyValue(Number(price) || 0, cycle))} a month at this price and cycle.`}
+        caption={`${rupees(monthlyValue(Number(price) || 0, cycle))} a month at this price and cycle. Standing and the renewal date are on the Standing card.`}
         footer={
           readOnly ? (
             <p className="text-[0.75rem] text-graphite-500">
@@ -145,23 +144,6 @@ export function PlanCard({
               />
               <span className="pos-hint">Per {cycleLabel(cycle)}. The invoice, not the list price.</span>
             </label>
-
-            <SelectRow
-              label="Standing"
-              value={status}
-              onChange={(next) => setStatus(next as typeof status)}
-              options={SUB_STATUSES.map((entry) => ({
-                id: entry.id,
-                label: entry.label,
-                description: entry.description,
-              }))}
-              hint={
-                chosen && !chosen.operable
-                  ? "The register will refuse new sales. Reading, exporting and closing the drawer stay open."
-                  : undefined
-              }
-            />
-            <input type="hidden" name="status" value={status} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -197,26 +179,15 @@ export function PlanCard({
                 defaultValue={client.graceDays}
                 inputMode="numeric"
               />
-              <span className="pos-hint">How long past due is tolerated.</span>
+              {/* Stored and read by nothing — the same honest label
+                  `max_branches` carries. Nothing expires a period or suspends a
+                  shop on a date: `getEntitlements` decides what a shop may do
+                  from its standing alone, and standing is something an operator
+                  sets. Saying "how long past due is tolerated" promised a
+                  tolerance the product does not implement. */}
+              <span className="pos-hint">Nothing reads this yet.</span>
             </label>
           </div>
-
-          <label className="block sm:max-w-xs">
-            <span className="pos-label">Paid up to</span>
-            <input
-              type="date"
-              name="current_period_end"
-              className="pos-field"
-              defaultValue={
-                client.currentPeriodEnd
-                  ? dateInput(new Date(client.currentPeriodEnd))
-                  : ""
-              }
-            />
-            <span className="pos-hint">
-              Recording a payment moves this by itself. Edit it only to correct a date.
-            </span>
-          </label>
         </fieldset>
       </ChartCard>
     </form>
@@ -228,17 +199,34 @@ export function PlanCard({
 /* -------------------------------------------------------------------------- */
 
 /**
- * What you press with the shopkeeper on the phone.
+ * What you press with the shopkeeper on the phone — and the one owner of both
+ * the standing and the period.
  *
- * Deliberately not the form above: at that moment nobody wants nine fields and
- * a Save button. One form, one action, and the button carries the standing it
- * moves to — which is also why there is no confirmation dialog on Suspend. It
- * is reversible in one tap from the same row, and every one of them is in the
- * audit trail under the operator's name.
+ * Deliberately not the plan form beside it: at that moment nobody wants nine
+ * fields and a Save button. One form, one action, and the button carries the
+ * standing it moves to — which is also why there is no confirmation dialog on
+ * Suspend. It is reversible in one tap from the same row, and every one of them
+ * is in the audit trail under the operator's name.
+ *
+ * Standing and `current_period_end` both used to be fields on the plan form as
+ * well. Two controls over one column is a lost update waiting to happen, and it
+ * happened here: recording a payment moved the period and set the shop active,
+ * and the plan form beside it — still holding the values it had rendered with —
+ * put both back the moment anybody pressed Save. Everything that moves the
+ * period now lives on this card or in Payments, and the plan form writes
+ * neither.
  */
-export function LifecycleCard({ client }: { client: Client }) {
+
+export function LifecycleCard({
+  client,
+  readOnly,
+}: {
+  client: Client;
+  readOnly: boolean;
+}) {
   const [state, action, pending] = useActionState(setSubscriptionStatus, IDLE);
   const [extendState, extendAction, extending] = useActionState(extendPeriod, IDLE);
+  const [dateState, dateAction, dating] = useActionState(setPeriodEnd, IDLE);
 
   useActionToast(state, {
     saved: state.saved?.label ?? "Changed",
@@ -248,8 +236,34 @@ export function LifecycleCard({ client }: { client: Client }) {
     saved: extendState.saved?.label ?? "Days added",
     failed: "Those days did not go on",
   });
+  useActionToast(dateState, {
+    saved: dateState.saved?.label ?? "Renewal date corrected",
+    failed: "That date did not save",
+  });
 
-  const now = statusOf(client.status ?? "active");
+  const now = standingOf(client.status);
+  const stored = client.currentPeriodEnd
+    ? dateInput(new Date(client.currentPeriodEnd))
+    : "";
+
+  /**
+   * The date box follows the server.
+   *
+   * Three things move this period — a payment, a goodwill extension and this
+   * box — and the first is a card away. An uncontrolled input keeps the value
+   * it mounted with, so after recording a payment the box still showed last
+   * month's date and saving it wound the payment back. Resetting during render
+   * when the stored date changes is React's own answer to state that has to
+   * follow a prop; a `key` on the card would do it too, but it would remount
+   * and swallow the toast that says what just happened.
+   */
+  const [periodEnd, setPeriodEndValue] = useState(stored);
+  const [seen, setSeen] = useState(stored);
+
+  if (seen !== stored) {
+    setSeen(stored);
+    setPeriodEndValue(stored);
+  }
 
   return (
     <ChartCard
@@ -268,57 +282,117 @@ export function LifecycleCard({ client }: { client: Client }) {
             : ""}
         </p>
 
-        <form action={action} className="flex flex-wrap gap-2">
-          <input type="hidden" name="tenant_id" value={client.tenantId} />
-
-          {SUB_STATUSES.filter((entry) => entry.id !== client.status).map((entry) => (
-            <button
-              key={entry.id}
-              type="submit"
-              name="status"
-              value={entry.id}
-              disabled={pending}
-              className={`pos-btn pos-btn-sm ${entry.id === "active" ? "pos-btn-primary" : "pos-btn-soft"}`}
-              title={entry.description}
-            >
-              {entry.id === "active"
-                ? "Put back in business"
-                : entry.id === "suspended"
-                  ? "Suspend"
-                  : entry.id === "cancelled"
-                    ? "Cancel"
-                    : entry.id === "past_due"
-                      ? "Mark past due"
-                      : "Back to trial"}
-            </button>
-          ))}
-        </form>
-
-        <form
-          action={extendAction}
-          className="flex flex-wrap items-end gap-2 border-t border-orchid-100 pt-4"
-        >
-          <input type="hidden" name="tenant_id" value={client.tenantId} />
-
-          <label className="block">
-            <span className="pos-label">Give days</span>
-            <input
-              name="days"
-              className="pos-field w-24"
-              defaultValue="7"
-              inputMode="numeric"
-            />
-          </label>
-
-          <button type="submit" className="pos-btn pos-btn-soft" disabled={extending}>
-            {extending ? "Adding…" : "Add to the period"}
-          </button>
-
-          <p className="w-full text-[0.75rem] text-graphite-500">
-            Goodwill, with no payment behind it — a week lost to a dead printer.
-            Money taken goes in Payments below, which moves the date by itself.
+        {client.status === null ? (
+          // Nothing below can act on a tenant with no subscription row: every
+          // one of these actions updates `subscriptions` by `tenant_id` and
+          // would match nothing. Saying so beats three buttons that fail.
+          <p className="text-[0.8125rem] text-graphite-500">
+            There is no subscription behind this shop, so there is no standing to
+            change and no period to move. It has to be given a plan before the
+            till will charge.
           </p>
-        </form>
+        ) : readOnly ? (
+          <p className="text-[0.75rem] text-graphite-500">
+            A support account can read this and change nothing on it.
+          </p>
+        ) : (
+          <>
+            <form action={action} className="flex flex-wrap gap-2">
+              <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+              {SUB_STATUSES.filter((entry) => entry.id !== client.status).map((entry) => (
+                <button
+                  key={entry.id}
+                  type="submit"
+                  name="status"
+                  value={entry.id}
+                  disabled={pending}
+                  className={`pos-btn pos-btn-sm ${entry.id === "active" ? "pos-btn-primary" : "pos-btn-soft"}`}
+                  title={entry.description}
+                >
+                  {entry.id === "active"
+                    ? "Put back in business"
+                    : entry.id === "suspended"
+                      ? "Suspend"
+                      : entry.id === "cancelled"
+                        ? "Cancel"
+                        : entry.id === "past_due"
+                          ? "Mark past due"
+                          : "Back to trial"}
+                </button>
+              ))}
+            </form>
+
+            <form
+              action={extendAction}
+              className="flex flex-wrap items-end gap-2 border-t border-orchid-100 pt-4"
+            >
+              <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+              <label className="block">
+                <span className="pos-label">Give days</span>
+                <input
+                  name="days"
+                  className="pos-field w-24"
+                  defaultValue="7"
+                  inputMode="numeric"
+                />
+              </label>
+
+              <button type="submit" className="pos-btn pos-btn-soft" disabled={extending}>
+                {extending ? "Adding…" : "Add to the period"}
+              </button>
+
+              <p className="w-full text-[0.75rem] text-graphite-500">
+                Goodwill, with no payment behind it — a week lost to a dead
+                printer. Money taken goes in Payments, which moves the date by
+                itself.
+              </p>
+
+              {/* Days on the period do not reopen a shut till: `getEntitlements`
+                  reads the standing and never the date. An operator promising a
+                  week to a suspended shopkeeper has to put them back in business
+                  too, and would otherwise hear about it from the shopkeeper. */}
+              {!now.operable ? (
+                <p className="pos-note pos-note-warn w-full">
+                  Days on their own will not start the till again — this shop is{" "}
+                  {now.label.toLowerCase()}. Put them back in business as well.
+                </p>
+              ) : null}
+            </form>
+
+            <form
+              action={dateAction}
+              className="flex flex-wrap items-end gap-2 border-t border-orchid-100 pt-4"
+            >
+              <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+              <label className="block">
+                <span className="pos-label">Paid up to</span>
+                <input
+                  type="date"
+                  name="current_period_end"
+                  className="pos-field"
+                  value={periodEnd}
+                  onChange={(event) => setPeriodEndValue(event.target.value)}
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="pos-btn pos-btn-quiet"
+                disabled={dating || periodEnd === stored || !periodEnd}
+              >
+                {dating ? "Saving…" : "Correct the date"}
+              </button>
+
+              <p className="w-full text-[0.75rem] text-graphite-500">
+                Only to fix a date that is wrong. Recording a payment moves it by
+                itself.
+              </p>
+            </form>
+          </>
+        )}
       </div>
     </ChartCard>
   );
@@ -516,12 +590,16 @@ export function PaymentsCard({
 export function InvitePanel({
   client,
   invites,
-  signedIn,
+  users,
   readOnly,
 }: {
   client: Client;
   invites: Invite[];
-  signedIn: number;
+  /** Who can actually sign in. This card used to sit beside a second one that
+   *  listed them, and both captions read "N accounts on this shop" — the same
+   *  sentence, from the same number, twice down one column. They are one
+   *  question: can anybody get in, and who. */
+  users: ShopUser[];
   readOnly: boolean;
 }) {
   const [state, action, pending] = useActionState(regenerateInvite, IDLE);
@@ -540,6 +618,8 @@ export function InvitePanel({
     (invite) =>
       !invite.usedAt && !invite.revokedAt && new Date(invite.expiresAt) > new Date(),
   );
+
+  const signedIn = users.length;
 
   return (
     <div className="space-y-4">
@@ -593,6 +673,27 @@ export function InvitePanel({
               ) : null}
             </div>
           )}
+
+          {/* No email column: `profiles` does not carry one, and reading
+              `auth.users` for it would be this console holding a password reset
+              over somebody's own account. */}
+          {signedIn > 0 ? (
+            <ul className="space-y-2 border-t border-orchid-100 pt-3">
+              {users.map((user) => (
+                <li key={user.id} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 text-[0.8125rem] text-graphite-900">
+                    {user.fullName}
+                    <span className="block text-[0.6875rem] text-graphite-500">
+                      {user.tenantRole} · joined {writeDay(user.createdAt)}
+                    </span>
+                  </span>
+                  {user.isActive ? null : (
+                    <span className="pos-badge pos-badge-warn">Suspended</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {invites.length > 0 ? (
             <ul className="space-y-1 border-t border-orchid-100 pt-3 text-[0.75rem] text-graphite-500">

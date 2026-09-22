@@ -5,11 +5,12 @@ import { notFound } from "next/navigation";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconChevron } from "@/components/pos/icons";
+import { InfoTip } from "@/components/pos/info-tip";
 import { rupees } from "@/lib/format";
+import type { Explainer } from "@/lib/pos/report";
 import {
-  renewalMessage,
-  statusOf,
-  waLink,
+  EXPLAIN,
+  standingOf,
   writeDay,
   writeExpiry,
   writeWhen,
@@ -25,7 +26,6 @@ import {
   listPlans,
   listShopUsers,
   type AuditRow,
-  type ShopUser,
 } from "@/lib/platform/console";
 
 import {
@@ -74,7 +74,7 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
   ]);
 
   const readOnly = session.platformRole !== "super_admin";
-  const status = statusOf(client.status ?? "active");
+  const status = standingOf(client.status);
   const planFeatures =
     plans.find((plan) => plan.id === client.planId)?.features ?? {};
 
@@ -121,17 +121,6 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
           </p>
         </div>
 
-        <a
-          href={waLink(
-            client.phone,
-            renewalMessage(client.shopName, client.daysUntilExpiry),
-          )}
-          target="_blank"
-          rel="noreferrer"
-          className="pos-btn pos-btn-soft"
-        >
-          WhatsApp them
-        </a>
       </header>
 
       {/* Is this shop actually using Flo? The question a renewal call turns on,
@@ -146,14 +135,16 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
               : "This shop has never rung anything up"
           }
           bad={!client.lastSaleAt}
+          explain={EXPLAIN.lastBill}
         />
         <Figure
           label="Sold in 30 days"
           value={rupees(client.sales30d)}
           note={`${client.bills30d.toLocaleString("en-PK")} bills`}
+          explain={EXPLAIN.sold30}
         />
         <Figure
-          label="On the shelf"
+          label="Products"
           value={client.itemCount.toLocaleString("en-PK")}
           note={
             client.itemCount === 0
@@ -161,6 +152,7 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
               : `${client.counterCount} ${client.counterCount === 1 ? "counter" : "counters"} open`
           }
           bad={client.itemCount === 0}
+          explain={EXPLAIN.onShelf}
         />
         <Figure
           label="Paid to date"
@@ -170,6 +162,7 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
               ? `Last ${writeWhen(client.lastPaidAt).toLowerCase()}`
               : "Nothing recorded yet"
           }
+          explain={EXPLAIN.paidToDate}
         />
       </section>
 
@@ -181,14 +174,13 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
         </div>
 
         <div className="space-y-4">
-          {readOnly ? null : <LifecycleCard client={client} />}
+          <LifecycleCard client={client} readOnly={readOnly} />
           <InvitePanel
             client={client}
             invites={invites}
-            signedIn={users.length}
+            users={users}
             readOnly={readOnly}
           />
-          <PeopleCard users={users} />
           <OverridesCard
             client={client}
             planFeatures={planFeatures}
@@ -214,16 +206,21 @@ function Figure({
   value,
   note,
   bad = false,
+  explain,
 }: {
   label: string;
   value: string;
   note: string;
   bad?: boolean;
+  /** How the figure is reached, from `EXPLAIN`. Nobody can check these against
+   *  a till roll, so every one of them carries the sentence. */
+  explain?: Explainer;
 }) {
   return (
     <article className="pos-card p-4">
-      <h2 className="font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
+      <h2 className="flex items-center gap-1 font-display text-[0.8125rem] leading-tight font-semibold text-graphite-500">
         {label}
+        {explain ? <InfoTip label={label} explain={explain} /> : null}
       </h2>
       <p
         className={`mt-2.5 font-display text-[1.5rem] leading-none font-bold tracking-tight tabular-nums ${bad ? "text-signal-bad" : "text-graphite-900"}`}
@@ -232,44 +229,6 @@ function Figure({
       </p>
       <p className="mt-2.5 text-[0.75rem] text-graphite-500">{note}</p>
     </article>
-  );
-}
-
-/** Who can sign in. No email column: `profiles` does not carry one, and reading
- *  `auth.users` for it would be this console holding a password reset over
- *  somebody's own account. */
-function PeopleCard({ users }: { users: ShopUser[] }) {
-  return (
-    <ChartCard
-      title="Who signs in"
-      caption={
-        users.length === 0
-          ? "Nobody yet."
-          : `${users.length} ${users.length === 1 ? "account" : "accounts"} on this shop.`
-      }
-    >
-      {users.length === 0 ? (
-        <p className="text-[0.8125rem] text-graphite-500">
-          The shop cannot be used until somebody redeems the sign-up link.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {users.map((user) => (
-            <li key={user.id} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-[0.8125rem] text-graphite-900">
-                {user.fullName}
-                <span className="block text-[0.6875rem] text-graphite-500">
-                  {user.tenantRole} · joined {writeDay(user.createdAt)}
-                </span>
-              </span>
-              {user.isActive ? null : (
-                <span className="pos-badge pos-badge-warn">Suspended</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </ChartCard>
   );
 }
 

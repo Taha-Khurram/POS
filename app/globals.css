@@ -1251,12 +1251,18 @@
   /* Hover is for the tabs you could go to. The one you are on already has the
      strongest paint available and lighting it further only makes the pointer
      look like it is doing something. */
-  .pos-tab:hover:not([aria-current="page"]) {
+  .pos-tab:hover:not([aria-current="page"], [aria-selected="true"]) {
     color: var(--indigo-deep);
     background: color-mix(in oklab, var(--color-paper-50) 72%, transparent);
   }
 
-  .pos-tab[aria-current="page"] {
+  /* Two ways of being the current tab, painted identically. The routed
+     switchers (`/app/sales`, `/app/purchasing`) are links and say
+     `aria-current="page"`; the ones that only move state in the browser — the
+     clients roster's cuts — are buttons with `role="tab"`, where `aria-selected`
+     is the correct ARIA and `aria-current` would be a lie about navigation. */
+  .pos-tab[aria-current="page"],
+  .pos-tab[aria-selected="true"] {
     color: var(--indigo-deep);
     background: var(--color-paper-50);
     box-shadow:
@@ -1283,7 +1289,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .pos-tab[aria-current="page"] .pos-tab-count {
+  .pos-tab[aria-current="page"] .pos-tab-count,
+  .pos-tab[aria-selected="true"] .pos-tab-count {
     background: var(--imperial);
     color: #fff;
   }

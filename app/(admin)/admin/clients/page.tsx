@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { IconPlus } from "@/components/pos/icons";
 import { rupees } from "@/lib/format";
-import { statusOf } from "@/lib/platform/admin";
+import { standingOf } from "@/lib/platform/admin";
 import { requirePlatform } from "@/lib/platform/access";
 import { listClients } from "@/lib/platform/console";
 
@@ -18,12 +18,17 @@ export default async function ClientsPage() {
   const session = await requirePlatform();
   const clients = await listClients();
 
-  const trading = clients.filter(
-    (client) => client.status !== null && statusOf(client.status).operable,
+  // Trading is everyone the till still charges for, trials included. MRR is
+  // `active` and `past_due` only — the one definition `platform_overview()` and
+  // the roster below both use. They are deliberately different sets, so the
+  // line names each rather than printing two numbers that look like they
+  // describe one.
+  const trading = clients.filter((client) => standingOf(client.status).operable);
+  const paying = trading.filter(
+    (client) => client.status === "active" || client.status === "past_due",
   );
-  const mrr = trading
-    .filter((client) => client.status !== "trialing")
-    .reduce((total, client) => total + client.monthlyValue, 0);
+  const mrr = paying.reduce((total, client) => total + client.monthlyValue, 0);
+  const onTrial = trading.length - paying.length;
 
   return (
     <div className="space-y-4">
@@ -33,7 +38,7 @@ export default async function ClientsPage() {
           <p className="mt-1 text-[0.8125rem] text-graphite-500">
             {clients.length === 0
               ? "Nobody yet."
-              : `${trading.length} trading · ${rupees(mrr)} a month`}
+              : `${trading.length} trading${onTrial > 0 ? `, ${onTrial} on trial` : ""} · ${rupees(mrr)} a month from ${paying.length} paying`}
           </p>
         </div>
 

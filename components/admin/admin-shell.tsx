@@ -8,7 +8,7 @@ import {
   rememberPref,
   type ConsoleTheme,
 } from "@/components/pos/console-prefs";
-import { IconMenu, IconPlus, IconRail } from "@/components/pos/icons";
+import { IconMenu, IconRail } from "@/components/pos/icons";
 import { ThemeToggle } from "@/components/pos/theme-toggle";
 import { ToastProvider } from "@/components/pos/toaster";
 import { FloMark } from "@/components/site/flo-mark";
@@ -119,18 +119,11 @@ export function AdminShell({
             <span className="hidden text-graphite-500 sm:inline"> · Flo owner console</span>
           </p>
 
+          {/* Activating a shop used to sit here as well as on the Clients
+              page, so /admin/clients drew the same primary button twice, one
+              above the other. It belongs with the roster it adds a row to. */}
           <div className="ml-auto flex items-center gap-1.5">
             <ThemeToggle initial={theme} />
-
-            {/* The only primary-weight control up here, and it is the one thing
-                this console exists to do: turn a closed deal into a working
-                shop before the WhatsApp thread goes cold. */}
-            {role === "super_admin" ? (
-              <Link href="/admin/clients/new" className="pos-btn pos-btn-primary">
-                <IconPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Activate a shop</span>
-              </Link>
-            ) : null}
           </div>
         </header>
 

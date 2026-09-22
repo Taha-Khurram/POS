@@ -874,6 +874,86 @@ WhatsApp message already composed — and is then unrecoverable by anything. An
 operator who loses it regenerates, which revokes the one they lost;
 `invites_one_live_per_tenant_role` is what makes that the only safe move.
 
+**Every figure on `/admin` says how it is worked out.** `EXPLAIN` in
+`lib/platform/admin.ts` is the single source, the same bargain
+`lib/pos/report.ts` strikes and for a stronger reason: a shopkeeper can check a
+figure against their own till roll, and nobody can check these against anything.
+An operator quoting MRR on a call is trusting a number with no second copy. The
+tips are `components/pos/info-tip.tsx` — pure CSS, hover and focus, no client
+bundle — and `DataTable`'s `Column` now carries the same optional `explain` that
+`ReportColumn` always did, so the two tables explain a figure the one way. Each
+entry is written against the SQL that produces it; move a window in
+`platform_overview()` or `platform_clients()` and the sentence moves in the same
+commit, or that file becomes the most confident liar in the product. Two of them
+exist to correct a label rather than decorate it: "Products" counts catalog rows
+active or not and is **not** a stock count, and "Last bill" is the shop's most
+recent sale ever, not one inside the thirty days beside it.
+
+**One primary button per job.** Activating a shop sat in the admin topbar *and*
+in the Clients page header, so `/admin/clients` drew the same primary button
+twice, one directly above the other. It lives with the roster it adds a row to.
+
+**No WhatsApp button on the client screens.** The roster's column, the client
+record's header and the Overview's renewal nudge are gone, and `renewalMessage`
+went with them rather than being left standing — the call `0034` made about the
+restaurant tables. What stays is WhatsApp where it is the *delivery mechanism*
+rather than a contact shortcut: `invite-card.tsx` composes the sign-in link
+message, which is how a shopkeeper receives a link that is shown exactly once,
+and Leads and Orders keep theirs because working a lead is a different job on a
+different screen.
+
+**One writer per field on a client's record.** `/admin/clients/[id]` draws five
+cards over one subscription row, and `0038`-era code let two of them write the
+same columns: the plan form carried Standing and a "Paid up to" date, while the
+standing buttons, the goodwill extension and `record_subscription_payment` wrote
+exactly those. A form is built from the values it was rendered with, so
+recording a payment — which moves the period and sets the shop `active` — and
+then pressing Save on the plan card beside it posted the standing and the date
+*as they were before the payment*, silently re-suspending a shop that had just
+paid and winding its period back. `revalidatePath` does not save you here: a
+client component that stays mounted keeps its `useState` initial values and its
+uncontrolled `defaultValue`s, both of which only ever read their props once.
+
+So `updateSubscription` now writes the commercial deal alone — plan, cycle,
+price, ceilings — and nothing that another control also writes. Standing belongs
+to `setSubscriptionStatus`, goodwill days to `extendPeriod`, a correction to
+`setPeriodEnd`, and a renewal to `record_subscription_payment`. The one date box
+that remains is controlled and resets during render when the stored value
+changes, which is React's own answer to state that has to follow a prop — a
+`key` would work too and would remount the card, swallowing the toast that says
+what just happened.
+
+**Days on the period do not reopen a shut till.** `getEntitlements` reads
+`status` and never the date, so `canOperate` is false for a suspended shop
+however far ahead its period runs. That is deliberate — suspension is a decision
+somebody takes, not a date that arrives — and it means "give them a week" is not
+by itself a way to put a shop back in business. The standing card says so where
+the button is, because the alternative is finding out from the shopkeeper.
+`subscriptions.grace_days` is written by that form and read by nothing at all;
+its hint says so, the way `max_branches` already did.
+
+**A tenant with no subscription is a state, not a default.** `platform_clients()`
+left-joins `subscriptions`, so `status` is null for a shop whose subscription was
+deleted by hand. Every screen used to read that as `statusOf(status ?? "active")`
+and paint a green **Active** badge over a shop with no plan, no price and no
+period — the row that most needs looking at, drawn as the one that needs
+nothing. `standingOf` in `lib/platform/admin.ts` is the single reader now and
+returns `NO_SUBSCRIPTION`, whose `operable` is false because `getEntitlements`
+returns null without that row and the till refuses the sale.
+
+**"Thirty days" means thirty days** (`0039`). `platform_clients()` windowed
+recent trading on `current_date - 30`, which is thirty-one days, under three
+captions that all said thirty. `bills_30d = 0` is what puts a shop on the "Gone
+quiet" list, so the extra day made a shop that had stopped selling look like one
+that had not — the wrong direction for a figure whose whole job is to notice.
+`current_date - 29` is the definition `0038`'s trend already used.
+
+**MRR is `active` and `past_due`, everywhere it appears.** The roster's header
+and the table caption both sum it that way now, and both say how many shops it
+is *of* — a trial is on the trading count and contributes nothing to the money,
+and two numbers side by side that quietly describe different sets is how a
+console stops being believed.
+
 **Both activation paths are one function.** `/admin/orders`' Verify button and
 the direct form both call `activateShop` in `clients/activate.ts`, which is
 `server-only` and deliberately *not* in a `"use server"` module — every export
@@ -890,6 +970,41 @@ found the RPC would otherwise get a one-row "platform" of their own shop, which
 is not a leak but is a screen that lies about what it is. `last_sale_at` is read
 live off `sales` rather than from `tenant_health`, which has existed since
 `0004` and which nothing has ever written a row into.
+
+**Every figure on the Overview is measured against something** since `0038`,
+which widened `platform_overview()` with the previous window, the thirty-day
+trend, and collections off `payments`. Before it, all four cards passed
+`delta={null}` and the console's headline row read "No comparison" four times
+over figures that were perfectly real.
+
+**The comparison is the same number of *elapsed* days, never the whole previous
+month.** Twenty-two days of September against thirty-one of August reports a
+third of every month as a collapse, until the 31st. `v_elapsed` in the function
+is the whole of that fix, `elapsed_days` rides back with the figures, and the
+strip captions which days it compared — a percentage whose two windows are
+different lengths is the commonest way a console misleads the person running the
+business off it. The same like-for-like rule `businessWindow` applies in
+`lib/pos/dashboard.ts`, whose `delta()` the page reuses rather than copying.
+
+**MRR still carries no delta, and that is the honest answer.** `subscriptions`
+stores today's price and no history, so there is no previous MRR to compare
+against; "Shops trading" and "Needs a call" are blank for the same kind of
+reason — a percentage change on a queue length means nothing. What moves is
+**collected** (`payments`, what actually landed) beside **MRR** (contracted),
+and the gap between the two is exactly what the renewal call list exists to
+chase.
+
+**The trend is gap-filled in SQL**, by `generate_series` rather than a `group
+by` over the rows that exist: a day nobody sold anything has to draw as a
+trough, or the chart joins the days either side and draws a slope that never
+happened. It plots rupees only — bills is a count and lives in the tooltip,
+because a second axis is how a chart tells you a lie with real numbers.
+`components/admin/platform-trend.tsx` is the one chart on `/admin`, and it is of
+volume through the product, not of shop count: the page's old argument that a
+business with twelve clients has nothing to plot still holds for the roster, and
+there is still no chart of it. `sales_business_day_brin_idx` is what the
+platform-wide date scans cost — BRIN, because `sales` is append-only and the
+index is paid for by every shop at the counter.
 
 **MRR counts `active` and `past_due` only.** A trial is not revenue, and a
 suspended shop is money that has stopped arriving — which is what the figure is

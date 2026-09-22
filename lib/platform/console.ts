@@ -39,6 +39,15 @@ import { createClient } from "@/utils/supabase/server";
 /* The strip across the top                                                   */
 /* -------------------------------------------------------------------------- */
 
+/** One day of the platform's own trading, gap-filled by `platform_overview`
+ *  so a day nobody sold anything is a zero rather than a missing point. */
+export type PlatformDay = {
+  /** `YYYY-MM-DD`, the business day — never a timestamp. */
+  day: string;
+  sales: number;
+  bills: number;
+};
+
 export type Overview = {
   clients: number;
   active: number;
@@ -57,9 +66,27 @@ export type Overview = {
   leadsNew: number;
   salesMonth: number;
   billsMonth: number;
+  /**
+   * The same figures over the same number of elapsed days of the previous
+   * month — not the whole of it. `0038` builds the window that way, and
+   * `elapsedDays` is how many days both halves cover, which the screen says
+   * out loud: a percentage whose two windows are different lengths is the
+   * commonest way a console misleads the person who runs the business off it.
+   */
+  salesPrev: number;
+  billsPrev: number;
+  /** What actually landed in the account, off `payments` — not what the shops
+   *  are contracted to pay, which is `mrr`. */
+  collectedMonth: number;
+  collectedPrev: number;
+  addedMonth: number;
+  addedPrev: number;
+  elapsedDays: number;
   /** Trading shops that have not rung anything up in three days. */
   dormant: number;
   neverSold: number;
+  /** Thirty days to this morning. */
+  trend: PlatformDay[];
 };
 
 const EMPTY_OVERVIEW: Overview = {
@@ -79,11 +106,34 @@ const EMPTY_OVERVIEW: Overview = {
   leadsNew: 0,
   salesMonth: 0,
   billsMonth: 0,
+  salesPrev: 0,
+  billsPrev: 0,
+  collectedMonth: 0,
+  collectedPrev: 0,
+  addedMonth: 0,
+  addedPrev: 0,
+  elapsedDays: 0,
   dormant: 0,
   neverSold: 0,
+  trend: [],
 };
 
 const num = (value: unknown) => Number(value ?? 0) || 0;
+
+/** The trend arrives as jsonb. It is parsed rather than cast, because a shape
+ *  this screen charts is one the page must not be handed half of. */
+function toTrend(value: unknown): PlatformDay[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    return {
+      day: typeof row.day === "string" ? row.day : "",
+      sales: num(row.sales),
+      bills: num(row.bills),
+    };
+  });
+}
 
 export async function getOverview(): Promise<Overview> {
   const supabase = createClient(await cookies());
@@ -113,8 +163,16 @@ export async function getOverview(): Promise<Overview> {
     leadsNew: num(row.leads_new),
     salesMonth: num(row.sales_month),
     billsMonth: num(row.bills_month),
+    salesPrev: num(row.sales_prev),
+    billsPrev: num(row.bills_prev),
+    collectedMonth: num(row.collected_month),
+    collectedPrev: num(row.collected_prev),
+    addedMonth: num(row.added_month),
+    addedPrev: num(row.added_prev),
+    elapsedDays: num(row.elapsed_days),
     dormant: num(row.dormant),
     neverSold: num(row.never_sold),
+    trend: toTrend(row.trend),
   };
 }
 

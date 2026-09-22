@@ -97,6 +97,32 @@ export const statusOf = (id: string) =>
 export const isStatus = (value: string): value is SubscriptionStatus =>
   SUB_STATUSES.some((status) => status.id === value);
 
+/**
+ * What a shop's standing is, including having no subscription at all.
+ *
+ * `platform_clients()` left-joins `subscriptions`, so `status` is null for a
+ * tenant whose subscription was deleted by hand. Every screen used to read that
+ * as `statusOf(status ?? "active")` and draw a green **Active** badge over a
+ * shop that has no plan, no price and no period — the one row in the console
+ * that most needs looking at, painted as the one that needs nothing. It is a
+ * real state and it gets drawn as one.
+ *
+ * `operable` is false for it, which is also the truth: `getEntitlements`
+ * returns null with no subscription row, so the till refuses the sale.
+ */
+export const NO_SUBSCRIPTION = {
+  id: "none",
+  label: "No subscription",
+  description: "No plan behind this shop. The till will not charge.",
+  tone: "bad",
+  operable: false,
+} as const satisfies Option<"none"> & { tone: StatusTone; operable: boolean };
+
+export const standingOf = (status: SubscriptionStatus | null) =>
+  status === null
+    ? NO_SUBSCRIPTION
+    : (SUB_STATUSES.find((entry) => entry.id === status) ?? NO_SUBSCRIPTION);
+
 export type BillingCycle = "monthly" | "quarterly" | "yearly";
 
 export const BILLING_CYCLES = [
@@ -387,6 +413,93 @@ export function checkClient(draft: ClientDraft): string | null {
 }
 
 /* -------------------------------------------------------------------------- */
+/* How every figure on this console is worked out                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The one place that says what a number on `/admin` means.
+ *
+ * The same bargain `EXPLAIN` strikes in `lib/pos/report.ts`, for a stronger
+ * reason: a shopkeeper can check a figure against their own till roll, and
+ * nobody can check these against anything. An operator quoting MRR on a call,
+ * or telling a shopkeeper what they have paid to date, is trusting a number
+ * they have no second copy of — so every one of them says how it was reached,
+ * in one sentence, from one place. Three explanations of one figure is how a
+ * console stops being believed.
+ *
+ * Each entry is written against the SQL that actually produces it —
+ * `platform_overview()` and `platform_clients()` in `0036`, as `0038` and
+ * `0039` left them. When one of those windows moves, the sentence moves with
+ * it in the same commit, or this file becomes the most confident liar in the
+ * product.
+ */
+export const EXPLAIN = {
+  /* ---- The strip across the top of /admin ---- */
+
+  mrr: {
+    formula: "Σ agreed price ÷ cycle months, active and past-due shops",
+    plain:
+      "What every shop is contracted to pay in a month, whether they pay monthly, quarterly or yearly. A trial counts nothing until it converts, and a suspended or cancelled shop drops out — this figure is money that is still arriving.",
+  },
+  collected: {
+    formula: "Σ payments recorded this month",
+    plain:
+      "Rupees actually recorded against a shop this month, whatever period they bought. Monthly revenue is what was promised; this is what landed.",
+  },
+  shopsTrading: {
+    plain:
+      "Shops whose till still charges — on trial, active, or past due. Suspended and cancelled shops are counted as stopped, and a shop with no subscription behind it is not trading at all.",
+  },
+  needsCall: {
+    plain:
+      "Trading shops whose period ends inside seven days, plus every one already past its date. Nothing shuts a shop off on that date — somebody has to decide to suspend it, which is why this is a call list.",
+  },
+  soldThroughFlo: {
+    formula: "Σ sale totals, every shop, this month",
+    plain:
+      "What the shops rang up, not what Flo earns. A refund is a negative sale and subtracts itself; the bill count is completed sales only, because the shop served that customer twice and did not un-serve them.",
+  },
+
+  /* ---- One shop's record ---- */
+
+  lastBill: {
+    plain:
+      "When this shop last rang anything up, at any time — not only inside the thirty days beside it. A shop that sold nothing this month but sold in March reads as March.",
+  },
+  sold30: {
+    formula: "Σ sale totals over the last 30 days, today included",
+    plain:
+      "Everything this shop billed in the last thirty days — their turnover, not what they pay Flo. A refund is a negative sale and comes off the money, while the bill count beside it stays completed sales only.",
+  },
+  onShelf: {
+    plain:
+      "How many products are in their catalog, switched on or off. It is the size of their item list and not a count of stock on the shelf.",
+  },
+  paidToDate: {
+    formula: "Σ every payment recorded against this shop",
+    plain:
+      "Every rupee recorded since the shop was activated, across all methods. It is only as complete as what operators have entered — a bank transfer nobody recorded is not here.",
+  },
+
+  /* ---- The roster's columns ---- */
+
+  standing: {
+    plain:
+      "Whether the till charges. Trial, active and past due all trade; suspended and cancelled do not, and neither does a shop with no subscription. It is set by an operator, never by a date arriving.",
+  },
+  period: {
+    formula: "period end − today, in calendar days",
+    plain:
+      "Days until the period they have paid for runs out, negative once it has passed. Running out does not stop the till by itself — it is what puts them on the call list.",
+  },
+  monthly: {
+    formula: "agreed price ÷ 1, 3 or 12",
+    plain:
+      "The agreed price as a monthly figure, so a yearly deal and a monthly one can be read down the same column. It is the invoice price, not the plan's list price.",
+  },
+} as const satisfies Record<string, { formula?: string; plain: string }>;
+
+/* -------------------------------------------------------------------------- */
 /* Reaching the shopkeeper                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -432,23 +545,6 @@ export function inviteMessage(shopName: string, link: string): string {
   ].join("\n");
 }
 
-/** The nudge for a shop whose period has run out or is about to. */
-export function renewalMessage(shopName: string, days: number): string {
-  const when =
-    days < 0
-      ? `${-days} din pehle khatam ho chuka hai`
-      : days === 0
-        ? "aaj khatam ho raha hai"
-        : `${days} din mein khatam ho raha hai`;
-
-  return [
-    `Assalam-o-Alaikum! ${shopName} ka Flo subscription ${when}.`,
-    "",
-    "Renew karne ke liye isi number par message kar dein — bank ya Easypaisa, jo aap ko asaan lage.",
-    "",
-    `Flo renewal for ${shopName}. Reply here and we will send the details.`,
-  ].join("\n");
-}
 
 /* -------------------------------------------------------------------------- */
 /* Dates, the way this console writes them                                    */
@@ -466,6 +562,26 @@ export function writeDay(iso: string | null): string {
     month: "short",
     year: "numeric",
   });
+}
+
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/**
+ * "22 Sep" — a business day on a chart axis.
+ *
+ * Takes the `YYYY-MM-DD` string apart by hand rather than going through `Date`.
+ * `new Date("2026-09-22")` is parsed as UTC midnight, so an operator whose
+ * laptop is set to a timezone west of Greenwich would see every point on the
+ * trend labelled with the day before — the browser's locale gets no vote here,
+ * the same rule `dateInput` follows one function down.
+ */
+export function writeAxisDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  if (!year || !month || !date) return day;
+  return `${date} ${MONTHS[month - 1] ?? ""}`.trim();
 }
 
 /** "2 days ago", "in 6 days" — for anything a human is deciding off. */

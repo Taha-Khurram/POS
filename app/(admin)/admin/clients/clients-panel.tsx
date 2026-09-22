@@ -8,13 +8,7 @@ import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconSearch } from "@/components/pos/icons";
 import { Select } from "@/components/pos/select-field";
 import { rupees } from "@/lib/format";
-import {
-  renewalMessage,
-  statusOf,
-  waLink,
-  writeExpiry,
-  writeWhen,
-} from "@/lib/platform/admin";
+import { EXPLAIN, standingOf, writeExpiry, writeWhen } from "@/lib/platform/admin";
 import type { Client } from "@/lib/platform/console";
 
 /**
@@ -42,16 +36,14 @@ const FILTERS = [
     label: "Needs a call",
     description: "Trading, and the period runs out inside a week",
     match: (client: Client) =>
-      client.status !== null &&
-      statusOf(client.status).operable &&
-      client.daysUntilExpiry <= 7,
+      standingOf(client.status).operable && client.daysUntilExpiry <= 7,
   },
   {
     id: "quiet",
     label: "Gone quiet",
     description: "Paying, no bill in thirty days",
     match: (client: Client) =>
-      client.status !== null && statusOf(client.status).operable && client.bills30d === 0,
+      standingOf(client.status).operable && client.bills30d === 0,
   },
   {
     id: "unsigned",
@@ -62,9 +54,8 @@ const FILTERS = [
   {
     id: "stopped",
     label: "Stopped",
-    description: "Suspended or cancelled",
-    match: (client: Client) =>
-      client.status !== null && !statusOf(client.status).operable,
+    description: "Suspended, cancelled, or with no subscription at all",
+    match: (client: Client) => !standingOf(client.status).operable,
   },
 ] as const;
 
@@ -164,8 +155,9 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
     {
       key: "status",
       header: "Standing",
+      explain: EXPLAIN.standing,
       cell: (client) => {
-        const status = statusOf(client.status ?? "active");
+        const status = standingOf(client.status);
         return (
           <span className={`pos-badge pos-badge-${status.tone}`}>{status.label}</span>
         );
@@ -174,6 +166,7 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
     {
       key: "period",
       header: "Period",
+      explain: EXPLAIN.period,
       hideBelow: "sm",
       cell: (client) => {
         const over = client.daysUntilExpiry < 0;
@@ -192,6 +185,7 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
     {
       key: "selling",
       header: "Last bill",
+      explain: EXPLAIN.lastBill,
       hideBelow: "lg",
       cell: (client) => (
         <span className={client.lastSaleAt ? "text-graphite-700" : "text-signal-bad"}>
@@ -202,88 +196,98 @@ export function ClientsPanel({ clients }: { clients: Client[] }) {
     {
       key: "value",
       header: "A month",
+      explain: EXPLAIN.monthly,
       align: "end",
       cell: (client) => rupees(client.monthlyValue),
     },
-    {
-      key: "nudge",
-      header: "",
-      align: "end",
-      hideBelow: "sm",
-      cell: (client) => (
-        <a
-          href={waLink(client.phone, renewalMessage(client.shopName, client.daysUntilExpiry))}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(event) => event.stopPropagation()}
-          className="pos-btn pos-btn-quiet pos-btn-sm"
-        >
-          WhatsApp
-        </a>
-      ),
-    },
   ];
 
-  const worth = rows.reduce((total, client) => total + client.monthlyValue, 0);
+  // MRR on the one definition the whole console uses — `active` and `past_due`
+  // and nothing else. Summing `monthlyValue` over every filtered row instead
+  // would count a trial as revenue here while the page header above and the
+  // Overview's strip both leave it out, and three figures for one number is how
+  // a console stops being believed.
+  const worth = rows.reduce(
+    (total, client) =>
+      client.status === "active" || client.status === "past_due"
+        ? total + client.monthlyValue
+        : total,
+    0,
+  );
+
+  const paying = rows.filter(
+    (client) => client.status === "active" || client.status === "past_due",
+  ).length;
 
   return (
-    <ChartCard
-      title="Clients"
-      // The caption describes the rows under it, every time they are not all of
-      // them — the same bargain `/app/sales` strikes with its totals.
-      caption={
-        rows.length === clients.length
-          ? `All ${clients.length} shops · ${rupees(worth)} a month`
-          : `${rows.length} of ${clients.length} shops · ${rupees(worth)} a month`
-      }
-      actions={
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="pos-field w-44 pl-9 sm:w-56"
-              placeholder="Shop, owner, city, phone"
-              aria-label="Search the clients"
+    <div className="space-y-3">
+      {/* The cuts are tabs rather than a dropdown, the same switcher `/app/sales`
+          and `/app/purchasing` use. A count inside a closed `<select>` answers
+          "is anybody about to run out" only after you open it and read five
+          rows; on the track it is answered before you decide to look. */}
+      <div className="pos-tabs" role="tablist" aria-label="Which shops">
+        {FILTERS.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            // `aria-selected` and not `aria-current`: these move state in the
+            // browser and navigate nowhere, and `.pos-tab` paints both.
+            aria-selected={filter === entry.id}
+            onClick={() => setFilter(entry.id)}
+            className="pos-tab"
+            title={"description" in entry ? entry.description : undefined}
+          >
+            {entry.label}
+            <span className="pos-tab-count">{counts[entry.id]}</span>
+          </button>
+        ))}
+      </div>
+
+      <ChartCard
+        title="Clients"
+        // The caption describes the rows under it, every time they are not all of
+        // them — the same bargain `/app/sales` strikes with its totals.
+        caption={
+          `${rows.length === clients.length ? `All ${clients.length} shops` : `${rows.length} of ${clients.length} shops`}` +
+          ` · ${rupees(worth)} a month from the ${paying} paying ${paying === 1 ? "one" : "ones"}`
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <IconSearch className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-graphite-500" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="pos-field w-44 pl-9 sm:w-56"
+                placeholder="Shop, owner, city, phone"
+                aria-label="Search the clients"
+              />
+            </div>
+
+            <Select
+              value={sort}
+              onChange={(next) => setSort(next as SortId)}
+              label="Sort by"
+              className="w-40"
+              options={SORTS.map((entry) => ({ id: entry.id, label: entry.label }))}
             />
           </div>
-
-          <Select
-            value={filter}
-            onChange={(next) => setFilter(next as FilterId)}
-            label="Which shops"
-            className="w-44"
-            options={FILTERS.map((entry) => ({
-              id: entry.id,
-              label: entry.label,
-              description: "description" in entry ? entry.description : undefined,
-              meta: counts[entry.id],
-            }))}
-          />
-
-          <Select
-            value={sort}
-            onChange={(next) => setSort(next as SortId)}
-            label="Sort by"
-            className="w-40"
-            options={SORTS.map((entry) => ({ id: entry.id, label: entry.label }))}
-          />
-        </div>
-      }
-      bleed
-    >
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(client) => client.tenantId}
-        empty={
-          clients.length === 0
-            ? "No shops yet. Press “Activate a shop” and the first one is sixty seconds away."
-            : "No shop matches that. Try the shop name, the owner, or the last four digits of their number."
         }
-      />
-    </ChartCard>
+        bleed
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(client) => client.tenantId}
+          empty={
+            clients.length === 0
+              ? "No shops yet. Press “Activate a shop” and the first one is sixty seconds away."
+              : "No shop matches that. Try the shop name, the owner, or the last four digits of their number."
+          }
+        />
+      </ChartCard>
+    </div>
   );
 }
