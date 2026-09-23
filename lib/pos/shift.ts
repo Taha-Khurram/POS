@@ -27,7 +27,11 @@ export type Shift = {
   status: "open" | "closed";
   closedBy: string;
   closedAt: string | null;
-  /** What was actually counted out. Null while the shift is open. */
+  /** Shut by the end of the shop's trading day rather than by a person.
+   *  `countedCash` stays null until somebody counts it afterwards. */
+  autoClosed: boolean;
+  /** What was actually counted out. Null while the shift is open, and on a
+   *  shift the clock closed that nobody has counted yet. */
   countedCash: number | null;
   /** What Flo said should be there — the float plus the shift's own cash
    *  takings, net of cash refunded. Stamped at closing and never re-derived. */

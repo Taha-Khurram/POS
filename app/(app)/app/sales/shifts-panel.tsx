@@ -127,6 +127,11 @@ export function ShiftsPanel({
                         <span className="text-signal-good">
                           open · {shiftLength(shift.openedAt, null)}
                         </span>
+                      ) : shift.autoClosed ? (
+                        // Left open past the end of the trading day, so the
+                        // clock shut it — said so, because a drawer nobody
+                        // closed is the thing the owner wants to ask about.
+                        `${shiftLength(shift.openedAt, shift.closedAt)} · closed at day end`
                       ) : (
                         shiftLength(shift.openedAt, shift.closedAt)
                       )}
@@ -138,7 +143,9 @@ export function ShiftsPanel({
 
                   <td className="pos-num">
                     {shift.countedCash === null ? (
-                      <span className="text-graphite-500">—</span>
+                      <span className="text-graphite-500">
+                        {shift.autoClosed ? "Not counted" : "—"}
+                      </span>
                     ) : (
                       money(shift.countedCash)
                     )}

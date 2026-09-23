@@ -1289,6 +1289,18 @@ because a cashier who can see what should be there is a cashier who can count to
 it. The row records both figures whoever pressed the button — withholding a
 figure from a screen is not the same as not writing it down.
 
+**A drawer left open shuts at the end of the trading day** (`0046`).
+`private.close_stale_shifts` runs every minute on pg_cron and closes any shift
+whose trading day is behind the shop's — midnight on the default
+`day_ends_at`, 2 am for a shop that cuts there, because the register cannot
+charge without an open shift and a midnight cut would stop that till mid-queue.
+Its day arithmetic is `businessDayOf`'s and the two have to stay identical. It
+stamps the expected figure, the non-cash total and the bills, and leaves
+`closing_cash` and `over_short` null with `auto_closed` true: nobody counted,
+and inventing a count is a drawer that balanced because a machine said so. A
+count can still arrive — `close_shift` on an auto-closed, uncounted shift
+records it once against the stamped expected figure.
+
 Still not real: there is no offline outbox — `sync_outbox` exists in the schema
 and nothing writes it.
 

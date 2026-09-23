@@ -31,6 +31,7 @@ const COLUMNS = `
   status,
   closed_by,
   closed_at,
+  auto_closed,
   closing_cash,
   expected_cash,
   over_short,
@@ -48,6 +49,7 @@ type Row = {
   status: string;
   closed_by: string | null;
   closed_at: string | null;
+  auto_closed: boolean | null;
   closing_cash: number | string | null;
   expected_cash: number | string | null;
   over_short: number | string | null;
@@ -85,6 +87,7 @@ function toShift(row: Row, books: Books): Shift {
     status: row.status === "closed" ? "closed" : "open",
     closedBy: closed?.name ?? (row.closed_by ? "Former staff" : "—"),
     closedAt: row.closed_at,
+    autoClosed: row.auto_closed === true,
     countedCash: money(row.closing_cash),
     expectedCash: money(row.expected_cash),
     overShort: money(row.over_short),
