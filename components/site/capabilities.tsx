@@ -117,7 +117,7 @@ export function Capabilities() {
                 <div className="order-1 grid gap-2.5 sm:order-2">
                   {ROLLS.map((roll, index) => (
                     <Reveal
-                      key={roll.number}
+                      key={roll.stamp}
                       className="glass rounded-2xl px-4 py-3"
                       delay={200 + index * 130}
                       x={26}

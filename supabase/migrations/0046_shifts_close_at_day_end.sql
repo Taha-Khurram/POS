@@ -16,7 +16,7 @@
 -- `closing_cash` and `over_short` stay null and `auto_closed` says why. What
 -- the till expected, what went elsewhere and the bill count are stamped exactly
 -- as `close_shift` stamps them, for the same reason: re-deriving them next
--- week would let a later refund rewrite them. Inventing a count — zero, or the
+-- week would let a later refund rewritethem. Inventing a count — zero, or the
 -- expected figure — would be a drawer that balanced because a machine said so.
 --
 -- **The count can still arrive.** A cashier whose close sheet was open across

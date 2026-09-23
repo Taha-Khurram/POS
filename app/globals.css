@@ -218,6 +218,12 @@
   to   { opacity: 1; transform: none; filter: none; }
 }
 
+/* The route-loading wordmark, fading in and out while a page streams */
+@keyframes logo-pulse {
+  0%, 100% { opacity: 0.12; transform: scale(0.97); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+
 /* ==========================================================================
    Base
    ========================================================================== */
@@ -2669,11 +2675,37 @@
 }
 
 /* ==========================================================================
+   Route loading — the wordmark shown while a page streams in
+   ========================================================================== */
+
+@layer components {
+  .route-loading {
+    display: grid;
+    place-items: center;
+    min-height: 60vh;
+  }
+
+  /* The short delay keeps a fast navigation from flashing the mark at all. */
+  .route-loading-mark {
+    grid-area: 1 / 1;
+    animation: logo-pulse 1.6s var(--ease-in-out-soft) 150ms infinite both;
+  }
+
+  .route-loading-white { display: none; }
+
+  .pos-root[data-theme="dark"] .route-loading-ink { display: none; }
+  .pos-root[data-theme="dark"] .route-loading-white { display: block; }
+}
+
+/* ==========================================================================
    Reduced motion — keep the layout, drop the movement
    ========================================================================== */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
+  /* One iteration would end the pulse on its faint frame; hold it lit. */
+  .route-loading-mark { opacity: 1 !important; transform: none !important; }
 
   *,
   *::before,
