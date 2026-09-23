@@ -2,14 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ProofPreview } from "@/components/admin/proof-preview";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
-import { IconChevron } from "@/components/pos/icons";
+import {
+  IconCash,
+  IconChevron,
+  IconClock,
+  IconDashboard,
+  IconHistory,
+  IconKey,
+  IconPencil,
+  IconStore,
+} from "@/components/pos/icons";
 import { InfoTip } from "@/components/pos/info-tip";
 import { rupees } from "@/lib/format";
 import type { Explainer } from "@/lib/pos/report";
 import {
   EXPLAIN,
+  lapseOf,
   standingOf,
   writeDay,
   writeExpiry,
@@ -18,7 +29,7 @@ import {
 import { requirePlatform } from "@/lib/platform/access";
 import {
   getClient,
-  getInvites,
+  getClientOrder,
   getShopDetails,
   listAudit,
   listClientPayments,
@@ -29,9 +40,10 @@ import {
 } from "@/lib/platform/console";
 
 import {
+  ActivateCard,
   DetailsCard,
-  InvitePanel,
   LifecycleCard,
+  LoginCard,
   NotesCard,
   PaymentsCard,
   PlanCard,
@@ -42,30 +54,55 @@ export const metadata: Metadata = {
   description: "One shop: what they pay, what they get, and whether they use it.",
 };
 
+const TABS = [
+  { id: "overview", label: "Overview", icon: IconDashboard },
+  { id: "standing", label: "Standing", icon: IconClock },
+  { id: "payments", label: "Payments", icon: IconCash },
+  { id: "details", label: "Details", icon: IconStore },
+  { id: "login", label: "Owner login", icon: IconKey },
+  { id: "notes", label: "Notes", icon: IconPencil },
+  { id: "activity", label: "Activity", icon: IconHistory },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const isTab = (value: unknown): value is TabId =>
+  TABS.some((tab) => tab.id === value);
+
 /**
  * One client's record.
  *
- * Ordered by what a support call actually needs, not by the schema: who they
- * are and whether they can trade, then the plan, then the money, then the
- * evidence. The health figures are up top because they decide the tone of the
- * call — a shop that has rung up four hundred bills this month is a renewal
- * conversation, and one that has never sold anything is a rescue.
+ * One tab per job, in the order a support call needs them, and in the URL the
+ * way `/app/purchasing`'s are — so the tab survives a reload and can be sent
+ * as a link. The header stays above every tab, because who this is and whether
+ * they can trade is the context for every other question. The health figures
+ * open the Overview because they decide the tone of the call — a shop that has
+ * rung up four hundred bills this month is a renewal conversation, and one
+ * that has never sold anything is a rescue.
+ *
+ * Standing is not drawn until there is a subscription: every one of its
+ * actions updates a row that does not exist yet, so asking for it falls back
+ * to the Overview, where the activation card is the one thing to do.
  *
  * A support account gets every screen and none of the controls, and the cards
  * say so where the buttons would have been. That is presentation; each action
  * checks `requireBilling()` for itself.
  */
-export default async function ClientPage({ params }: PageProps<"/admin/clients/[id]">) {
+export default async function ClientPage({
+  params,
+  searchParams,
+}: PageProps<"/admin/clients/[id]">) {
   const session = await requirePlatform();
   const { id } = await params;
+  const query = await searchParams;
 
   const client = await getClient(id);
   if (!client) notFound();
 
-  const [plans, payments, invites, notes, users, details, audit] = await Promise.all([
+  const [plans, payments, order, notes, users, details, audit] = await Promise.all([
     listPlans(),
     listClientPayments(client.tenantId),
-    getInvites(client.tenantId),
+    getClientOrder(client.tenantId),
     listNotes(client.tenantId),
     listShopUsers(client.tenantId),
     getShopDetails(client.tenantId),
@@ -73,7 +110,23 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
   ]);
 
   const readOnly = session.platformRole !== "super_admin";
-  const status = standingOf(client.status);
+  const activated = client.status !== null;
+  // The badge says what the till is doing now, through the same `lapseOf` the
+  // register reads — not whatever the sweep last wrote.
+  const status = standingOf(
+    client.status && client.currentPeriodEnd
+      ? lapseOf(client.status, client.currentPeriodEnd, client.graceDays).status
+      : client.status,
+  );
+  const held = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+  const tabs = TABS.filter((item) => item.id !== "standing" || activated);
+  const asked: TabId = isTab(query.tab) ? query.tab : "overview";
+  const tab: TabId = tabs.some((item) => item.id === asked) ? asked : "overview";
+  const hrefOf = (to: TabId) =>
+    to === "overview" ? `/admin/clients/${id}` : `/admin/clients/${id}?tab=${to}`;
+  const countOf = (to: TabId) =>
+    to === "payments" ? payments.length : to === "notes" ? notes.length : undefined;
 
   return (
     <div className="space-y-4">
@@ -106,89 +159,150 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
             {client.email ? ` · ${client.email}` : ""}
           </p>
 
-          <p className="mt-1 text-[0.8125rem] text-graphite-700">
-            {client.planName} · {rupees(client.agreedPrice)} a{" "}
-            {client.billingCycle === "monthly"
-              ? "month"
-              : client.billingCycle === "quarterly"
-                ? "quarter"
-                : "year"}{" "}
-            · {writeExpiry(client.daysUntilExpiry)} (to{" "}
-            {writeDay(client.currentPeriodEnd)})
-          </p>
+          {activated ? (
+            <p className="mt-1 text-[0.8125rem] text-graphite-700">
+              {client.planName} · {rupees(client.agreedPrice)} a{" "}
+              {client.billingCycle === "monthly"
+                ? "month"
+                : client.billingCycle === "quarterly"
+                  ? "quarter"
+                  : "year"}{" "}
+              · {writeExpiry(client.daysUntilExpiry)} (to{" "}
+              {writeDay(client.currentPeriodEnd)})
+            </p>
+          ) : (
+            <p className="mt-1 text-[0.8125rem] text-graphite-700">
+              {order ? `Accepted from order ${order.reference}. ` : ""}
+              Not on a plan yet —{" "}
+              <Link
+                href={hrefOf("overview")}
+                scroll={false}
+                className="font-semibold underline underline-offset-2"
+              >
+                activate it on the Overview
+              </Link>
+              .
+            </p>
+          )}
         </div>
 
       </header>
 
-      {/* Is this shop actually using Flo? The question a renewal call turns on,
-          and the one a plan card cannot answer. */}
-      <section aria-label="How the shop is doing" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Figure
-          label="Last bill"
-          value={client.lastSaleAt ? writeWhen(client.lastSaleAt) : "Never"}
-          note={
-            client.lastSaleAt
-              ? "Their most recent sale"
-              : "This shop has never rung anything up"
-          }
-          bad={!client.lastSaleAt}
-          explain={EXPLAIN.lastBill}
-        />
-        <Figure
-          label="Sold in 30 days"
-          value={rupees(client.sales30d)}
-          note={`${client.bills30d.toLocaleString("en-PK")} bills`}
-          explain={EXPLAIN.sold30}
-        />
-        <Figure
-          label="Products"
-          value={client.itemCount.toLocaleString("en-PK")}
-          note={
-            client.itemCount === 0
-              ? "No catalog yet — they cannot sell"
-              : `${client.counterCount} ${client.counterCount === 1 ? "counter" : "counters"} open`
-          }
-          bad={client.itemCount === 0}
-          explain={EXPLAIN.onShelf}
-        />
-        <Figure
-          label="Paid to date"
-          value={rupees(client.paidTotal)}
-          note={
-            client.lastPaidAt
-              ? `Last ${writeWhen(client.lastPaidAt).toLowerCase()}`
-              : "Nothing recorded yet"
-          }
-          explain={EXPLAIN.paidToDate}
-        />
-      </section>
+      <nav className="pos-tabs" aria-label="Client sections">
+        {tabs.map((item) => {
+          const count = countOf(item.id);
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="space-y-4 xl:col-span-2">
-          <PlanCard client={client} plans={plans} readOnly={readOnly} />
+          return (
+            <Link
+              key={item.id}
+              href={hrefOf(item.id)}
+              className="pos-tab"
+              aria-current={item.id === tab ? "page" : undefined}
+              scroll={false}
+            >
+              <item.icon className="pos-tab-icon h-4 w-4" />
+              {item.label}
+              {count === undefined ? null : (
+                <span className="pos-tab-count">{count.toLocaleString("en-PK")}</span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {tab === "overview" ? (
+        <>
+          {/* Is this shop actually using Flo? The question a renewal call turns on,
+              and the one a plan card cannot answer. */}
+          <section aria-label="How the shop is doing" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Figure
+              label="Last bill"
+              value={client.lastSaleAt ? writeWhen(client.lastSaleAt) : "Never"}
+              note={
+                client.lastSaleAt
+                  ? "Their most recent sale"
+                  : "This shop has never rung anything up"
+              }
+              bad={!client.lastSaleAt}
+              explain={EXPLAIN.lastBill}
+            />
+            <Figure
+              label="Sold in 30 days"
+              value={rupees(client.sales30d)}
+              note={`${client.bills30d.toLocaleString("en-PK")} bills`}
+              explain={EXPLAIN.sold30}
+            />
+            <Figure
+              label="Products"
+              value={client.itemCount.toLocaleString("en-PK")}
+              note={
+                client.itemCount === 0
+                  ? "No catalog yet — they cannot sell"
+                  : `${client.counterCount} ${client.counterCount === 1 ? "counter" : "counters"} open`
+              }
+              bad={client.itemCount === 0}
+              explain={EXPLAIN.onShelf}
+            />
+            <Figure
+              label="Paid to date"
+              value={rupees(client.paidTotal)}
+              note={
+                client.lastPaidAt
+                  ? `Last ${writeWhen(client.lastPaidAt).toLowerCase()}`
+                  : "Nothing recorded yet"
+              }
+              explain={EXPLAIN.paidToDate}
+            />
+          </section>
+
+          {activated ? (
+            <PlanCard client={client} plans={plans} readOnly={readOnly} />
+          ) : (
+            <ActivateCard
+              client={client}
+              order={order}
+              plans={plans}
+              paidSoFar={held}
+              readOnly={readOnly}
+            />
+          )}
+        </>
+      ) : tab === "standing" ? (
+        <LifecycleCard client={client} readOnly={readOnly} />
+      ) : tab === "payments" ? (
+        <>
           <PaymentsCard client={client} payments={payments} readOnly={readOnly} />
-          <DetailsCard client={client} details={details} readOnly={readOnly} />
-        </div>
-
-        <div className="space-y-4">
-          <LifecycleCard client={client} readOnly={readOnly} />
-          <InvitePanel
-            client={client}
-            invites={invites}
-            users={users}
-            readOnly={readOnly}
-          />
-          <NotesCard tenantId={client.tenantId} notes={notes} />
-        </div>
-      </div>
-
-      <ChartCard
-        title="What we have done to this account"
-        caption="Append-only. Every change any operator made, newest first."
-        bleed
-      >
-        <AuditTable rows={audit} />
-      </ChartCard>
+          {/* The screenshot the order was accepted on, kept with the client it
+              became — the question "what did they actually send us" comes up at
+              renewal, long after the order queue has moved on. */}
+          {order?.proofKind ? (
+            <ChartCard
+              title="Payment proof"
+              caption={`Sent with order ${order.reference}${order.proofUploadedAt ? `, ${writeDay(order.proofUploadedAt)}` : ""}.`}
+            >
+              <ProofPreview
+                src={`/admin/orders/${order.id}/proof`}
+                kind={order.proofKind}
+                label={order.reference}
+              />
+            </ChartCard>
+          ) : null}
+        </>
+      ) : tab === "details" ? (
+        <DetailsCard client={client} details={details} readOnly={readOnly} />
+      ) : tab === "login" ? (
+        <LoginCard client={client} users={users} readOnly={readOnly} />
+      ) : tab === "notes" ? (
+        <NotesCard tenantId={client.tenantId} notes={notes} />
+      ) : (
+        <ChartCard
+          title="What we have done to this account"
+          caption="Append-only. Every change any operator made, newest first."
+          bleed
+        >
+          <AuditTable rows={audit} />
+        </ChartCard>
+      )}
     </div>
   );
 }

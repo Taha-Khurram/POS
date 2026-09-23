@@ -1,12 +1,12 @@
 "use server";
 
-import { randomInt } from "node:crypto";
-
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireOwner } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
+import { featureLimit, getEntitlements } from "@/lib/entitlements";
+import { generatePassword } from "@/lib/password";
 import {
   PHONE_RE,
   STAFF_NAME_MAX,
@@ -53,29 +53,6 @@ async function requireShopOwner() {
         ? "This login is not linked to a shop yet."
         : "Only the shop owner can add or change staff.",
   };
-}
-
-// -----------------------------------------------------------------------------
-// Passwords
-// -----------------------------------------------------------------------------
-
-/**
- * The alphabet drops 0/1/I/L/O/U, the same way order references do — this
- * password gets read off a screen, typed into a phone, and often dictated down
- * a line with a generator running outside. A password nobody can transcribe is
- * a password the owner writes on the till in marker instead.
- */
-const ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-/**
- * Three groups of four. Sixty bits from `randomInt`, which is the CSPRNG —
- * `Math.random()` here would be a password guessable from the one before it.
- */
-function generatePassword(): string {
-  const group = () =>
-    Array.from({ length: 4 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
-
-  return `${group()}-${group()}-${group()}`;
 }
 
 // -----------------------------------------------------------------------------
@@ -237,6 +214,30 @@ export async function addStaff(
   }
 
   const supabase = createAdminClient();
+
+  // The plan's Staff ceiling (`max_staff_pins`, set on /admin/plans and
+  // printed on /pricing). Every account but the owner's counts, switched off or
+  // not — switching one back on is not a hire, so it is never refused, and a
+  // ceiling lowered later stops new hires without removing anybody. Read live
+  // off the plan, so it follows the editor rather than the day the shop signed.
+  const entitlements = await getEntitlements(session.tenantId);
+  const ceiling = entitlements ? featureLimit(entitlements, "max_staff_pins") : null;
+
+  if (ceiling !== null) {
+    const { count, error: countError } = await supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", session.tenantId)
+      .neq("tenant_role", "owner");
+
+    if (countError) return fail("We could not check your staff list. Please try again.");
+
+    if ((count ?? 0) >= ceiling) {
+      return fail(
+        `Your plan covers ${ceiling} staff ${ceiling === 1 ? "account" : "accounts"} and all of them are in use. Delete one you no longer need, or message us about a bigger plan.`,
+      );
+    }
+  }
 
   const [{ data: shop }, branchId] = await Promise.all([
     supabase

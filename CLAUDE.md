@@ -856,23 +856,48 @@ say something back. A `support` operator reads every screen, works the leads and
 writes notes, and is refused anything that touches money — checked in the
 action, not trusted from the rail.
 
-**Two writes are one transaction each, in SQL.** `public.activate_tenant` writes
-the tenant, its primary branch, the subscription and a hashed invite together,
-because a half-done activation is the worst row in the system: a shop that signs
-in to a console with no plan behind it, or a link already pasted into a chat
-pointing at a tenant that has none. `public.record_subscription_payment` locks
-the subscription row, works the new period out and inserts the payment beside
-it, so two operators recording the same renewal cannot both extend from the same
-end date. Both are granted to `service_role` alone, which is why neither needs
-`security definer`.
+**Money first, then a client, then a plan** (`0042`). The order of the
+operator's day is the order of the screens:
 
-**The invite token is minted in the Server Action and never reaches Postgres.**
-`activate_tenant` takes the sha256, because a function's arguments end up in
-`pg_stat_statements` and the slow-query log. The plaintext is returned once, in
-`AdminState.invite`, drawn by `components/admin/invite-card.tsx` with the
-WhatsApp message already composed — and is then unrecoverable by anything. An
-operator who loses it regenerates, which revokes the one they lost;
-`invites_one_live_per_tenant_role` is what makes that the only safe move.
+1. A buyer checks out on the site and an **order** lands in `/admin/orders`.
+2. The transfer is matched against the statement and **recorded against the
+   order** in Payments. `payments.tenant_id` is nullable for exactly this — a
+   payment can exist before its shop does — and `payments_owner_known` requires
+   the tenant or the order. Such a row is invisible to every tenant JWT, because
+   `tenant_id = claim` is never true of a null.
+3. The order is **accepted**, which makes a **client**: `public.create_client`
+   locks the order row, refuses one with no payment recorded against it, writes
+   the tenant and its primary branch, marks the order `verified` (drawn as
+   "Accepted") and moves its payments onto the new tenant — one transaction.
+   The row lock replaced `0005`'s ten-minute `verification_started_at` claim.
+4. The client is **activated** from its own record: `public.start_subscription`
+   writes the subscription and attaches every payment no period has claimed yet.
+   The activation card is filled from the order (`getClientOrder`), so it is a
+   check and a press, not a retyping.
+5. Activation **mints the owner's login** — `owner@<shop>.flopos.pk` and a
+   `generatePassword()` password, shown once in `OwnerLoginCard` with the
+   WhatsApp message composed. It is a work address so `isWorkEmail` lets it past
+   the sign-in allow-list, and it can reach `/app` and nothing else.
+
+Between 3 and 4 a client has no subscription and is drawn **Not activated** —
+a state to finish, not a broken row. `/admin/clients/new` is steps 3–5 in one
+press for a deal closed on the phone with no order. `activate_tenant` and the
+invite links are gone: nothing writes `invites` any more and `/signup` is
+deleted. The table stays because the two redeemed rows are history.
+
+`issueOwnerLogin` in `clients/activate.ts` is both activation's last step and
+"New owner password", because they are the same act — one owner per shop, so
+an existing owner has their password replaced (and, if they signed up through an
+old invite with their own Gmail, their login moved onto a work address, since
+that address could never get past the allow-list). It refuses an owner who is
+also a console operator: resetting that from a client's record would hand a
+shop's WhatsApp the password to `/admin`.
+
+`public.record_subscription_payment` locks the subscription row, works the new
+period out and inserts the payment beside it, so two operators recording the
+same renewal cannot both extend from the same end date. Every write function
+here is granted to `service_role` alone, which is why none needs
+`security definer`.
 
 **Every figure on `/admin` says how it is worked out.** `EXPLAIN` in
 `lib/platform/admin.ts` is the single source, the same bargain
@@ -897,8 +922,8 @@ twice, one directly above the other. It lives with the roster it adds a row to.
 record's header and the Overview's renewal nudge are gone, and `renewalMessage`
 went with them rather than being left standing — the call `0034` made about the
 restaurant tables. What stays is WhatsApp where it is the *delivery mechanism*
-rather than a contact shortcut: `invite-card.tsx` composes the sign-in link
-message, which is how a shopkeeper receives a link that is shown exactly once,
+rather than a contact shortcut: `owner-login-card.tsx` composes the login
+message, which is how a shopkeeper receives a password that is shown exactly once,
 and Leads and Orders keep theirs because working a lead is a different job on a
 different screen.
 
@@ -923,18 +948,34 @@ changes, which is React's own answer to state that has to follow a prop — a
 `key` would work too and would remount the card, swallowing the toast that says
 what just happened.
 
-**Days on the period do not reopen a shut till.** `getEntitlements` reads
-`status` and never the date, so `canOperate` is false for a suspended shop
-however far ahead its period runs. That is deliberate — suspension is a decision
-somebody takes, not a date that arrives — and it means "give them a week" is not
-by itself a way to put a shop back in business. The standing card says so where
-the button is, because the alternative is finding out from the shopkeeper.
-`subscriptions.grace_days` is written by that form and read by nothing at all;
-its hint says so, the way `max_branches` already did.
+**The date stops a till; only a person restarts one** (`0042`). When a trading
+shop's period ends it is past due, and when its `grace_days` after that run out
+too it is suspended. `private.sweep_subscriptions` writes both hourly on pg_cron
+with a `system` audit row, and `lapseOf` in `lib/platform/admin.ts` applies the
+same two rules at read time — `getEntitlements` returns the *effective* status —
+so the till stops on the hour the grace ends and not at five past. The two
+definitions have to stay identical. This reverses `0036`'s "suspension is a
+decision somebody takes, not a date that arrives", at the owner's call: a lapsed
+shop that trades until somebody notices is trading for free.
+
+The other direction is still a decision. A stored `suspended` is not rewritten
+by moving the date, so "give them a week" is not by itself a way back into
+business, and the standing card says so. A payment is — it un-suspends in the
+same transaction. `setSubscriptionStatus` refuses a trading standing on a period
+whose grace has already run out, because the next sweep would undo it within the
+hour and the till would never have opened.
+
+**Paused freezes the clock.** `paused` is a standing (`0042`) with `paused_at`
+beside it. `public.pause_subscription` stops the till like a suspension, and on
+resume pushes the period out by exactly the time spent paused — under the row
+lock, so a payment from another tab cannot land in between. A payment recorded
+while paused extends from the frozen end, not from today, and leaves it paused.
+A paused shop's only exits are Resume and Cancel; anything else would drop the
+days it is holding. `platform_clients()` counts its days from `paused_at`.
 
 **A tenant with no subscription is a state, not a default.** `platform_clients()`
-left-joins `subscriptions`, so `status` is null for a shop whose subscription was
-deleted by hand. Every screen used to read that as `statusOf(status ?? "active")`
+left-joins `subscriptions`, so `status` is null for a client accepted and not yet
+activated. Every screen used to read that as `statusOf(status ?? "active")`
 and paint a green **Active** badge over a shop with no plan, no price and no
 period — the row that most needs looking at, drawn as the one that needs
 nothing. `standingOf` in `lib/platform/admin.ts` is the single reader now and
@@ -954,13 +995,12 @@ is *of* — a trial is on the trading count and contributes nothing to the money
 and two numbers side by side that quietly describe different sets is how a
 console stops being believed.
 
-**Both activation paths are one function.** `/admin/orders`' Verify button and
-the direct form both call `activateShop` in `clients/activate.ts`, which is
-`server-only` and deliberately *not* in a `"use server"` module — every export
-of one is a callable endpoint, so a shared body taking its actor as an argument
-would be a way to activate a shop as anybody. Verify claims the order first
-through `orders.verification_started_at` (`0005`), because one order becoming
-two tenants is the failure that queue has.
+**Every activation path is the same three steps.** Accept on `/admin/orders`,
+Activate on a client's record and the direct form all call
+`createClientRecord`, `startPlan` and `issueOwnerLogin` in `clients/activate.ts`,
+which is `server-only` and deliberately *not* in a `"use server"` module — every
+export of one is a callable endpoint, so a shared body taking its actor as an
+argument would be a way to activate a shop as anybody.
 
 **The reads are grouped in Postgres.** `platform_clients()` returns one row per
 shop with its plan, standing, monthly value, last sale and item count;
@@ -1017,25 +1057,51 @@ still exports it and still closes the drawer it opened this morning. What stops
 is ringing up a new one: `recordSale` refuses through `getEntitlements`, and the
 register draws a strip above the till saying so. Holding a shop's own books
 hostage over an unpaid invoice is indecent and, in a dispute about their
-records, the weaker position to stand in. `past_due` stays operable on purpose —
-suspension is a decision somebody takes, not a date that arrives.
+records, the weaker position to stand in. `past_due` stays operable for the grace
+days and no longer; `paused` is not operable at all.
 
-**`plans.features` is still copy.** The plan editor says so on the screen:
-nothing in `/app` gates a screen on a flag, so unticking a box changes
-`/pricing` and not what a shop can open. `PLAN_FEATURES` marks which ones the
-product actually honours, and `0020`'s rule stands — flip a flag in the
-migration that lands the feature. The one entitlement that bites is
-`subscriptions.max_registers`, which Settings enforces, and it lives on the
-subscription rather than the plan precisely so a haggled "teen counter kar do"
-is a one-row update.
+**`/pricing` is drawn from `plans`** (`0045`). It used to write its cards by
+hand, so a price saved on `/admin/plans` reached `/checkout` and was
+contradicted by the page a buyer reads first. Now every on-sale row is a card —
+name, price, pitch, `sort_order` left to right — and its lines are
+`pricingLines` in `lib/platform/admin.ts`: the counter ceiling, one sentence
+per flag that is on (`PLAN_FEATURES[].line`), then `plans.highlights`, the
+extra lines for promises no flag can make ("your rate list imported for you").
+A later tier prints "Everything in Standard" plus its difference only when its
+flags really are a superset. The two FAQ answers that quote plans are worked out
+from the same rows. `/pricing` reads on the service role behind
+`connection()`, for `/checkout`'s reason.
+
+**A flag is a line of copy, not a gate.** Nothing in `/app` gates a screen on
+one, so unticking Reports takes the sentence off `/pricing` and not the module
+off a shop. `PLAN_FEATURES` sorts them into `wired` (the product does it —
+`0020`'s rule: flip it in the migration that lands the feature), `service`
+(kept by people: WhatsApp, priority) and `copy` (**not built** — ticking one
+prints it anyway, which is why the editor marks it).
+
+**The ceilings bite.** `PLAN_LIMITS[].effect` says what each does and the
+editor prints it. Counters is what a new shop on the plan is activated with —
+both activation forms seed `subscriptions.max_registers` from it — and
+`/checkout` refuses an order for more. From there the subscription column is
+the ceiling Settings enforces, so a haggled "teen counter kar do" is still a
+one-row update and lowering the plan never touches a shop already on it. Staff
+(`max_staff_pins`, a key from `0002` that now counts accounts) is read live off
+the plan by `addStaff`: every account but the owner's counts, switched off or
+not, so a lowered ceiling stops new hires and removes nobody. Branches is only
+carried into the subscription.
+
+**`is_active` has one writer**, `togglePlan` — the plan form had an "On sale"
+box as well, rendered at page load, so taking a plan off sale and then saving
+its price put it straight back on. The same failure the client record's cards
+had, below.
 
 **There are no per-shop flags.** `0040` dropped
 `subscriptions.feature_overrides` and the "One-off deals" card that wrote it.
 The column was the one-off deal — Premium price, throw in X — merged over
 `plans.features` by `getEntitlements` and read by nothing: `hasFeature` is
 called from nowhere, no screen in `/app` is gated on a flag, and `/pricing`
-writes its plan lists by hand, so an override could not reach the marketing site
-either. The card admitted as much in a warning under its own buttons, and a
+then wrote its plan lists by hand, so an override could not reach the marketing
+site either. The card admitted as much in a warning under its own buttons, and a
 control that ships with a note saying it does nothing is how an operator
 promises a feature on a call that the shop never gets. It is deleted rather than
 left standing — the call `0034` made about the restaurant tables — and it cost
@@ -1061,9 +1127,22 @@ lists. Note that `SelectRow` is a listbox the page owns and not an `<input>`:
 every one of them needs its own hidden field, or the action gets a body with no
 plan in it and refuses a form that looked complete.
 
-The invite link's origin comes off the request headers, overridable with
+The sign-in link's origin in the owner's login message comes off the request headers, overridable with
 `NEXT_PUBLIC_SITE_URL` behind a proxy that rewrites the host. A link that is
 nearly right is one nobody notices until the shop rings up.
+
+**Where a buyer sends the money is a table** (`0044`). `payment_accounts` holds
+Flo's own bank and wallet accounts — bank transfer, Easypaisa, JazzCash, and
+nothing else, because cash and card are how a payment is recorded, not where a
+stranger can send one. Edited on `/admin/payment-accounts` (billing-only
+writes, support reads), printed on `/order/[reference]` with a copy button per
+number. Platform data like `plans`, so no `tenant_id`; select-only for a
+platform JWT, and the order page reads the active rows on the service role
+through `listPublicPaymentAccounts`, as it already reads the order. With none
+switched on, the page falls back to "support will send the details on
+WhatsApp". `checkAccount` in `lib/platform/admin.ts` is the one validator, and
+the IBAN check in `0044` is its floor — a wrong character there is somebody's
+money in a stranger's account.
 
 ## Notifications
 

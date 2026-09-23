@@ -1,27 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 
-import { InviteCard } from "@/components/admin/invite-card";
+import { ProofPreview } from "@/components/admin/proof-preview";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconClose } from "@/components/pos/icons";
-import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
 import { rupees } from "@/lib/format";
 import { orderStatusOf, waLink, writeWhen } from "@/lib/platform/admin";
-import type { Order, Plan } from "@/lib/platform/console";
+import type { Order } from "@/lib/platform/console";
 
-import { rejectOrder, verifyOrder } from "./actions";
+import { acceptOrder, rejectOrder } from "./actions";
 import { IDLE } from "../state";
 
 /**
  * The self-serve queue.
  *
- * An order is a claim of payment, not a payment. The screen is built around
- * the one action that matters — open it beside your bank statement, see the
- * screenshot, and either verify it (which activates the shop and mints the
- * link) or reject it with a reason the buyer will read on their own order page.
+ * An order is a claim of payment, not a payment. Open it beside your bank
+ * statement and see the screenshot. If the money is there, record it in
+ * Payments against this order, then accept it here, which makes the order a
+ * client. If it is not, reject it with a reason the buyer reads on their own
+ * order page. The plan is started from the client's record, not from here.
  *
  * Opening a row is a sheet rather than a navigation, the same call
  * `/app/sales` makes: a queue somebody is working through must survive looking
@@ -29,16 +30,9 @@ import { IDLE } from "../state";
  */
 export function OrdersPanel({
   orders,
-  plans,
-  proofs,
   readOnly,
 }: {
   orders: Order[];
-  plans: Plan[];
-  /** Signed, short-lived links for the proofs worth looking at. The bucket is
-   *  private and these expire in ten minutes — a payment screenshot carries an
-   *  account number and a name. */
-  proofs: Record<string, string>;
   readOnly: boolean;
 }) {
   const [open, setOpen] = useState<Order | null>(null);
@@ -93,6 +87,18 @@ export function OrdersPanel({
         ),
     },
     {
+      key: "paid",
+      header: "Recorded",
+      align: "end",
+      hideBelow: "sm",
+      cell: (order) =>
+        order.paid > 0 ? (
+          <span className="text-graphite-900">{rupees(order.paid)}</span>
+        ) : (
+          <span className="text-graphite-500">nothing yet</span>
+        ),
+    },
+    {
       key: "amount",
       header: "Quoted",
       align: "end",
@@ -125,8 +131,6 @@ export function OrdersPanel({
       {open ? (
         <OrderSheet
           order={open}
-          plans={plans}
-          proof={proofs[open.id] ?? null}
           readOnly={readOnly}
           onClose={() => setOpen(null)}
         />
@@ -137,39 +141,36 @@ export function OrdersPanel({
 
 function OrderSheet({
   order,
-  plans,
-  proof,
   readOnly,
   onClose,
 }: {
   order: Order;
-  plans: Plan[];
-  proof: string | null;
   readOnly: boolean;
   onClose: () => void;
 }) {
-  const [verifyState, verifyAction, verifying] = useActionState(verifyOrder, IDLE);
+  const [acceptState, acceptAction, accepting] = useActionState(acceptOrder, IDLE);
   const [rejectState, rejectAction, rejecting] = useActionState(rejectOrder, IDLE);
 
-  useActionToast(verifyState, {
-    saved: verifyState.saved?.label ?? "Shop activated",
-    failed: "That order was not verified",
+  useActionToast(acceptState, {
+    saved: acceptState.saved?.label ?? "Order accepted",
+    failed: "That order was not accepted",
   });
   useActionToast(rejectState, {
     saved: rejectState.saved?.label ?? "Order rejected",
     failed: "That order was not rejected",
   });
 
-  const [planId, setPlanId] = useState(order.planId ?? plans[0]?.id ?? "");
-  const [price, setPrice] = useState(String(order.quotedPrice));
-
-  const settled = order.status === "verified" || order.status === "rejected";
+  // The sheet holds the row it was opened with; the accept result is what says
+  // it has moved on before the list behind it re-renders.
+  const acceptedInto =
+    acceptState.tenantId ?? (order.status === "verified" ? order.tenantId : null);
+  const settled = acceptedInto !== null || order.status === "rejected";
 
   return (
     <div
       className="pos-modal"
       onPointerDown={(event) => {
-        if (event.target === event.currentTarget && !verifying && !rejecting) onClose();
+        if (event.target === event.currentTarget && !accepting && !rejecting) onClose();
       }}
     >
       <div
@@ -194,8 +195,6 @@ function OrderSheet({
         </header>
 
         <div className="space-y-5 px-4 py-5 sm:px-5">
-          {verifyState.invite ? <InviteCard invite={verifyState.invite} /> : null}
-
           <dl className="grid gap-x-6 gap-y-1.5 text-[0.8125rem] sm:grid-cols-2">
             <Row label="Owner" value={order.ownerName} />
             <Row label="Phone" value={order.phone} />
@@ -205,24 +204,30 @@ function OrderSheet({
             <Row label="Billed" value={order.billingCycle} />
             <Row label="Counters" value={String(order.registers)} />
             <Row label="Quoted" value={rupees(order.quotedPrice)} />
+            <Row
+              label="Recorded against it"
+              value={order.paid > 0 ? rupees(order.paid) : "Nothing yet"}
+            />
           </dl>
 
-          {/* The screenshot, which is the whole of the verification. A link
-              rather than an inline image: it is a private-bucket URL that dies
-              in ten minutes, and a broken <img> in a queue reads as a bug. */}
-          {proof ? (
-            <a
-              href={proof}
-              target="_blank"
-              rel="noreferrer"
-              className="pos-btn pos-btn-soft"
-            >
-              Open the payment screenshot
-            </a>
+          {/* The screenshot, which is the whole of the verification — drawn
+              inline so it sits beside the figures it is checked against, and
+              kept on accepted and rejected orders too, because "what did they
+              send us" is still asked after the decision. */}
+          {order.proofKind ? (
+            <ProofPreview
+              src={`/admin/orders/${order.id}/proof`}
+              kind={order.proofKind}
+              label={
+                order.proofUploadedAt
+                  ? `Payment proof · sent ${writeWhen(order.proofUploadedAt).toLowerCase()}`
+                  : "Payment proof"
+              }
+            />
           ) : (
             <p className="pos-note pos-note-warn">
-              No screenshot was uploaded. Verify only if you can see the transfer
-              on the statement with this reference against it.
+              No screenshot was uploaded. Record a payment only if you can see
+              the transfer on the statement with this reference against it.
             </p>
           )}
 
@@ -236,64 +241,47 @@ function OrderSheet({
           </a>
 
           {settled ? (
-            <p className={`pos-note ${order.status === "verified" ? "pos-note-good" : "pos-note-bad"}`}>
-              {order.status === "verified"
-                ? `Verified ${writeWhen(order.verifiedAt).toLowerCase()}. It is a working shop now.`
-                : `Rejected. They were told: “${order.rejectionReason}”`}
-            </p>
+            acceptedInto ? (
+              <div className="pos-note pos-note-good space-y-2">
+                <p>
+                  {order.status === "verified" && order.verifiedAt
+                    ? `Accepted ${writeWhen(order.verifiedAt).toLowerCase()}. `
+                    : "Accepted. "}
+                  It is a client now — activate the plan from their record, which
+                  also makes the owner&rsquo;s login.
+                </p>
+                <Link
+                  href={`/admin/clients/${acceptedInto}`}
+                  className="pos-btn pos-btn-primary pos-btn-sm"
+                >
+                  Open the client
+                </Link>
+              </div>
+            ) : (
+              <p className="pos-note pos-note-bad">
+                Rejected. They were told: &ldquo;{order.rejectionReason}&rdquo;
+              </p>
+            )
           ) : readOnly ? (
             <p className="pos-note">
               A support account can read this queue and work none of it.
             </p>
           ) : (
             <>
-              <form action={verifyAction} className="space-y-3 border-t border-orchid-100 pt-4">
+              <form action={acceptAction} className="space-y-3 border-t border-orchid-100 pt-4">
                 <input type="hidden" name="order_id" value={order.id} />
 
-                {verifyState.error ? (
-                  <p className="pos-note pos-note-bad">{verifyState.error}</p>
+                {acceptState.error ? (
+                  <p className="pos-note pos-note-bad">{acceptState.error}</p>
                 ) : null}
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SelectRow
-                    label="Plan to activate on"
-                    value={planId}
-                    onChange={setPlanId}
-                    options={plans.map((plan) => ({
-                      id: plan.id,
-                      label: plan.name,
-                      description: `${rupees(plan.listPrice)} a month list`,
-                    }))}
-                  />
-                  <input type="hidden" name="plan_id" value={planId} />
-
-                  <label className="block">
-                    <span className="pos-label">Price to record</span>
-                    <input
-                      name="agreed_price"
-                      className="pos-field"
-                      value={price}
-                      inputMode="decimal"
-                      onChange={(event) => setPrice(event.target.value)}
-                    />
-                    <span className="pos-hint">
-                      What actually landed, which is not always what was quoted.
-                    </span>
-                  </label>
-                </div>
 
                 <button
                   type="submit"
                   className="pos-btn pos-btn-primary w-full"
-                  disabled={verifying}
+                  disabled={accepting}
                 >
-                  {verifying ? "Activating…" : "Verify and activate the shop"}
+                  {accepting ? "Accepting…" : "Accept — make it a client"}
                 </button>
-
-                <p className="text-[0.75rem] text-graphite-500">
-                  This creates the shop, its subscription and a one-time sign-up
-                  link — the same thing the Activate form does.
-                </p>
               </form>
 
               <form action={rejectAction} className="space-y-2 border-t border-orchid-100 pt-4">

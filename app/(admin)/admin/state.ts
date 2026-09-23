@@ -19,18 +19,22 @@ export type AdminState = {
   /** What to say happened. Null on a refusal. */
   saved: { label: string; detail?: string } | null;
   /**
-   * A freshly minted invite: the link and the message to paste beside it.
+   * A freshly minted password — an operator's on `/admin/team`, a shop owner's
+   * at activation or on "New password".
    *
-   * Returned exactly once, on the response to the action that created it, and
-   * never readable again from anywhere — `invites.token_hash` is a sha256 and
-   * there is nothing to reverse it with. An operator who loses this before
-   * pasting it regenerates the link, which revokes the one they lost.
+   * Returned once, on the response to the action that made it, and stored
+   * nowhere — GoTrue keeps a hash, the audit entry records that it happened and
+   * not what it was. Lost means a new one, which stops the old one working.
+   *
+   * `phone` and `message` ride along for an owner: the login goes to the shop
+   * on WhatsApp, already composed, because it is shown exactly once.
    */
-  invite: {
-    link: string;
-    message: string;
-    phone: string;
-    shopName: string;
+  credentials: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    message?: string;
   } | null;
   /** Where the caller should go next, when the action created something. */
   tenantId: string | null;
@@ -40,6 +44,6 @@ export const IDLE: AdminState = {
   error: null,
   savedAt: null,
   saved: null,
-  invite: null,
+  credentials: null,
   tenantId: null,
 };

@@ -595,6 +595,78 @@
 
   select.field option { background: var(--color-ink-950); }
 
+  /* The console's listbox (`components/site/select-field.tsx`) in the site's
+     own clothes: the trigger is a `.field` to the pixel, so it lines up with
+     the inputs beside it, and the list is drawn from `ink`/`iris`/`mist`
+     rather than the console's `paper`/`orchid`. */
+  .site-select .pos-select {
+    gap: 0.625rem;
+    border-radius: 14px;
+    border-color: var(--color-ink-600);
+    background: var(--color-ink-950);
+    padding: 0.75rem 0.85rem 0.75rem 0.95rem;
+    font-size: 0.9375rem;
+    color: var(--color-mist-50);
+    transition:
+      border-color 0.3s var(--ease-out-soft),
+      box-shadow 0.3s var(--ease-out-soft);
+  }
+
+  .site-select .pos-select:hover:not(:disabled) {
+    border-color: var(--color-iris-400);
+  }
+
+  .site-select .pos-select:focus-visible,
+  .site-select .pos-select[aria-expanded="true"] {
+    border-color: color-mix(in oklab, var(--color-iris-500) 65%, transparent);
+    box-shadow: 0 0 0 4px rgb(111 82 220 / 0.16);
+  }
+
+  .site-select .pos-select-caret { color: var(--color-mist-400); }
+
+  .site-select .pos-select-menu {
+    top: calc(100% + 8px);
+    padding: 0.4rem;
+    border-radius: 16px;
+    border-color: var(--color-ink-700);
+    background: var(--color-ink-950);
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.6) inset,
+      0 28px 56px -28px rgb(59 40 204 / 0.45);
+  }
+
+  .site-select .pos-select-menu[data-drop="up"] {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+
+  .site-select .pos-option {
+    gap: 0.75rem;
+    border-radius: 11px;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.9375rem;
+    color: var(--color-mist-200);
+  }
+
+  .site-select .pos-option:hover,
+  .site-select .pos-option[data-active="true"] {
+    background: var(--color-ink-800);
+    color: var(--color-mist-50);
+  }
+
+  .site-select .pos-option[aria-selected="true"] {
+    background: color-mix(in oklab, var(--color-iris-200) 70%, transparent);
+    color: var(--color-iris-700);
+  }
+
+  .site-select .pos-option-note { font-size: 0.8125rem; }
+
+  .site-select .pos-option-meta {
+    font-family: var(--font-display);
+    font-size: 0.8125rem;
+    color: var(--color-iris-600);
+  }
+
   /* ---------------- Ambient light ---------------- */
 
   .glow {

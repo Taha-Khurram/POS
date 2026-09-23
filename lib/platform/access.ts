@@ -1,9 +1,12 @@
 import "server-only";
 
-import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
+import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 
 import { requireSession, type SessionContext } from "@/lib/auth";
 import { canBill, type PlatformRole } from "@/lib/platform/admin";
+import { createClient } from "@/utils/supabase/server";
 
 export type PlatformSession = SessionContext & { platformRole: PlatformRole };
 
@@ -36,8 +39,51 @@ export async function requirePlatform(): Promise<PlatformSession> {
 
   if (!session.platformRole) notFound();
 
+  const standing = await operatorStanding(session.userId);
+
+  if (standing !== "ok") {
+    // An account that exists only to work this console has nowhere else to be,
+    // so it is signed out and told why. One that also has a shop keeps its till
+    // and simply stops finding a console here.
+    if (!session.tenantId) redirect(`/logout?ended=${standing}`);
+    notFound();
+  }
+
   return { ...session, platformRole: session.platformRole };
 }
+
+type OperatorStanding = "ok" | "removed" | "suspended";
+
+/**
+ * Is this operator still on the roster, and switched on?
+ *
+ * The `platform_role` claim is stamped at sign-in and outlives whatever the
+ * roster says for as long as the token lasts — an hour of somebody who was
+ * switched off at noon still activating shops. `accountStanding` in
+ * `lib/auth.ts` answers the same question for a till and this is its console
+ * twin: one primary-key read of their own `platform_admins` row, through their
+ * own JWT, which `platform_admins_read_self` allows.
+ *
+ * Fails open for the same reason that one does — an unreachable database is
+ * not evidence anybody was removed — and is `cache()`d for the same reason:
+ * the layout and the page both gate, and nothing an operator does in one
+ * request changes their own standing, because `/admin/team` refuses their own
+ * row.
+ */
+const operatorStanding = cache(async (userId: string): Promise<OperatorStanding> => {
+  const supabase = createClient(await cookies());
+
+  const { data, error } = await supabase
+    .from("platform_admins")
+    .select("is_active")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) return "ok";
+  if (!data) return "removed";
+
+  return data.is_active ? "ok" : "suspended";
+});
 
 /** Only the roster of operators — who can hire and revoke support staff.
  *  `platform_admins_read_self` says the same thing in SQL. */

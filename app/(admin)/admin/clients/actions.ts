@@ -4,17 +4,18 @@ import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
 import { writeReadError } from "@/lib/pos/read-error";
-import { sha256Hex } from "@/lib/invite-token";
 import {
-  INVITE_DAYS,
+  GRACE_DAYS_MAX,
   isCycle,
   isStatus,
+  lapseOf,
+  writeDay,
   type SubscriptionStatus,
 } from "@/lib/platform/admin";
 import { requireBilling, requirePlatform } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
-import { activateShop, inviteFor, mintToken } from "./activate";
+import { activateShop, issueOwnerLogin, startPlan } from "./activate";
 
 /**
  * Everything the owner console writes about a shop.
@@ -57,17 +58,17 @@ function revalidateClient(tenantId?: string | null) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Activation — path A                                                        */
+/* Activation                                                                 */
 /* -------------------------------------------------------------------------- */
 
 /**
- * A closed deal becomes a working shop.
+ * A deal closed on the phone, with no order behind it: client, plan and owner
+ * login in one go from `/admin/clients/new`.
  *
- * The work is `activateShop` in `./activate.ts`, which the order queue's Verify
- * button calls too — one function that can bring a tenant into existence, so
- * one thing to audit. It is not exported from a `"use server"` module because
- * every export of one is a callable endpoint, and a shared body taking its
- * actor as an argument would be a way to activate a shop as anybody.
+ * The work is in `./activate.ts`, whose three steps the order queue and the
+ * client record also call. It is not exported from a `"use server"` module
+ * because every export of one is a callable endpoint, and a shared body taking
+ * its actor as an argument would be a way to activate a shop as anybody.
  */
 export async function activateClient(
   _previous: AdminState,
@@ -76,7 +77,61 @@ export async function activateClient(
   const gate = await requireBilling();
   if (!gate.ok) return fail(gate.error);
 
-  return activateShop(formData, null, gate.session);
+  return activateShop(formData, gate.session);
+}
+
+/**
+ * An accepted client goes on a plan, and its owner gets a login.
+ *
+ * The second half of the order flow: the order was accepted into a client on
+ * `/admin/orders`, and this is the card on that client's record that finishes
+ * it. The login is minted straight after the plan starts, so the operator
+ * leaves this screen holding the one thing the shop is waiting for.
+ */
+export async function activateSubscription(
+  _previous: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const gate = await requireBilling();
+  if (!gate.ok) return fail(gate.error);
+
+  const tenantId = text(formData.get("tenant_id"));
+  if (!tenantId) return fail("That client is not on the list any more.");
+
+  const plan = await startPlan(tenantId, formData, gate.session);
+  if ("error" in plan) return fail(plan.error);
+
+  return issueOwnerLogin(tenantId, gate.session);
+}
+
+/**
+ * A new password for the owner — lost, forgotten, or written on a till.
+ *
+ * Also the way through when minting the login failed at activation: the same
+ * step, run again. For an owner who already has a login it replaces the
+ * password, which stops the old one working at the next sign-in.
+ */
+export async function resetOwnerLogin(
+  _previous: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const gate = await requireBilling();
+  if (!gate.ok) return fail(gate.error);
+
+  const tenantId = text(formData.get("tenant_id"));
+  if (!tenantId) return fail("That client is not on the list any more.");
+
+  const { data: subscription } = await createAdminClient()
+    .from("subscriptions")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  // A login to a shop with no plan is a login to a till that refuses every
+  // sale. Activation mints it; until then there is nothing to sign in to.
+  if (!subscription) return fail("Activate this client first — the login is made then.");
+
+  return issueOwnerLogin(tenantId, gate.session);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -184,7 +239,9 @@ export async function updateSubscription(
   if (!Number.isInteger(branches) || branches < 1) {
     return fail("A shop has at least one branch.");
   }
-  if (!Number.isInteger(grace) || grace < 0) return fail("Grace days cannot be negative.");
+  if (!Number.isInteger(grace) || grace < 0 || grace > GRACE_DAYS_MAX) {
+    return fail(`Grace is between 0 and ${GRACE_DAYS_MAX} days.`);
+  }
 
   const supabase = createAdminClient();
 
@@ -325,16 +382,41 @@ export async function setSubscriptionStatus(
 
   if (!tenantId) return fail("That shop is not on the list any more.");
   if (!isStatus(status)) return fail("That is not a standing we have.");
+  if (status === "paused") return fail("Pause it with the Pause button — that keeps its days.");
 
   const supabase = createAdminClient();
 
   const { data: before } = await supabase
     .from("subscriptions")
-    .select("status")
+    .select("status, current_period_end, grace_days")
     .eq("tenant_id", tenantId)
     .maybeSingle();
 
   if (!before) return fail("That shop has no subscription.");
+
+  // Leaving a pause any way but Resume would lose the days it was holding —
+  // the whole point of pausing rather than suspending. Cancelling is the one
+  // exit that has no days to keep.
+  if (before.status === "paused" && status !== "cancelled") {
+    return fail("This shop is paused. Resume it, which puts its days back, before changing it.");
+  }
+
+  // A trading standing on a period whose grace has run out would be undone by
+  // the next sweep within the hour, and the till would never have opened —
+  // `getEntitlements` reads the date too. Say so now, with the way through.
+  if (status === "trialing" || status === "active" || status === "past_due") {
+    const { status: effective, graceEndsAt } = lapseOf(
+      status,
+      before.current_period_end as string,
+      Number(before.grace_days),
+    );
+
+    if (effective === "suspended") {
+      return fail(
+        `Its period and grace ran out on ${writeDay(graceEndsAt)}. Record a payment, or give days first, then put it back in business.`,
+      );
+    }
+  }
 
   const now = new Date().toISOString();
 
@@ -344,6 +426,7 @@ export async function setSubscriptionStatus(
       status,
       suspended_at: status === "suspended" ? now : null,
       cancelled_at: status === "cancelled" ? now : null,
+      paused_at: null,
     })
     .eq("tenant_id", tenantId);
 
@@ -370,9 +453,64 @@ const LABELS: Record<SubscriptionStatus, string> = {
   trialing: "Put back on trial",
   active: "Back in business",
   past_due: "Marked past due",
+  paused: "Paused — the clock is stopped",
   suspended: "Suspended — the till will not charge",
   cancelled: "Cancelled",
 };
+
+/**
+ * Shut for a while, with the clock stopped — and back again with every day it
+ * was shut put back on the end of the period.
+ *
+ * Its own action and its own function (`public.pause_subscription`) rather than
+ * a status on the buttons above, because resuming has arithmetic in it: the
+ * period moves out by exactly the time spent paused, worked out under the row
+ * lock so a payment recorded from another tab cannot land in between.
+ */
+export async function pauseClient(
+  _previous: AdminState,
+  formData: FormData,
+): Promise<AdminState> {
+  const gate = await requireBilling();
+  if (!gate.ok) return fail(gate.error);
+
+  const tenantId = text(formData.get("tenant_id"));
+  const pause = text(formData.get("pause")) === "1";
+
+  if (!tenantId) return fail("That shop is not on the list any more.");
+
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase.rpc("pause_subscription", {
+    p_tenant: tenantId,
+    p_pause: pause,
+  });
+
+  if (error || !data) {
+    console.error("[admin] pause failed for %s: %s", tenantId, writeReadError(error));
+    return fail(
+      pause
+        ? "Only a shop that is trading can be paused."
+        : "That shop is not paused any more. Reload the record.",
+    );
+  }
+
+  const result = data as { status: SubscriptionStatus; current_period_end: string };
+
+  await recordAudit(gate.session, {
+    action: pause ? "subscription.paused" : "subscription.resumed",
+    tenantId,
+    subjectType: "subscription",
+    subjectId: tenantId,
+    after: result,
+  });
+
+  revalidateClient(tenantId);
+
+  return pause
+    ? done("Paused — the clock is stopped", "The till will not charge until you resume.")
+    : done("Resumed", `Paid up to ${writeDay(result.current_period_end)} now.`);
+}
 
 /**
  * Days given rather than sold — a shop that lost a week to a dead printer, or
@@ -445,135 +583,6 @@ export async function extendPeriod(
  * that ships with a note explaining that it does nothing is how an operator
  * promises a feature on a call that the shop never gets. The one entitlement
  * that bites is `subscriptions.max_registers`, written by the plan form above. */
-
-/* -------------------------------------------------------------------------- */
-/* The invite                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A new link, and the old one dead.
- *
- * The commonest support call on a new shop is "bhai link khul nahi raha" a week
- * after activation, by which time the invite has expired. Regenerating revokes
- * every live invite for the role first, because
- * `invites_one_live_per_tenant_role` allows exactly one — two valid doors is
- * the thing that index exists to prevent.
- */
-export async function regenerateInvite(
-  _previous: AdminState,
-  formData: FormData,
-): Promise<AdminState> {
-  const gate = await requireBilling();
-  if (!gate.ok) return fail(gate.error);
-
-  const tenantId = text(formData.get("tenant_id"));
-  if (!tenantId) return fail("That shop is not on the list any more.");
-
-  const supabase = createAdminClient();
-
-  const { data: tenant } = await supabase
-    .from("tenants")
-    .select("shop_name, phone, email")
-    .eq("id", tenantId)
-    .maybeSingle();
-
-  if (!tenant) return fail("That shop is not on the list any more.");
-
-  const { error: revokeError } = await supabase
-    .from("invites")
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("tenant_id", tenantId)
-    .eq("tenant_role", "owner")
-    .is("used_at", null)
-    .is("revoked_at", null);
-
-  if (revokeError) {
-    console.error("[admin] invite revoke failed for %s: %s", tenantId, writeReadError(revokeError));
-    return fail("The old link could not be revoked, so no new one was made.");
-  }
-
-  const token = mintToken();
-
-  const { data: invite, error } = await supabase
-    .from("invites")
-    .insert({
-      tenant_id: tenantId,
-      token_hash: await sha256Hex(token),
-      email: (tenant.email as string | null) ?? null,
-      phone: tenant.phone as string,
-      tenant_role: "owner",
-      expires_at: new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString(),
-      created_by: gate.session.userId,
-    })
-    .select("id")
-    .single();
-
-  if (error || !invite) {
-    console.error("[admin] invite mint failed for %s: %s", tenantId, writeReadError(error));
-    return fail("A new link could not be made. Please try again.");
-  }
-
-  await recordAudit(gate.session, {
-    action: "invite.regenerated",
-    tenantId,
-    subjectType: "invite",
-    subjectId: invite.id,
-  });
-
-  revalidateClient(tenantId);
-
-  return {
-    error: null,
-    savedAt: Date.now(),
-    saved: { label: "New link ready", detail: "The old one no longer works." },
-    invite: await inviteFor(
-      tenant.shop_name as string,
-      tenant.phone as string,
-      token,
-    ),
-    tenantId,
-  };
-}
-
-/** Kill the live link without making another — for a deal that fell through
- *  between the activation and the first sign-in. */
-export async function revokeInvite(
-  _previous: AdminState,
-  formData: FormData,
-): Promise<AdminState> {
-  const gate = await requireBilling();
-  if (!gate.ok) return fail(gate.error);
-
-  const tenantId = text(formData.get("tenant_id"));
-  const inviteId = text(formData.get("invite_id"));
-
-  if (!tenantId || !inviteId) return fail("That invite is already gone.");
-
-  const supabase = createAdminClient();
-
-  const { error } = await supabase
-    .from("invites")
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("id", inviteId)
-    .eq("tenant_id", tenantId)
-    .is("used_at", null);
-
-  if (error) {
-    console.error("[admin] invite revoke failed for %s: %s", inviteId, writeReadError(error));
-    return fail("That link could not be revoked. Please try again.");
-  }
-
-  await recordAudit(gate.session, {
-    action: "invite.revoked",
-    tenantId,
-    subjectType: "invite",
-    subjectId: inviteId,
-  });
-
-  revalidateClient(tenantId);
-
-  return done("Link revoked");
-}
 
 /* -------------------------------------------------------------------------- */
 /* Notes                                                                      */

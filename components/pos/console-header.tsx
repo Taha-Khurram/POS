@@ -9,7 +9,6 @@ import {
   IconBell,
   IconCheck,
   IconMenu,
-  IconPlus,
   IconRail,
   IconSearch,
 } from "./icons";
@@ -22,14 +21,18 @@ import { ThemeToggle } from "./theme-toggle";
 import { useDismiss } from "./use-dismiss";
 
 /**
- * The fixed top bar: the wordmark, find something, see what needs attention,
- * and start a sale. It spans the full width of the shell, so the rail hangs
- * beneath it.
+ * The fixed top bar: the wordmark, find something, and see what needs
+ * attention. It spans the full width of the shell, so the rail hangs beneath
+ * it.
  *
- * The "New sale" button is the only primary-weight control on the whole screen.
- * That is deliberate — on a counter, the dashboard is what you look at between
- * customers, and the moment one arrives there should be exactly one obvious
- * thing to press, reachable without reading anything.
+ * **There is no "New sale" button up here any more.** It was the one
+ * primary-weight control on the screen and it went to `/app/register` — which
+ * is Register, the second row of the rail, already drawn and already one tap
+ * away. Two routes to one screen, one of them shouting, is the same mistake
+ * `/admin/clients` made with its activate button: a primary belongs with the
+ * thing it does, and the rail is where a cashier looks for a screen. What is
+ * left in the corner is the two things that are *not* screens — the theme and
+ * the bell.
  *
  * Who is signed in, and which shop, is not up here. The foot of the rail says
  * both and has the sign-out beside them; a second copy in the corner was one
@@ -181,11 +184,6 @@ export function ConsoleHeader({
             </div>
           ) : null}
         </div>
-
-        <Link href="/app/register" className="pos-btn pos-btn-primary">
-          <IconPlus className="h-4 w-4" />
-          <span className="hidden sm:inline">New sale</span>
-        </Link>
       </div>
     </header>
   );

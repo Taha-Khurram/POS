@@ -10,7 +10,7 @@ import { ActivateForm } from "./activate-form";
 
 export const metadata: Metadata = {
   title: "Activate a shop",
-  description: "Turn a closed deal into a working shop and a link to send.",
+  description: "Turn a deal closed on the phone into a working shop and an owner login.",
 };
 
 /**
@@ -45,8 +45,8 @@ export default async function NewClientPage() {
           Activate a shop
         </h1>
         <p className="mt-1 text-[0.8125rem] text-graphite-500">
-          The shop, its subscription and a one-time link — in one go, without
-          leaving the chat you closed the deal in.
+          For a deal closed on the phone. The client, its plan and the owner&rsquo;s
+          login in one go — a self-serve order is accepted from Orders instead.
         </p>
       </header>
 

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { InviteCard } from "@/components/admin/invite-card";
+import { OwnerLoginCard } from "@/components/admin/owner-login-card";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconTrash } from "@/components/pos/icons";
@@ -12,11 +12,15 @@ import { useActionToast } from "@/components/pos/toaster";
 import { rupees } from "@/lib/format";
 import {
   BILLING_CYCLES,
+  GRACE_DAYS,
   HELP,
   PAYMENT_METHODS,
   SUB_STATUSES,
   type SubscriptionStatus,
+  cycleMonths,
   dateInput,
+  lapseOf,
+  limitOf,
   methodLabel,
   monthlyValue,
   standingOf,
@@ -26,8 +30,8 @@ import {
 } from "@/lib/platform/admin";
 import type {
   Client,
-  Invite,
   Note,
+  Order,
   Payment,
   Plan,
   ShopDetails,
@@ -35,11 +39,12 @@ import type {
 } from "@/lib/platform/console";
 
 import {
+  activateSubscription,
   addNote,
   deleteNote,
   extendPeriod,
-  regenerateInvite,
-  revokeInvite,
+  pauseClient,
+  resetOwnerLogin,
   setPeriodEnd,
   setSubscriptionStatus,
   updateClient,
@@ -94,7 +99,7 @@ export function PlanCard({
 
       <ChartCard
         title="Plan and what it buys"
-        caption={`${rupees(monthlyValue(Number(price) || 0, cycle))} a month at this price and cycle. Standing and the renewal date are on the Standing card.`}
+        caption={`${rupees(monthlyValue(Number(price) || 0, cycle))} a month at this price and cycle. Standing and the renewal date are on the Standing tab.`}
         footer={
           readOnly ? (
             <p className="text-[0.75rem] text-graphite-500">
@@ -174,20 +179,19 @@ export function PlanCard({
             </label>
 
             <label className="block">
-              <span className="pos-label">Grace days</span>
+              <span className="pos-label flex items-center gap-1">
+                Grace days
+                <InfoTip label="Grace days" explain={HELP.graceDays} />
+              </span>
               <input
                 name="grace_days"
                 className="pos-field"
                 defaultValue={client.graceDays}
                 inputMode="numeric"
               />
-              {/* Stored and read by nothing — the same honest label
-                  `max_branches` carries. Nothing expires a period or suspends a
-                  shop on a date: `getEntitlements` decides what a shop may do
-                  from its standing alone, and standing is something an operator
-                  sets. Saying "how long past due is tolerated" promised a
-                  tolerance the product does not implement. */}
-              <span className="pos-hint">Nothing reads this yet.</span>
+              {/* Read since `0042`: `lapseOf` and the hourly sweep both stop
+                  the till this many days after the renewal date. */}
+              <span className="pos-hint">Past the renewal date before the till stops.</span>
             </label>
           </div>
         </fieldset>
@@ -229,6 +233,7 @@ export function LifecycleCard({
   const [state, action, pending] = useActionState(setSubscriptionStatus, IDLE);
   const [extendState, extendAction, extending] = useActionState(extendPeriod, IDLE);
   const [dateState, dateAction, dating] = useActionState(setPeriodEnd, IDLE);
+  const [pauseState, pauseAction, pausing] = useActionState(pauseClient, IDLE);
 
   useActionToast(state, {
     saved: state.saved?.label ?? "Changed",
@@ -242,8 +247,20 @@ export function LifecycleCard({
     saved: dateState.saved?.label ?? "Renewal date corrected",
     failed: "That date did not save",
   });
+  useActionToast(pauseState, {
+    saved: pauseState.saved?.label ?? "Changed",
+    failed: "That did not change",
+  });
 
-  const now = standingOf(client.status);
+  // What the till is doing now, not what was last written: a period that ran
+  // out at noon reads past due before the sweep writes it. `getEntitlements`
+  // reads the same `lapseOf`, so this card and the register cannot disagree.
+  const lapse =
+    client.status && client.currentPeriodEnd
+      ? lapseOf(client.status, client.currentPeriodEnd, client.graceDays)
+      : null;
+  const now = standingOf(lapse?.status ?? client.status);
+  const paused = client.status === "paused";
   const stored = client.currentPeriodEnd
     ? dateInput(new Date(client.currentPeriodEnd))
     : "";
@@ -278,9 +295,15 @@ export function LifecycleCard({
       actions={<InfoTip label="Standing" explain={HELP.standing} align="end" />}
     >
       <div className="space-y-4">
-        <p className={`pos-note ${now.operable ? "pos-note-good" : "pos-note-bad"}`}>
+        <p className={`pos-note ${now.operable ? "pos-note-good" : paused ? "" : "pos-note-bad"}`}>
           <span className="font-semibold">{now.label}.</span> {now.description}
-          {client.suspendedAt
+          {now.id === "past_due" && lapse
+            ? ` The till stops ${writeDay(lapse.graceEndsAt)}.`
+            : ""}
+          {paused && client.pausedAt
+            ? ` Paused ${writeWhen(client.pausedAt).toLowerCase()}.`
+            : ""}
+          {client.status === "suspended" && client.suspendedAt
             ? ` Suspended ${writeWhen(client.suspendedAt).toLowerCase()}.`
             : ""}
         </p>
@@ -300,23 +323,54 @@ export function LifecycleCard({
           </p>
         ) : (
           <>
-            <form action={action} className="flex flex-wrap gap-2">
-              <input type="hidden" name="tenant_id" value={client.tenantId} />
+            {state.error ? <p className="pos-note pos-note-bad">{state.error}</p> : null}
+            {pauseState.error ? (
+              <p className="pos-note pos-note-bad">{pauseState.error}</p>
+            ) : null}
 
-              {SUB_STATUSES.filter((entry) => entry.id !== client.status).map((entry) => (
-                <button
-                  key={entry.id}
-                  type="submit"
-                  name="status"
-                  value={entry.id}
-                  disabled={pending}
-                  className={`pos-btn pos-btn-sm ${entry.id === "active" ? "pos-btn-primary" : "pos-btn-soft"}`}
-                  title={entry.description}
-                >
-                  {STANDING_BUTTON[entry.id]}
-                </button>
-              ))}
-            </form>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Pause is its own action, not one of the standings below: it
+                  has to remember when it started so resuming can give the days
+                  back. A paused shop gets Resume and Cancel and nothing else —
+                  any other exit would drop the days it is holding. */}
+              {paused || now.operable ? (
+                <form action={pauseAction} className="flex items-center gap-1">
+                  <input type="hidden" name="tenant_id" value={client.tenantId} />
+                  <input type="hidden" name="pause" value={paused ? "0" : "1"} />
+                  <button
+                    type="submit"
+                    disabled={pausing}
+                    className={`pos-btn pos-btn-sm ${paused ? "pos-btn-primary" : "pos-btn-soft"}`}
+                  >
+                    {pausing ? "…" : paused ? "Resume" : "Pause"}
+                  </button>
+                  <InfoTip label="Pause" explain={HELP.pause} />
+                </form>
+              ) : null}
+
+              <form action={action} className="flex flex-wrap gap-2">
+                <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+                {SUB_STATUSES.filter(
+                  (entry) =>
+                    entry.id !== "paused" &&
+                    entry.id !== client.status &&
+                    (!paused || entry.id === "cancelled"),
+                ).map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="submit"
+                    name="status"
+                    value={entry.id}
+                    disabled={pending}
+                    className={`pos-btn pos-btn-sm ${entry.id === "active" ? "pos-btn-primary" : "pos-btn-soft"}`}
+                    title={entry.description}
+                  >
+                    {STANDING_BUTTON[entry.id]}
+                  </button>
+                ))}
+              </form>
+            </div>
 
             {/* One section over one column, rather than two forms with a
                 paragraph of prose under each.
@@ -342,11 +396,13 @@ export function LifecycleCard({
                 </p>
               </div>
 
-              {/* Days on the period do not reopen a shut till: `getEntitlements`
-                  reads the standing and never the date. An operator promising a
-                  week to a suspended shopkeeper has to put them back in business
-                  too, and would otherwise hear about it from the shopkeeper. */}
-              {!now.operable ? (
+              {/* Days on the period do not reopen a shut till: a suspension is
+                  a stored standing, and moving the date does not rewrite it. An
+                  operator promising a week to a suspended shopkeeper has to put
+                  them back in business too — which, once the date is ahead,
+                  the standing buttons above will now allow. A paused shop is
+                  the exception: its days come back by themselves on Resume. */}
+              {!now.operable && !paused ? (
                 <p className="pos-note pos-note-warn">
                   Days on their own will not start the till again — this shop is{" "}
                   {now.label.toLowerCase()}. Put them back in business as well.
@@ -410,6 +466,7 @@ export function LifecycleCard({
  *  card is not a five-deep ternary in the middle of a form. */
 const STANDING_BUTTON: Record<SubscriptionStatus, string> = {
   active: "Put back in business",
+  paused: "Pause",
   suspended: "Suspend",
   cancelled: "Cancel",
   past_due: "Mark past due",
@@ -602,108 +659,80 @@ export function PaymentsCard({
 }
 
 /* -------------------------------------------------------------------------- */
-/* The invite                                                                 */
+/* Signing in                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export function InvitePanel({
+export function LoginCard({
   client,
-  invites,
   users,
   readOnly,
 }: {
   client: Client;
-  invites: Invite[];
-  /** Who can actually sign in. This card used to sit beside a second one that
-   *  listed them, and both captions read "N accounts on this shop" — the same
-   *  sentence, from the same number, twice down one column. They are one
-   *  question: can anybody get in, and who. */
+  /** Who can actually sign in, owner first. The owner's login is minted at
+   *  activation; the staff under it are the owner's own business, hired on
+   *  `/app/employees`, and listed here only so a support call can see them. */
   users: ShopUser[];
   readOnly: boolean;
 }) {
-  const [state, action, pending] = useActionState(regenerateInvite, IDLE);
-  const [revocation, revokeAction] = useActionState(revokeInvite, IDLE);
+  const [state, action, pending] = useActionState(resetOwnerLogin, IDLE);
 
   useActionToast(state, {
-    saved: state.saved?.label ?? "New link ready",
-    failed: "No new link was made",
-  });
-  useActionToast(revocation, {
-    saved: revocation.saved?.label ?? "Link revoked",
-    failed: "That link was not revoked",
+    saved: state.saved?.label ?? "New password made",
+    failed: "No new password was made",
   });
 
-  const live = invites.find(
-    (invite) =>
-      !invite.usedAt && !invite.revokedAt && new Date(invite.expiresAt) > new Date(),
-  );
-
-  const signedIn = users.length;
+  const owner = users.find((user) => user.tenantRole === "owner");
 
   return (
     <div className="space-y-4">
-      {state.invite ? <InviteCard invite={state.invite} /> : null}
+      {state.credentials ? (
+        <OwnerLoginCard credentials={state.credentials} shopName={client.shopName} />
+      ) : null}
 
       <ChartCard
         title="Signing in"
         caption={
-          signedIn > 0
-            ? `${signedIn} ${signedIn === 1 ? "account" : "accounts"} on this shop.`
-            : "Nobody has made an account yet."
+          users.length > 0
+            ? `${users.length} ${users.length === 1 ? "account" : "accounts"} on this shop.`
+            : "Nobody can sign in yet."
         }
         actions={<InfoTip label="Signing in" explain={HELP.signIn} align="end" />}
       >
         <div className="space-y-3">
-          {signedIn === 0 && !live ? (
+          {!owner ? (
             <p className="pos-note pos-note-warn">
-              This shop has been activated and has no live link. Nobody can sign
-              in until you make one.
+              {client.status
+                ? "This shop is on a plan and has no owner login. Make one below and send it."
+                : "The owner's login is made when this client is activated."}
             </p>
           ) : null}
 
-          {live ? (
-            // What happens to it — shown once, killed by the next one — is in
-            // the tip on the header now. Here it only has to say there is one.
-            <p className="pos-note">
-              A link is live and expires {writeWhen(live.expiresAt).toLowerCase()}.
-            </p>
-          ) : null}
+          {state.error ? <p className="pos-note pos-note-bad">{state.error}</p> : null}
 
           {readOnly ? (
             <p className="text-[0.75rem] text-graphite-500">
-              A support account cannot mint sign-in links.
+              A support account cannot hand out passwords.
             </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <form action={action}>
-                <input type="hidden" name="tenant_id" value={client.tenantId} />
-                <button type="submit" className="pos-btn pos-btn-soft" disabled={pending}>
-                  {pending ? "Making…" : live ? "Make a new link" : "Make a link"}
-                </button>
-              </form>
+          ) : client.status ? (
+            <form action={action}>
+              <input type="hidden" name="tenant_id" value={client.tenantId} />
+              <button type="submit" className="pos-btn pos-btn-soft" disabled={pending}>
+                {pending ? "Making…" : owner ? "New owner password" : "Make the owner's login"}
+              </button>
+            </form>
+          ) : null}
 
-              {live ? (
-                <form action={revokeAction}>
-                  <input type="hidden" name="tenant_id" value={client.tenantId} />
-                  <input type="hidden" name="invite_id" value={live.id} />
-                  <button type="submit" className="pos-btn pos-btn-quiet">
-                    Revoke it
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          )}
-
-          {/* No email column: `profiles` does not carry one, and reading
-              `auth.users` for it would be this console holding a password reset
-              over somebody's own account. */}
-          {signedIn > 0 ? (
+          {users.length > 0 ? (
             <ul className="space-y-2 border-t border-orchid-100 pt-3">
               {users.map((user) => (
                 <li key={user.id} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 text-[0.8125rem] text-graphite-900">
                     {user.fullName}
+                    <span className="block truncate font-mono text-[0.6875rem] text-graphite-500">
+                      {user.email || user.tenantRole}
+                    </span>
                     <span className="block text-[0.6875rem] text-graphite-500">
-                      {user.tenantRole} · joined {writeDay(user.createdAt)}
+                      {user.tenantRole} · since {writeDay(user.createdAt)}
                     </span>
                   </span>
                   {user.isActive ? null : (
@@ -713,27 +742,185 @@ export function InvitePanel({
               ))}
             </ul>
           ) : null}
-
-          {invites.length > 0 ? (
-            <ul className="space-y-1 border-t border-orchid-100 pt-3 text-[0.75rem] text-graphite-500">
-              {invites.slice(0, 4).map((invite) => (
-                <li key={invite.id}>
-                  {invite.usedAt
-                    ? `Used ${writeWhen(invite.usedAt).toLowerCase()}`
-                    : invite.revokedAt
-                      ? `Revoked ${writeWhen(invite.revokedAt).toLowerCase()}`
-                      : new Date(invite.expiresAt) > new Date()
-                        ? `Live until ${writeDay(invite.expiresAt)}`
-                        : `Expired ${writeWhen(invite.expiresAt).toLowerCase()}`}
-                  {" · made "}
-                  {writeDay(invite.createdAt)}
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
       </ChartCard>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Activation                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The second half of an order: an accepted client goes on a plan.
+ *
+ * Filled from the order it was accepted from — the plan, cycle, counters and
+ * quoted price the buyer chose on `/checkout` — so this is a check and a press,
+ * not a retyping. Everything stays editable because the deal on WhatsApp is not
+ * always the deal on the site.
+ *
+ * Drawn in place of the plan and standing cards, which have nothing to act on
+ * until a subscription exists. The result is the owner's login, shown once on
+ * the card that made it.
+ */
+export function ActivateCard({
+  client,
+  order,
+  plans,
+  paidSoFar,
+  readOnly,
+}: {
+  client: Client;
+  order: Order | null;
+  plans: Plan[];
+  /** Money already recorded against this client, attached to the first period. */
+  paidSoFar: number;
+  readOnly: boolean;
+}) {
+  const [state, action, pending] = useActionState(activateSubscription, IDLE);
+
+  useActionToast(state, {
+    saved: state.saved?.label ?? "Activated",
+    failed: "That client was not activated",
+  });
+
+  const offered = plans.filter((plan) => plan.isActive);
+  const firstPlan =
+    (order?.planId && plans.find((plan) => plan.id === order.planId)) || offered[0] || plans[0];
+
+  const [planId, setPlanId] = useState(firstPlan?.id ?? "");
+  const chosenPlan = plans.find((plan) => plan.id === planId);
+  const [cycle, setCycle] = useState<string>(order?.billingCycle ?? "monthly");
+  const [price, setPrice] = useState(
+    String(order?.quotedPrice ?? (firstPlan ? firstPlan.listPrice * cycleMonths("monthly") : "")),
+  );
+
+  if (state.credentials) {
+    return <OwnerLoginCard credentials={state.credentials} shopName={client.shopName} />;
+  }
+
+  return (
+    <form action={action}>
+      <input type="hidden" name="tenant_id" value={client.tenantId} />
+
+      <ChartCard
+        title="Activate"
+        caption={
+          order
+            ? `Filled from order ${order.reference}. ${paidSoFar > 0 ? `${rupees(paidSoFar)} is recorded and goes against the first period.` : "Nothing is recorded against it yet."}`
+            : paidSoFar > 0
+              ? `${rupees(paidSoFar)} is recorded and goes against the first period.`
+              : "Pick the plan and the price agreed."
+        }
+        actions={<InfoTip label="Activate" explain={HELP.activate} align="end" />}
+        footer={
+          readOnly ? (
+            <p className="text-[0.75rem] text-graphite-500">
+              A support account can read this and activate nothing.
+            </p>
+          ) : (
+            <button type="submit" className="pos-btn pos-btn-primary" disabled={pending || !planId}>
+              {pending ? "Activating…" : "Activate and make the login"}
+            </button>
+          )
+        }
+      >
+        <fieldset disabled={readOnly || pending} className="space-y-4">
+          {state.error ? <p className="pos-note pos-note-bad">{state.error}</p> : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectRow
+              label="Plan"
+              value={planId}
+              onChange={setPlanId}
+              options={plans.map((plan) => ({
+                id: plan.id,
+                label: plan.name,
+                description: `${rupees(plan.listPrice)} a month list${plan.isActive ? "" : " · off sale"}`,
+              }))}
+            />
+            <input type="hidden" name="plan_id" value={planId} />
+
+            <SelectRow
+              label="Billed"
+              value={cycle}
+              onChange={setCycle}
+              options={BILLING_CYCLES.map((entry) => ({
+                id: entry.id,
+                label: entry.label,
+                description: entry.description,
+              }))}
+            />
+            <input type="hidden" name="billing_cycle" value={cycle} />
+
+            <label className="block">
+              <span className="pos-label">Price agreed</span>
+              <input
+                name="agreed_price"
+                className="pos-field"
+                value={price}
+                inputMode="decimal"
+                onChange={(event) => setPrice(event.target.value)}
+              />
+              <span className="pos-hint">
+                Per {cycleLabel(cycle)} — {rupees(monthlyValue(Number(price) || 0, cycle))} a month.
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="pos-label">Starts</span>
+              <input
+                type="date"
+                name="starts_at"
+                className="pos-field"
+                defaultValue={dateInput(new Date())}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block">
+              <span className="pos-label">Counters</span>
+              <input
+                name="registers"
+                className="pos-field"
+                // What the buyer ordered, or else the chosen plan's own
+                // ceiling — re-keyed so picking another plan re-seeds it.
+                key={order ? "order" : planId}
+                defaultValue={order?.registers ?? limitOf(chosenPlan?.features ?? {}, "max_registers") ?? 1}
+                inputMode="numeric"
+              />
+            </label>
+
+            <label className="block">
+              <span className="pos-label">Trial days</span>
+              <input name="trial_days" className="pos-field" defaultValue="0" inputMode="numeric" />
+              <span className="pos-hint">0 for a shop that has paid.</span>
+            </label>
+
+            <label className="block">
+              <span className="pos-label flex items-center gap-1">
+                Grace days
+                <InfoTip label="Grace days" explain={HELP.graceDays} />
+              </span>
+              <input
+                name="grace_days"
+                className="pos-field"
+                defaultValue={GRACE_DAYS}
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+
+          <input
+            type="hidden"
+            name="branches"
+            value={order?.branches ?? limitOf(chosenPlan?.features ?? {}, "max_branches") ?? 1}
+          />
+        </fieldset>
+      </ChartCard>
+    </form>
   );
 }
 

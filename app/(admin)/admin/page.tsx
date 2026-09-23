@@ -416,9 +416,10 @@ function NewestTable({ clients }: { clients: Client[] }) {
             {client.userCount} {client.userCount === 1 ? "account" : "accounts"}
           </span>
         ) : (
-          // The state worth chasing: sold, invited, never arrived.
+          // The state worth chasing: accepted and never activated, or on a
+          // plan with nobody able to sign in to it.
           <span className="pos-badge pos-badge-warn">
-            {client.inviteOpen ? "Invite unused" : "No account"}
+            {client.status ? "No login" : "Not activated"}
           </span>
         ),
     },

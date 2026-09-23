@@ -15,7 +15,7 @@ import {
   methodLabel,
   writeDay,
 } from "@/lib/platform/admin";
-import type { Client, Payment } from "@/lib/platform/console";
+import type { Client, Order, Payment } from "@/lib/platform/console";
 
 import { deletePayment, recordPayment } from "./actions";
 import { IDLE } from "../state";
@@ -25,22 +25,34 @@ import { IDLE } from "../state";
  *
  * The form is at the top because that is what this screen is opened for: a
  * transfer has landed, you have the statement open, and you want it recorded
- * against the right shop before you forget which one it was. Recording it moves
- * that shop's renewal date in the same transaction — one write, so the money
- * and the days it bought cannot come apart.
+ * against the right shop before you forget which one it was.
+ *
+ * The picker holds two kinds of payer. A waiting **order** is somebody who
+ * checked out and has no shop yet — money against it buys no time and is what
+ * lets the order be accepted. A **client** on a plan has its renewal date moved
+ * in the same transaction as the money, so the two cannot come apart; one not
+ * yet activated has its payment held for the first period.
  */
 export function PaymentsPanel({
   payments,
   clients,
+  orders,
   readOnly,
 }: {
   payments: Payment[];
   clients: Client[];
+  /** Orders still waiting on money — the only ones a payment can land on. */
+  orders: Order[];
   readOnly: boolean;
 }) {
   const [state, action, pending] = useActionState(recordPayment, IDLE);
   const [removal, removeAction] = useActionState(deletePayment, IDLE);
-  const [tenantId, setTenantId] = useState(clients[0]?.tenantId ?? "");
+  // `order:<id>` or `tenant:<id>`. One listbox, because the operator is
+  // looking for a name on a statement and does not care yet which kind it is.
+  // Orders first: they are the money nobody has placed yet.
+  const [payer, setPayer] = useState(
+    orders[0] ? `order:${orders[0].id}` : clients[0] ? `tenant:${clients[0].tenantId}` : "",
+  );
   const [query, setQuery] = useState("");
 
   useActionToast(state, {
@@ -52,7 +64,11 @@ export function PaymentsPanel({
     failed: "That payment did not come off",
   });
 
-  const chosen = clients.find((client) => client.tenantId === tenantId);
+  const [kind, payerId] = payer.split(":") as ["order" | "tenant", string];
+  const order = kind === "order" ? orders.find((entry) => entry.id === payerId) : undefined;
+  const chosen = kind === "tenant" ? clients.find((client) => client.tenantId === payerId) : undefined;
+  // Time can only be bought by a shop with a period to extend.
+  const buysTime = Boolean(chosen?.status);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -62,6 +78,7 @@ export function PaymentsPanel({
       (payment) =>
         payment.shopName.toLowerCase().includes(needle) ||
         payment.reference.toLowerCase().includes(needle) ||
+        payment.orderReference.toLowerCase().includes(needle) ||
         methodLabel(payment.method).toLowerCase().includes(needle),
     );
   }, [payments, query]);
@@ -73,12 +90,23 @@ export function PaymentsPanel({
       key: "shop",
       header: "Shop",
       cell: (payment) => (
-        <Link
-          href={`/admin/clients/${payment.tenantId}`}
-          className="font-medium text-graphite-900 underline-offset-2 hover:underline"
-        >
-          {payment.shopName}
-        </Link>
+        <span className="block min-w-0">
+          {payment.tenantId ? (
+            <Link
+              href={`/admin/clients/${payment.tenantId}`}
+              className="font-medium text-graphite-900 underline-offset-2 hover:underline"
+            >
+              {payment.shopName}
+            </Link>
+          ) : (
+            <span className="font-medium text-graphite-900">{payment.shopName}</span>
+          )}
+          {payment.orderReference ? (
+            <span className="block font-mono text-[0.6875rem] text-graphite-500">
+              {payment.tenantId ? payment.orderReference : `${payment.orderReference} · not accepted yet`}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {
@@ -147,9 +175,13 @@ export function PaymentsPanel({
           <ChartCard
             title="Record a payment"
             caption={
-              chosen
-                ? `${chosen.planName} · ${rupees(chosen.agreedPrice)} a ${chosen.billingCycle === "monthly" ? "month" : chosen.billingCycle === "quarterly" ? "quarter" : "year"} · paid to ${writeDay(chosen.currentPeriodEnd)}`
-                : "Pick the shop the money came from."
+              order
+                ? `Order ${order.reference} · quoted ${rupees(order.quotedPrice)}${order.paid > 0 ? ` · ${rupees(order.paid)} recorded so far` : ""}. Buys no time — accept the order next.`
+                : chosen && chosen.status
+                  ? `${chosen.planName} · ${rupees(chosen.agreedPrice)} a ${chosen.billingCycle === "monthly" ? "month" : chosen.billingCycle === "quarterly" ? "quarter" : "year"} · paid to ${writeDay(chosen.currentPeriodEnd)}`
+                  : chosen
+                    ? "Not activated yet. This is held for their first period."
+                    : "Pick the shop or order the money came from."
             }
             footer={
               <button type="submit" className="pos-btn pos-btn-primary" disabled={pending}>
@@ -163,26 +195,34 @@ export function PaymentsPanel({
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="sm:col-span-2">
                   <SelectRow
-                    label="Which shop"
-                    value={tenantId}
-                    onChange={setTenantId}
-                    options={clients.map((client) => ({
-                      id: client.tenantId,
-                      label: client.shopName,
-                      description: `${client.city} · ${client.planName}`,
-                    }))}
-                    placeholder="No shops yet"
+                    label="Who paid"
+                    value={payer}
+                    onChange={setPayer}
+                    options={[
+                      ...orders.map((entry) => ({
+                        id: `order:${entry.id}`,
+                        label: `${entry.shopName} — order ${entry.reference}`,
+                        description: `${entry.city} · waiting to be accepted`,
+                      })),
+                      ...clients.map((client) => ({
+                        id: `tenant:${client.tenantId}`,
+                        label: client.shopName,
+                        description: `${client.city} · ${client.status ? client.planName : "not activated"}`,
+                      })),
+                    ]}
+                    placeholder="No shops or orders yet"
                   />
                 </div>
-                <input type="hidden" name="tenant_id" value={tenantId} />
+                <input type="hidden" name="order_id" value={kind === "order" ? payerId : ""} />
+                <input type="hidden" name="tenant_id" value={kind === "tenant" ? payerId : ""} />
 
                 <label className="block">
                   <span className="pos-label">Amount</span>
                   <input
                     name="amount"
                     className="pos-field"
-                    key={tenantId}
-                    defaultValue={chosen?.agreedPrice ?? ""}
+                    key={payer}
+                    defaultValue={order?.quotedPrice ?? chosen?.agreedPrice ?? ""}
                     inputMode="decimal"
                   />
                 </label>
@@ -198,16 +238,22 @@ export function PaymentsPanel({
                   </select>
                 </label>
 
-                <label className="block">
-                  <span className="pos-label">Cycles bought</span>
-                  <input
-                    name="cycles"
-                    className="pos-field"
-                    defaultValue="1"
-                    inputMode="numeric"
-                  />
-                  <span className="pos-hint">0 records it and moves nothing.</span>
-                </label>
+                {buysTime ? (
+                  <label className="block">
+                    <span className="pos-label">Cycles bought</span>
+                    <input
+                      name="cycles"
+                      className="pos-field"
+                      defaultValue="1"
+                      inputMode="numeric"
+                    />
+                    <span className="pos-hint">0 records it and moves nothing.</span>
+                  </label>
+                ) : (
+                  // No period to extend yet. The field is not drawn rather than
+                  // drawn dead, and the action ignores it for these payers.
+                  <input type="hidden" name="cycles" value="0" />
+                )}
 
                 <label className="block">
                   <span className="pos-label">Date</span>
@@ -262,7 +308,7 @@ export function PaymentsPanel({
           rowKey={(payment) => payment.id}
           empty={
             payments.length === 0
-              ? "Nothing taken yet. The first renewal lands here."
+              ? "Nothing taken yet. The first order's payment lands here."
               : "No payment matches that."
           }
         />

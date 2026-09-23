@@ -41,13 +41,24 @@ export async function createCheckoutOrder(formData: FormData) {
   const supabase = createAdminClient();
   const { data: plan, error: planError } = await supabase
     .from("plans")
-    .select("id, list_price")
+    .select("id, list_price, features")
     .eq("code", planCode)
     .eq("is_active", true)
     .maybeSingle();
 
   if (planError || !plan) {
     redirect("/checkout?error=That+plan+is+not+available.");
+  }
+
+  // The plan's Counters ceiling, set on /admin/plans and printed on /pricing.
+  // More than that is a different plan, or a conversation — not an order.
+  const ceiling = (plan.features as Record<string, unknown> | null)?.max_registers;
+  if (typeof ceiling === "number" && registers > ceiling) {
+    redirect(
+      `/checkout?plan=${encodeURIComponent(planCode)}&error=${encodeURIComponent(
+        `That plan covers up to ${ceiling} ${ceiling === 1 ? "counter" : "counters"}. Choose a bigger plan, or message us for more.`,
+      )}`,
+    );
   }
 
   const multiplier = billingCycle === "quarterly" ? 3 : billingCycle === "yearly" ? 12 : 1;

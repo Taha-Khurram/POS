@@ -97,6 +97,7 @@ export default async function ConsoleLayout({ children }: LayoutProps<"/app">) {
             status: entitlements.status,
             planName: entitlements.planName,
             daysUntilExpiry: entitlements.daysUntilExpiry,
+            graceEndsAt: entitlements.graceEndsAt,
             maxRegisters: entitlements.maxRegisters,
           }
         : null,

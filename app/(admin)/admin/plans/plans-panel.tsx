@@ -6,25 +6,32 @@ import { ChartCard } from "@/components/pos/chart-card";
 import { IconAlert, IconPlus } from "@/components/pos/icons";
 import { useActionToast } from "@/components/pos/toaster";
 import { rupees } from "@/lib/format";
-import { PLAN_FEATURES, PLAN_LIMITS, flagOn } from "@/lib/platform/admin";
+import {
+  HIGHLIGHTS_MAX,
+  PLAN_FEATURES,
+  PLAN_LIMITS,
+  flagOn,
+  limitOf,
+} from "@/lib/platform/admin";
 import type { Plan } from "@/lib/platform/console";
 
 import { createPlan, savePlan, togglePlan } from "./actions";
 import { IDLE } from "../state";
 
 /**
- * What each plan costs and what it says it includes.
+ * What each plan costs and what it says it includes — and, since `0045`, the
+ * source `/pricing` is drawn from, so a save here is a change on the sales page
+ * the same minute.
  *
- * The honest caveat is at the top of the screen rather than buried: the flags
- * below are what `/pricing` tells a shopkeeper they are buying, and nothing in
- * `/app` gates a screen on any of them yet. The one entitlement the console
- * enforces is the counter limit, and that lives on each shop's own subscription
- * because it is what gets haggled.
- *
- * Saying that out loud costs nothing and is the difference between an operator
- * who knows unticking a box changes the sales page, and one who believes it
- * takes Reports away from a shop and is surprised on a support call.
+ * One tab per plan, with the shops on it as the count, so a tier is one tap
+ * away rather than a scroll past the one above it. What each control does is
+ * said beside it — the hint under each ceiling, the marker on each flag —
+ * rather than in a banner nobody reads twice: a box gates no screen in `/app`,
+ * and the ceilings are what bite.
  */
+/** The tab that holds the new-plan form rather than a plan. */
+const NEW = "new";
+
 export function PlansPanel({
   plans,
   counts,
@@ -37,38 +44,60 @@ export function PlansPanel({
   counts: Record<string, number>;
   readOnly: boolean;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState<string>(plans[0]?.id ?? NEW);
+  // A plan that has gone (or a list that was empty) falls back to the first.
+  const current =
+    selected === NEW || plans.some((plan) => plan.id === selected)
+      ? selected
+      : (plans[0]?.id ?? NEW);
 
   return (
     <div className="space-y-4">
-      <p className="pos-note pos-note-warn">
-        <span className="font-semibold">What these flags do.</span> They describe
-        the plan on <code>/pricing</code>. No screen in the console is gated on
-        one yet, so unticking a box changes the sales page and not what a shop
-        can open. The real ceiling is <em>Counters</em> on each client&rsquo;s own
-        plan card. Mark a flag on only when the product actually does it.
-      </p>
+      <div className="pos-tabs" role="tablist" aria-label="Plans">
+        {plans.map((plan) => (
+          <button
+            key={plan.id}
+            type="button"
+            role="tab"
+            // `aria-selected` and not `aria-current`: the tabs move state in the
+            // browser and navigate nowhere, and `.pos-tab` paints both.
+            aria-selected={current === plan.id}
+            onClick={() => setSelected(plan.id)}
+            className="pos-tab"
+            title={plan.isActive ? "On sale" : "Off sale"}
+          >
+            {plan.name}
+            {plan.isActive ? null : (
+              <span className="text-[0.6875rem] text-graphite-500">off sale</span>
+            )}
+            <span className="pos-tab-count">{counts[plan.id] ?? 0}</span>
+          </button>
+        ))}
 
+        {readOnly ? null : (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={current === NEW}
+            onClick={() => setSelected(NEW)}
+            className="pos-tab"
+          >
+            <IconPlus className="pos-tab-icon h-4 w-4" />
+            Add a plan
+          </button>
+        )}
+      </div>
+
+      {/* Every plan stays mounted and only the chosen one is shown, so a
+          half-edited price survives a look at the other tab. */}
       {plans.map((plan) => (
-        <PlanForm
-          key={plan.id}
-          plan={plan}
-          clients={counts[plan.id] ?? 0}
-          readOnly={readOnly}
-        />
+        <div key={plan.id} role="tabpanel" hidden={current !== plan.id}>
+          <PlanForm plan={plan} clients={counts[plan.id] ?? 0} readOnly={readOnly} />
+        </div>
       ))}
 
-      {readOnly ? null : adding ? (
-        <NewPlanForm onDone={() => setAdding(false)} />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="pos-btn pos-btn-soft"
-        >
-          <IconPlus className="h-4 w-4" />
-          Add a plan
-        </button>
+      {readOnly || current !== NEW ? null : (
+        <NewPlanForm onDone={() => setSelected(plans[0]?.id ?? NEW)} />
       )}
     </div>
   );
@@ -99,7 +128,9 @@ function PlanForm({
     <>
       {/* A sibling, never a child: a form inside a form is invalid HTML and the
           browser drops the inner one, so the toggle would silently submit the
-          editor instead. The button reaches it by id from inside the card. */}
+          editor instead. The button reaches it by id from inside the card.
+          It is the only writer of `is_active` — the editor below has no "On
+          sale" box, because one rendered at page load would undo this. */}
       {readOnly ? null : (
         <form action={toggleAction} id={`toggle-${plan.id}`} className="hidden">
           <input type="hidden" name="plan_id" value={plan.id} />
@@ -112,7 +143,7 @@ function PlanForm({
 
         <ChartCard
           title={plan.name}
-          caption={`${plan.code} · ${clients} ${clients === 1 ? "shop" : "shops"} on it${plan.isActive ? "" : " · off sale"}`}
+          caption={`${plan.code} · ${clients} ${clients === 1 ? "shop" : "shops"} on it · ${plan.isActive ? "on /pricing" : "off sale, not on /pricing"}`}
           actions={
             readOnly ? null : (
               <button
@@ -135,7 +166,7 @@ function PlanForm({
           <fieldset disabled={readOnly || pending} className="space-y-5">
             {state.error ? <p className="pos-note pos-note-bad">{state.error}</p> : null}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <label className="block">
                 <span className="pos-label">Name</span>
                 <input name="name" className="pos-field" defaultValue={plan.name} />
@@ -160,16 +191,7 @@ function PlanForm({
                   defaultValue={plan.sortOrder}
                   inputMode="numeric"
                 />
-              </label>
-
-              <label className="flex items-center gap-2 self-end pb-2">
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  defaultChecked={plan.isActive}
-                  className="h-4 w-4 accent-orchid-700"
-                />
-                <span className="text-[0.8125rem] text-graphite-900">On sale</span>
+                <span className="pos-hint">Left to right on /pricing.</span>
               </label>
             </div>
 
@@ -186,21 +208,19 @@ function PlanForm({
             <div>
               <p className="pos-label">Ceilings</p>
               <div className="mt-1 grid gap-4 sm:grid-cols-3">
-                {PLAN_LIMITS.map((limit) => {
-                  const value = plan.features[limit.key];
-                  return (
-                    <label key={limit.key} className="block">
-                      <span className="pos-label">{limit.label}</span>
-                      <input
-                        name={`limit:${limit.key}`}
-                        className="pos-field"
-                        defaultValue={typeof value === "number" ? value : ""}
-                        inputMode="numeric"
-                        placeholder="No limit"
-                      />
-                    </label>
-                  );
-                })}
+                {PLAN_LIMITS.map((limit) => (
+                  <label key={limit.key} className="block">
+                    <span className="pos-label">{limit.label}</span>
+                    <input
+                      name={`limit:${limit.key}`}
+                      className="pos-field"
+                      defaultValue={limitOf(plan.features, limit.key) ?? ""}
+                      inputMode="numeric"
+                      placeholder={limit.key === "max_staff_pins" ? "No limit" : "1"}
+                    />
+                    <span className="pos-hint">{limit.effect}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -209,7 +229,11 @@ function PlanForm({
 
               <div className="mt-1 grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
                 {PLAN_FEATURES.map((feature) => (
-                  <label key={feature.key} className="flex items-start gap-2">
+                  <label
+                    key={feature.key}
+                    className="flex items-start gap-2"
+                    title={`On /pricing: “${feature.line}”`}
+                  >
                     <input
                       type="checkbox"
                       name={`feature:${feature.key}`}
@@ -221,7 +245,11 @@ function PlanForm({
                       {feature.kind === "copy" ? (
                         <span className="mt-0.5 flex items-center gap-1 text-[0.6875rem] text-graphite-500">
                           <IconAlert className="h-3 w-3 flex-none text-signal-warn" />
-                          Not built
+                          Not built — ticking it still prints it
+                        </span>
+                      ) : feature.kind === "service" ? (
+                        <span className="mt-0.5 block text-[0.6875rem] text-graphite-500">
+                          Kept by people, not the software
                         </span>
                       ) : null}
                     </span>
@@ -229,8 +257,24 @@ function PlanForm({
                 ))}
               </div>
             </div>
+
+            <label className="block">
+              <span className="pos-label">Extra lines on /pricing</span>
+              <textarea
+                name="highlights"
+                className="pos-field h-auto py-2"
+                defaultValue={plan.highlights.join("\n")}
+                rows={Math.max(3, plan.highlights.length + 1)}
+                placeholder={"Your rate list imported and checked for you\nNamed person for setup and support"}
+              />
+              <span className="pos-hint">
+                One per line, up to {HIGHLIGHTS_MAX}, printed under the ticked
+                boxes — for what no box can say. Only write what somebody will
+                actually do.
+              </span>
+            </label>
           </fieldset>
-          </ChartCard>
+        </ChartCard>
       </form>
     </>
   );
@@ -248,7 +292,7 @@ function NewPlanForm({ onDone }: { onDone: () => void }) {
     <form action={action}>
       <ChartCard
         title="A new plan"
-        caption="It starts off sale with nothing switched on. Set what it includes, then put it on sale."
+        caption="It starts off sale with one counter and nothing switched on. Set what it includes, then put it on sale."
         footer={
           <div className="flex gap-2">
             <button type="button" onClick={onDone} className="pos-btn pos-btn-quiet">

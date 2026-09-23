@@ -30,6 +30,7 @@ export type SubscriptionStatus =
   | "trialing"
   | "active"
   | "past_due"
+  | "paused"
   | "suspended"
   | "cancelled";
 
@@ -46,9 +47,12 @@ export type StatusTone = "good" | "info" | "warn" | "bad";
  * bazaar, and in a dispute about their records it is the weaker position to be
  * standing in.
  *
- * `past_due` is deliberately still operable. The invoice is late, the till goes
- * on working, and the shopkeeper gets a nudge rather than a shut counter —
- * suspension is a decision somebody takes, not a date that arrives.
+ * `past_due` is still operable, but only for the grace days after the period
+ * ends. When those run out the shop is suspended by the date, not by a person —
+ * `lapseOf` below says exactly when, and the hourly sweep in `0042` writes it.
+ *
+ * `paused` is the other stop, and the kind one: the till is shut because the
+ * shop is, and the days it was paused go back on the end of its period.
  */
 export const SUB_STATUSES = [
   {
@@ -68,9 +72,16 @@ export const SUB_STATUSES = [
   {
     id: "past_due",
     label: "Past due",
-    description: "The invoice is late. The till still works.",
+    description: "The period has ended. The till works until the grace days run out.",
     tone: "warn",
     operable: true,
+  },
+  {
+    id: "paused",
+    label: "Paused",
+    description: "Shut for now. The clock is stopped and the days come back on resume.",
+    tone: "info",
+    operable: false,
   },
   {
     id: "suspended",
@@ -101,20 +112,19 @@ export const isStatus = (value: string): value is SubscriptionStatus =>
  * What a shop's standing is, including having no subscription at all.
  *
  * `platform_clients()` left-joins `subscriptions`, so `status` is null for a
- * tenant whose subscription was deleted by hand. Every screen used to read that
- * as `statusOf(status ?? "active")` and draw a green **Active** badge over a
- * shop that has no plan, no price and no period — the one row in the console
- * that most needs looking at, painted as the one that needs nothing. It is a
- * real state and it gets drawn as one.
+ * tenant with no subscription — which, since `0042`, is every client an order
+ * was accepted into and nobody has activated yet. It is a real state, the one
+ * an operator has to finish, and it gets drawn as one rather than as a green
+ * **Active** badge over a shop with no plan, no price and no period.
  *
  * `operable` is false for it, which is also the truth: `getEntitlements`
  * returns null with no subscription row, so the till refuses the sale.
  */
 export const NO_SUBSCRIPTION = {
   id: "none",
-  label: "No subscription",
-  description: "No plan behind this shop. The till will not charge.",
-  tone: "bad",
+  label: "Not activated",
+  description: "No plan yet. Activate it from this client's record.",
+  tone: "warn",
   operable: false,
 } as const satisfies Option<"none"> & { tone: StatusTone; operable: boolean };
 
@@ -122,6 +132,41 @@ export const standingOf = (status: SubscriptionStatus | null) =>
   status === null
     ? NO_SUBSCRIPTION
     : (SUB_STATUSES.find((entry) => entry.id === status) ?? NO_SUBSCRIPTION);
+
+/**
+ * Where a shop stands once the date has had its say.
+ *
+ * The stored status is what an operator or the sweep last wrote; this is what
+ * it is *now*. A trading shop whose period has ended is past due, and one whose
+ * grace days after that have run out as well is suspended — whether or not the
+ * hourly `private.sweep_subscriptions` has got round to writing it yet. That is
+ * what lets the till stop on the hour the grace ends rather than at five past.
+ *
+ * The same two rules as the sweep in `0042`, and the two have to stay
+ * identical: a till that stops before the console says so, or after, is a
+ * shopkeeper on the phone asking which of them is lying. A stored `paused`,
+ * `suspended` or `cancelled` is left exactly as it is — those are decisions,
+ * and the date does not get to overrule one.
+ */
+export function lapseOf(
+  status: SubscriptionStatus,
+  periodEnd: string,
+  graceDays: number,
+  now = Date.now(),
+): { status: SubscriptionStatus; graceEndsAt: string } {
+  const end = new Date(periodEnd).getTime();
+  const graceEnds = end + Math.max(graceDays, 0) * DAY;
+  const graceEndsAt = new Date(graceEnds).toISOString();
+
+  if (status !== "trialing" && status !== "active" && status !== "past_due") {
+    return { status, graceEndsAt };
+  }
+
+  if (now > graceEnds) return { status: "suspended", graceEndsAt };
+  if (now > end) return { status: "past_due", graceEndsAt };
+
+  return { status, graceEndsAt };
+}
 
 export type BillingCycle = "monthly" | "quarterly" | "yearly";
 
@@ -197,9 +242,11 @@ export const ORDER_STATUSES = [
     id: "proof_submitted",
     label: "Proof sent",
     tone: "warn",
-    description: "Match it against the bank statement, then verify.",
+    description: "Match it against the bank statement and record the payment.",
   },
-  { id: "verified", label: "Verified", tone: "good", description: "Activated." },
+  // Stored as `verified` since `0001`. Since `0042` it means the order was
+  // accepted into a client — which is not yet an activated shop.
+  { id: "verified", label: "Accepted", tone: "good", description: "A client now." },
   { id: "rejected", label: "Rejected", tone: "bad" },
   { id: "expired", label: "Expired", tone: "bad" },
 ] as const satisfies readonly (Option<OrderStatus> & { tone: StatusTone })[];
@@ -268,64 +315,164 @@ export const canBill = (role: PlatformRole | null) => role === "super_admin";
 
 /**
  * `plans.features`, written out so the plan editor is a form rather than a
- * JSON textarea.
+ * JSON textarea — and, since `0045`, the list `/pricing` is drawn from. A flag
+ * that is on prints its `line` on the plan's card; one that is off prints
+ * nothing. That is what makes a flag a promise: ticking a box puts a sentence
+ * in front of a buyer the same minute.
  *
- * Two kinds of entry and the difference matters more than it looks. A `wired`
- * flag is one the product can be held to — it names something `/app` actually
- * does, and `0020`'s rule applies to it: flip it in the same migration that
- * lands the feature. The rest are **copy**: they describe the plan on
- * `/pricing` and nothing in the console reads them, because nothing calls
- * `hasFeature` yet. The editor says so on the screen rather than letting an
- * operator believe that unticking a box takes a screen away from a shop.
+ * Three kinds of entry, and the difference matters more than it looks. A
+ * `wired` flag names something `/app` actually does, and `0020`'s rule applies
+ * to it: flip it in the same migration that lands the feature. A `service` flag
+ * is a promise made by people, not software — support on WhatsApp, a place in
+ * the queue — so it is true the day somebody keeps it. A `copy` flag names
+ * something that is **not built**: ticking one puts a feature on `/pricing` that
+ * no shop can open, and the editor marks every one of them so nobody does it by
+ * accident.
  *
- * The one ceiling that is real is `subscriptions.max_registers`, which Settings
- * enforces when a shop adds a counter — and it lives on the subscription, not
- * here, precisely so a haggled deal is a one-row update and not a release.
+ * None of them gates a screen. Nothing in `/app` calls `hasFeature`, so
+ * unticking Reports takes the line off the sales page and not the module off a
+ * shop. What bites is the ceilings below.
  */
-export type FeatureKind = "wired" | "copy";
+export type FeatureKind = "wired" | "service" | "copy";
 
 export const PLAN_FEATURES = [
-  { key: "sales_history", label: "Sales history", kind: "wired" },
-  { key: "receipt_reprint", label: "Reprint a receipt", kind: "wired" },
-  { key: "day_close_report", label: "Day close", kind: "wired" },
-  { key: "shift_close", label: "Shift close and variance", kind: "wired" },
-  { key: "stock_ledger", label: "Stock ledger", kind: "wired" },
-  { key: "purchase_orders", label: "Buying — orders and deliveries", kind: "wired" },
-  { key: "customer_directory", label: "Customer list", kind: "wired" },
-  { key: "profit_reporting", label: "Profit and margin", kind: "wired" },
-  { key: "advanced_reports", label: "Reports", kind: "wired" },
-  { key: "role_permissions", label: "Roles and permissions", kind: "wired" },
-  { key: "staff_accounts", label: "Staff accounts", kind: "wired" },
-  { key: "bulk_import", label: "CSV import", kind: "wired" },
-  { key: "csv_export", label: "CSV export", kind: "wired" },
-  { key: "catalog_roman_urdu_search", label: "Roman Urdu search", kind: "wired" },
-  { key: "thermal_printing", label: "Thermal printing", kind: "wired" },
-  { key: "whatsapp_support", label: "WhatsApp support", kind: "copy" },
-  { key: "priority_support", label: "Priority support", kind: "copy" },
-  { key: "staff_pins", label: "Staff PINs", kind: "copy" },
-  { key: "offline_register", label: "Offline register", kind: "copy" },
-  { key: "fbr_invoicing", label: "FBR digital invoicing", kind: "copy" },
-  { key: "provincial_tax_filing", label: "Provincial tax filing", kind: "copy" },
-  { key: "loyalty_campaigns", label: "Loyalty campaigns", kind: "copy" },
-  { key: "recipe_depletion", label: "Recipe depletion", kind: "copy" },
-  { key: "delivery_reconciliation", label: "Delivery reconciliation", kind: "copy" },
-  { key: "central_catalog", label: "Central catalog", kind: "copy" },
-  { key: "cross_branch_reports", label: "Cross-branch reports", kind: "copy" },
-  { key: "multi_branch_dashboard", label: "Multi-branch dashboard", kind: "copy" },
-  { key: "payroll_export", label: "Payroll export", kind: "copy" },
-  { key: "api_access", label: "API access", kind: "copy" },
-] as const satisfies readonly { key: string; label: string; kind: FeatureKind }[];
+  { key: "sales_history", label: "Sales history", kind: "wired", line: "Every bill findable by number, customer or counter" },
+  { key: "receipt_reprint", label: "Reprint a receipt", kind: "wired", line: "Any receipt reprinted, marked DUPLICATE" },
+  { key: "day_close_report", label: "Day close", kind: "wired", line: "Day close per counter — what should be in each drawer" },
+  { key: "shift_close", label: "Shift close and variance", kind: "wired", line: "Shifts opened and counted, with who was over or short and by how much" },
+  { key: "stock_ledger", label: "Stock ledger", kind: "wired", line: "Stock that moves with every sale, delivery and count — each change with its reason" },
+  { key: "purchase_orders", label: "Buying — orders and deliveries", kind: "wired", line: "Buying: suppliers, orders, deliveries with the carriage in the cost, and what you owe each distributor" },
+  { key: "customer_directory", label: "Customer list", kind: "wired", line: "Customer list, searchable by name or phone" },
+  { key: "profit_reporting", label: "Profit and margin", kind: "wired", line: "Dashboard: sales, profit, cost of goods, margin" },
+  { key: "advanced_reports", label: "Reports", kind: "wired", line: "Reports: profit by item, by department, by counter and by cashier — for any period, exported with the same words on screen" },
+  { key: "role_permissions", label: "Roles and permissions", kind: "wired", line: "Roles and permissions — who may discount, refund or see the reports" },
+  { key: "staff_accounts", label: "Staff accounts", kind: "wired", line: "Staff accounts, each with their own sign-in" },
+  { key: "bulk_import", label: "CSV import", kind: "wired", line: "Your item list in from a spreadsheet — cost, price, barcode, Urdu name" },
+  { key: "csv_export", label: "CSV export", kind: "wired", line: "Sales, items and reports out to CSV" },
+  { key: "catalog_roman_urdu_search", label: "Roman Urdu search", kind: "wired", line: "Items found by their English or their Urdu name" },
+  { key: "thermal_printing", label: "Thermal printing", kind: "wired", line: "Receipts to any thermal printer your device can already reach" },
+  { key: "whatsapp_support", label: "WhatsApp support", kind: "service", line: "WhatsApp support in Urdu and English" },
+  { key: "priority_support", label: "Priority support", kind: "service", line: "Priority on the queue when something breaks" },
+  { key: "staff_pins", label: "Staff PINs", kind: "copy", line: "Staff PINs at the till" },
+  { key: "offline_register", label: "Offline register", kind: "copy", line: "Billing while the internet is down" },
+  { key: "fbr_invoicing", label: "FBR digital invoicing", kind: "copy", line: "FBR digital invoicing" },
+  { key: "provincial_tax_filing", label: "Provincial tax filing", kind: "copy", line: "Provincial tax filing" },
+  { key: "loyalty_campaigns", label: "Loyalty campaigns", kind: "copy", line: "Loyalty campaigns" },
+  { key: "recipe_depletion", label: "Recipe depletion", kind: "copy", line: "Recipe depletion" },
+  { key: "delivery_reconciliation", label: "Delivery reconciliation", kind: "copy", line: "Delivery reconciliation" },
+  { key: "central_catalog", label: "Central catalog", kind: "copy", line: "One catalog across branches" },
+  { key: "cross_branch_reports", label: "Cross-branch reports", kind: "copy", line: "Reports across branches" },
+  { key: "multi_branch_dashboard", label: "Multi-branch dashboard", kind: "copy", line: "A dashboard across branches" },
+  { key: "payroll_export", label: "Payroll export", kind: "copy", line: "Payroll export" },
+  { key: "api_access", label: "API access", kind: "copy", line: "API access" },
+] as const satisfies readonly { key: string; label: string; kind: FeatureKind; line: string }[];
 
-/** The numeric entries in the same JSON. Ceilings, not switches. */
+/**
+ * The numeric entries in the same JSON. Ceilings, not switches, and unlike the
+ * flags each one does something:
+ *
+ * - Counters is what a new shop on the plan is activated with — the figure
+ *   `subscriptions.max_registers` starts from, which Settings enforces and a
+ *   haggle then moves one shop at a time. `/checkout` refuses an order for
+ *   more, and `/pricing` prints it.
+ * - Staff is enforced when an owner adds somebody on Staff, read live off the
+ *   plan, so lowering it stops new hires and never removes anybody.
+ * - Branches is only carried into the subscription. Flo runs one branch.
+ *
+ * The key is still `max_staff_pins` from `0002`; it counts staff accounts.
+ */
 export const PLAN_LIMITS = [
-  { key: "max_branches", label: "Branches" },
-  { key: "max_registers", label: "Counters" },
-  { key: "max_staff_pins", label: "Staff", nullMeans: "No limit" },
+  {
+    key: "max_branches",
+    label: "Branches",
+    effect: "Copied onto each new shop. Nothing reads it — Flo runs one branch.",
+  },
+  {
+    key: "max_registers",
+    label: "Counters",
+    effect: "New shops start with this many. /checkout refuses more; /pricing prints it.",
+  },
+  {
+    key: "max_staff_pins",
+    label: "Staff",
+    effect: "Accounts besides the owner. Checked when an owner adds one.",
+  },
 ] as const;
 
 export type FeatureFlags = Record<string, unknown>;
 
 export const flagOn = (features: FeatureFlags, key: string) => features[key] === true;
+
+/** A ceiling out of the JSON, or null for none. `featureLimit` in
+ *  `lib/entitlements.ts` is the same reading of a shop's entitlements. */
+export const limitOf = (features: FeatureFlags, key: string): number | null => {
+  const value = features[key];
+  return typeof value === "number" ? value : null;
+};
+
+/** The extra lines `/pricing` prints for promises no flag can make. */
+export const HIGHLIGHTS_MAX = 12;
+export const HIGHLIGHT_MAX = 160;
+
+type PricedFeature = (typeof PLAN_FEATURES)[number];
+
+/**
+ * One plan's card on `/pricing`, as lines of copy.
+ *
+ * A tier after the first is sold as "Everything in Standard" plus what it adds
+ * — but only when that is true, which is worked out from the flags rather than
+ * written: a Premium that lost a flag Standard has gets its whole list printed
+ * instead, because "everything in" is a promise too.
+ */
+export function pricingLines(
+  plan: { features: FeatureFlags; highlights: readonly string[] },
+  previous: { name: string; features: FeatureFlags } | null,
+): string[] {
+  const on = (features: FeatureFlags) =>
+    PLAN_FEATURES.filter((feature) => flagOn(features, feature.key));
+
+  const counters = limitOf(plan.features, "max_registers");
+  const staff = limitOf(plan.features, "max_staff_pins");
+
+  const countersLine =
+    counters === null
+      ? "As many counters as the shop needs, each with its own receipt series"
+      : `Up to ${counters} ${counters === 1 ? "counter" : "counters"}, each with its own receipt series`;
+
+  // The staff flag's sentence carries the ceiling, so the two never disagree.
+  const lineOf = (feature: PricedFeature): string =>
+    feature.key !== "staff_accounts"
+      ? feature.line
+      : staff === null
+        ? "Unlimited staff accounts, each with their own sign-in"
+        : `Up to ${staff} staff ${staff === 1 ? "account" : "accounts"}, each with their own sign-in`;
+
+  const mine = on(plan.features);
+  const inherits =
+    previous !== null &&
+    on(previous.features).every((feature) => flagOn(plan.features, feature.key));
+
+  if (!previous || !inherits) {
+    return [countersLine, ...mine.map(lineOf), ...plan.highlights];
+  }
+
+  // What this tier adds: flags the previous one lacks, and the staff line
+  // again when only its ceiling moved.
+  const added = mine.filter(
+    (feature) =>
+      !flagOn(previous.features, feature.key) ||
+      (feature.key === "staff_accounts" &&
+        limitOf(previous.features, "max_staff_pins") !== staff),
+  );
+  const sameCounters = limitOf(previous.features, "max_registers") === counters;
+
+  return [
+    `Everything in ${previous.name}`,
+    ...(sameCounters ? [] : [countersLine]),
+    ...added.map(lineOf),
+    ...plan.highlights,
+  ];
+}
 
 /* -------------------------------------------------------------------------- */
 /* Field limits, shared by the form and the action                            */
@@ -341,42 +488,56 @@ export const PRICE_MAX = 1_000_000;
 export const TRIAL_DAYS_MAX = 90;
 export const REGISTERS_MAX = 20;
 export const BRANCHES_MAX = 50;
-/** A link that lives longer than a week is a link nobody has chased. */
-export const INVITE_DAYS = 7;
+/** How long a shop keeps trading after its period ends, unless told otherwise. */
+export const GRACE_DAYS = 7;
+export const GRACE_DAYS_MAX = 60;
 
-export type ClientDraft = {
+/** Who the client is. Accepting an order needs this and nothing else. */
+export type ShopDraft = {
   shopName: string;
   ownerName: string;
   phone: string;
   email: string;
   city: string;
+  notes: string;
+};
+
+/** What they are on. Activation needs this and nothing else. */
+export type PlanDraft = {
   planId: string;
   billingCycle: string;
   agreedPrice: string;
   branches: string;
   registers: string;
   trialDays: string;
-  notes: string;
+  graceDays: string;
 };
+
+export type ClientDraft = ShopDraft & PlanDraft;
 
 const digits = (value: string) => value.replace(/\D/g, "");
 
 /**
- * The complaint about an activation, or null.
+ * The complaint about a new client and its plan, or null.
  *
  * Called by the form as it is typed and again by the Server Action before
  * anything is written, so the sentence the operator reads under the field is
  * the sentence that comes back from the server. One function, two callers —
- * the same bargain `checkCustomer` strikes.
+ * the same bargain `checkCustomer` strikes. It is the two halves below, which
+ * the accept and activate steps each call alone.
  */
 export function checkClient(draft: ClientDraft): string | null {
+  return checkShop(draft) ?? checkPlan(draft);
+}
+
+export function checkShop(draft: ShopDraft): string | null {
   if (!draft.shopName.trim()) return "The shop needs a name — it prints on every receipt.";
   if (draft.shopName.length > SHOP_NAME_MAX) return "That shop name is too long.";
   if (!draft.ownerName.trim()) return "Whose shop is it? A name to ask for on the phone.";
   if (draft.ownerName.length > PERSON_MAX) return "That name is too long.";
 
   const phone = digits(draft.phone);
-  if (!phone) return "A phone number is how the invite gets to them.";
+  if (!phone) return "A phone number is how the login gets to them.";
   if (phone.length < 10) return "That does not look like a phone number. A mobile is 11 digits — 0300 1234567.";
 
   if (!draft.city.trim()) return "Which city? It is how you find them in the list later.";
@@ -385,6 +546,12 @@ export function checkClient(draft: ClientDraft): string | null {
   const email = draft.email.trim();
   if (email && !email.includes("@")) return "That email address does not look right.";
 
+  if (draft.notes.length > NOTES_MAX) return "That note is too long.";
+
+  return null;
+}
+
+export function checkPlan(draft: PlanDraft): string | null {
   if (!draft.planId) return "Pick a plan.";
   if (!isCycle(draft.billingCycle)) return "Pick how often they are billed.";
 
@@ -407,7 +574,10 @@ export function checkClient(draft: ClientDraft): string | null {
     return `A trial is between 0 and ${TRIAL_DAYS_MAX} days.`;
   }
 
-  if (draft.notes.length > NOTES_MAX) return "That note is too long.";
+  const grace = Number(draft.graceDays);
+  if (!Number.isInteger(grace) || grace < 0 || grace > GRACE_DAYS_MAX) {
+    return `Grace is between 0 and ${GRACE_DAYS_MAX} days.`;
+  }
 
   return null;
 }
@@ -452,7 +622,7 @@ export const EXPLAIN = {
   },
   needsCall: {
     plain:
-      "Trading shops whose period ends inside seven days, plus every one already past its date. Nothing shuts a shop off on that date — somebody has to decide to suspend it, which is why this is a call list.",
+      "Trading shops whose period ends inside seven days, plus every one already past its date. Past the date a shop keeps trading only for its grace days, then its till stops by itself — this is the list to ring before that happens.",
   },
   soldThroughFlo: {
     formula: "Σ sale totals, every shop, this month",
@@ -485,12 +655,12 @@ export const EXPLAIN = {
 
   standing: {
     plain:
-      "Whether the till charges. Trial, active and past due all trade; suspended and cancelled do not, and neither does a shop with no subscription. It is set by an operator, never by a date arriving.",
+      "Whether the till charges. Trial, active and past due all trade; paused, suspended and cancelled do not, and neither does a client not yet activated. A period that ends makes a shop past due, and the grace days running out suspend it — both by the date. Everything else is set by an operator.",
   },
   period: {
     formula: "period end − today, in calendar days",
     plain:
-      "Days until the period they have paid for runs out, negative once it has passed. Running out does not stop the till by itself — it is what puts them on the call list.",
+      "Days until the period they have paid for runs out, negative once it has passed. After that the till keeps charging for the shop's grace days and then stops. A paused shop's count is frozen at the day it was paused.",
   },
   monthly: {
     formula: "agreed price ÷ 1, 3 or 12",
@@ -521,11 +691,23 @@ export const EXPLAIN = {
 export const HELP = {
   standing: {
     plain:
-      "Whether this shop's till charges. Trial, active and past due all trade; suspended and cancelled do not. Suspension only stops new sales — the shop still signs in, still reads every bill it ever rang up, still exports it and still closes the drawer it opened this morning. It is a decision somebody takes, never a date arriving: a period that has run out does not shut a till by itself.",
+      "Whether this shop's till charges. Trial, active and past due all trade; paused, suspended and cancelled do not. Stopping only stops new sales — the shop still signs in, still reads every bill it ever rang up, still exports it and still closes the drawer it opened this morning. When the period ends the shop goes past due by itself, and when its grace days run out too it is suspended by itself; recording a payment puts it back.",
+  },
+  pause: {
+    plain:
+      "For a shop that is shut for a while — renovation, a month away. The till stops like a suspension, but the clock stops with it: when you resume, every day it was paused goes back on the end of the period. A payment recorded while paused extends the period and leaves it paused; resuming is still yours to press.",
   },
   renewalDate: {
     plain:
-      "The date this shop has paid up to. Three things move it: recording a payment in Payments, which is the usual one and moves it by itself; giving goodwill days here; and correcting a date that is simply wrong. It drives the renewal call list on the Overview and the shop's own reminder — it does not start or stop the till, which is what Standing above is for.",
+      "The date this shop has paid up to. Three things move it: recording a payment in Payments, which is the usual one and moves it by itself; giving goodwill days here; and correcting a date that is simply wrong. When it passes, the shop trades for its grace days and then its till stops — so moving this date is also how a lapsed shop gets its till back.",
+  },
+  graceDays: {
+    plain:
+      "How many days past the renewal date this shop keeps trading. Past due for that long, then suspended by itself on the hour the last day ends. Zero stops the till the moment the period runs out.",
+  },
+  activate: {
+    plain:
+      "Starts the plan and makes the owner's login. The period runs from the start date for one billing cycle, or for the trial days if you give any. Money already recorded against this client is attached to that first period. The username and password are shown once, here — send them on WhatsApp.",
   },
   giveDays: {
     plain:
@@ -533,7 +715,7 @@ export const HELP = {
   },
   signIn: {
     plain:
-      "A shop needs one link to make its first account. Make it, send it on WhatsApp, and it works once and expires. Nothing can show it again — if it is lost, make a new one, which kills the old. Once somebody has signed in, they are listed here and no link is needed.",
+      "The owner signs in with a username and password Flo made at activation. Nothing can show the password again — if it is lost, make a new one here, which stops the old one working. The owner then hires their own staff from the console.",
   },
 } as const satisfies Record<string, { formula?: string; plain: string }>;
 
@@ -562,22 +744,28 @@ export const waLink = (phone: string, message: string) => {
 };
 
 /**
- * The message you paste into the chat you are already in.
+ * The owner's login, as the message you paste into the chat you are already in.
  *
  * Urdu first and English under it, because the person reading it on a counter
  * in Faisalabad reads the first line and the person forwarding it to their
- * accountant reads the second. It carries the link and nothing else that could
- * go stale — no price, no plan name — since the whole point is that it is sent
- * once and the console is where those live.
+ * accountant reads the second. It carries the login and nothing else that could
+ * go stale — no price, no plan name — since it is sent once and the console is
+ * where those live.
  */
-export function inviteMessage(shopName: string, link: string): string {
+export function loginMessage(
+  shopName: string,
+  signInUrl: string,
+  email: string,
+  password: string,
+): string {
   return [
     `Assalam-o-Alaikum! ${shopName} ka Flo account taiyar hai.`,
     "",
-    "Neeche diye gaye link par apna password bana lein — yeh link sirf ek baar chalega:",
-    link,
+    `Sign in: ${signInUrl}`,
+    `Username: ${email}`,
+    `Password: ${password}`,
     "",
-    `Your Flo account for ${shopName} is ready. Open the link above to set your password. It works once and expires in ${INVITE_DAYS} days.`,
+    `Your Flo account for ${shopName} is ready. Sign in with the username and password above. Do not share them with anyone.`,
     "",
     "Koi masla ho to isi number par message kar dein. Shukriya!",
   ].join("\n");
@@ -646,3 +834,89 @@ export function writeExpiry(days: number): string {
 /** `<input type="date">` wants exactly this, and the browser's locale must not
  *  get a vote. */
 export const dateInput = (date: Date) => date.toISOString().slice(0, 10);
+
+/* -------------------------------------------------------------------------- */
+/* Where a buyer sends the money                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The three ways a buyer can send money from home. `payment_accounts.method`
+ * is checked against exactly this list in `0044`; cash and card are how a
+ * payment is *recorded*, not accounts a stranger can transfer into.
+ */
+export type AccountMethod = "bank_transfer" | "easypaisa" | "jazzcash";
+
+export const ACCOUNT_METHODS = [
+  { id: "bank_transfer", label: "Bank transfer", description: "Account number and IBAN" },
+  { id: "easypaisa", label: "Easypaisa", description: "A mobile wallet" },
+  { id: "jazzcash", label: "JazzCash", description: "A mobile wallet" },
+] as const satisfies readonly Option<AccountMethod>[];
+
+export const isAccountMethod = (value: string): value is AccountMethod =>
+  ACCOUNT_METHODS.some((method) => method.id === value);
+
+export const isWallet = (method: string) => method === "easypaisa" || method === "jazzcash";
+
+export const ACCOUNT_TITLE_MAX = 80;
+export const BANK_NAME_MAX = 60;
+
+export type AccountDraft = {
+  method: string;
+  accountTitle: string;
+  bankName: string;
+  accountNumber: string;
+  iban: string;
+};
+
+/** An IBAN as the bank prints it, with the spaces people type taken out. */
+export const normaliseIban = (value: string) => value.replace(/\s+/g, "").toUpperCase();
+
+/**
+ * A wallet number as `03001234567`, whatever was typed — `+92 300 1234567`,
+ * `0300-1234567`. Null when it is not a Pakistani mobile number at all.
+ */
+export function normaliseWallet(value: string): string | null {
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("92")) digits = `0${digits.slice(2)}`;
+  if (digits.startsWith("3")) digits = `0${digits}`;
+  return /^03\d{9}$/.test(digits) ? digits : null;
+}
+
+/** `0300 1234567`, the way it is read out over the phone. */
+export const writeWallet = (value: string) =>
+  /^03\d{9}$/.test(value) ? `${value.slice(0, 4)} ${value.slice(4)}` : value;
+
+/** `PK36 SCBL 0000 0011 2345 6702`, in the fours a bank app shows. */
+export const writeIban = (value: string) => value.replace(/(.{4})(?=.)/g, "$1 ");
+
+/**
+ * The one validator, for the form and the Server Action alike — so the
+ * sentence under the card is the sentence the server refuses with. `0044`'s
+ * check constraints are the floor under it.
+ */
+export function checkAccount(draft: AccountDraft): string | null {
+  if (!isAccountMethod(draft.method)) return "Pick how the money is sent.";
+
+  const title = draft.accountTitle.trim();
+  if (!title) return "An account needs its title — the name the buyer's app shows before they send.";
+  if (title.length > ACCOUNT_TITLE_MAX) return "That account title is too long.";
+
+  if (isWallet(draft.method)) {
+    if (!normaliseWallet(draft.accountNumber)) return "A wallet number is a mobile number — 0300 1234567.";
+    return null;
+  }
+
+  const bank = draft.bankName.trim();
+  if (!bank) return "Name the bank — Meezan, HBL, Alfalah.";
+  if (bank.length > BANK_NAME_MAX) return "That bank name is too long.";
+
+  const number = draft.accountNumber.replace(/\s+/g, "");
+  if (number.length < 4 || number.length > 34) return "That account number does not look right.";
+
+  const iban = normaliseIban(draft.iban);
+  if (iban && !/^PK\d{2}[A-Z]{4}\d{16}$/.test(iban)) {
+    return "A Pakistani IBAN is 24 characters — PK, two digits, four letters, sixteen digits.";
+  }
+
+  return null;
+}

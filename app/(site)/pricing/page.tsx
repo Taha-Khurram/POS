@@ -1,69 +1,91 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 
 import { Reveal } from "@/components/motion/reveal";
 import { PageHeader } from "@/components/site/page-header";
 import { Cta } from "@/components/site/cta";
+import { rupees } from "@/lib/format";
+import { limitOf, pricingLines, type FeatureFlags } from "@/lib/platform/admin";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Two plans, priced in rupees. Standard at Rs 5,000 a month for up to two counters and Premium at Rs 10,000 for up to four — with a list of what is built and what is not.",
+    "Flo's plans, priced in rupees a month, by how many counters the shop runs — with a list of what is built and what is not.",
+};
+
+type PricedPlan = {
+  code: string;
+  name: string;
+  pitch: string;
+  price: number;
+  counters: number | null;
+  lines: string[];
 };
 
 /**
- * Every line below is a thing the software does today. The plan rows in
- * `0020_plans_tell_the_truth.sql` say the same, because a feature flag is a
- * promise the console can be held to and the two must not drift.
+ * The plans on sale, read from `plans` per request (`0045`).
  *
- * Reports and Buying are on the Standard list rather than held back for
- * Premium, because nothing in the console gates either by plan — Reports is
- * reached through `can_view_reports`, which is a permission an owner grants a
- * cashier. `0035` raised the `advanced_reports` flag on Standard to match, so
- * what Premium actually buys is counters and people: four tills, priority in
- * the queue, a named person, and the rate list imported for you. A tier has to
- * be sold on what it is.
+ * This page used to write its cards by hand, so a price saved on
+ * `/admin/plans` reached `/checkout` and was contradicted by the page a buyer
+ * reads first. Now the name, price, pitch, order and every line come off the
+ * row: a line per flag that is on (`PLAN_FEATURES[].line`) and the plan's own
+ * `highlights` for what no flag can say. `pricingLines` decides the words.
+ *
+ * `connection()` for `/checkout`'s reason — `next build` must not need a live
+ * database. The service role because `plans` has no anonymous read policy;
+ * only on-sale rows and only the columns a buyer is shown leave this function.
+ * A failed read draws the page without cards rather than a 500: the rest of it
+ * is still true, and the demo link still works.
  */
-const PLANS = [
-  {
-    name: "Standard",
-    price: "Rs 5,000",
-    cadence: "per month",
-    pitch: "For a shop with one counter, or two.",
-    cta: { label: "Get started", href: "/checkout" },
-    features: [
-      "Up to 2 counters, each with its own receipt series",
-      "Unlimited staff accounts, each with their own sign-in",
-      "Cash, card, Raast, Easypaisa, JazzCash or a transfer — and one bill split across them",
-      "Your item list — cost, price, margin, Urdu name, barcode",
-      "Departments and categories you name yourself",
-      "Customer list, searchable by name or phone",
-      "Every bill findable, and reprintable marked DUPLICATE",
-      "Day close per counter, and CSV export",
-      "Dashboard: sales, profit, cost of goods, margin",
-      "Reports: profit by item, by department, by counter and by cashier — for any period, exported with the same words on screen",
-      "Buying: suppliers, orders, deliveries with the carriage in the cost, and what you owe each distributor",
-      "Batch numbers and expiry on the lines that need them — sold soonest-expiring first, and expired stock cannot be billed",
-      "WhatsApp support in Urdu and English",
-    ],
-  },
-  {
-    name: "Premium",
-    price: "Rs 10,000",
-    cadence: "per month",
-    pitch: "For a busy floor that needs more than two tills, and somebody of ours on the end of the phone.",
-    cta: { label: "Get started", href: "/checkout" },
-    featured: true,
-    features: [
-      "Every screen in Standard — no module is held back for this tier",
-      "Up to 4 counters",
-      "New modules the week they land, at no extra cost",
-      "Your rate list imported and checked for you",
-      "Named person for setup and support",
-      "Priority on the queue when something breaks",
-    ],
-  },
-];
+async function loadPlans(): Promise<{ plans: PricedPlan[]; staff: (number | null)[] }> {
+  await connection();
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("plans")
+    .select("code, name, pitch, list_price, features, highlights")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("[pricing] plans read failed", error);
+    return { plans: [], staff: [] };
+  }
+
+  const rows = (data ?? []).map((row) => ({
+    code: String(row.code),
+    name: String(row.name),
+    pitch: row.pitch ? String(row.pitch) : "",
+    price: Number(row.list_price),
+    features: (row.features as FeatureFlags | null) ?? {},
+    highlights: Array.isArray(row.highlights) ? row.highlights.map(String) : [],
+  }));
+
+  return {
+    plans: rows.map((row, index) => ({
+      code: row.code,
+      name: row.name,
+      pitch: row.pitch,
+      price: row.price,
+      counters: limitOf(row.features, "max_registers"),
+      lines: pricingLines(row, index > 0 ? rows[index - 1] : null),
+    })),
+    staff: rows.map((row) => limitOf(row.features, "max_staff_pins")),
+  };
+}
+
+/** "Rs 5,000 or Rs 10,000" — the prices as a buyer reads them in a sentence. */
+const priceList = (plans: PricedPlan[]) => {
+  const prices = plans.map((plan) => rupees(plan.price));
+  return prices.length <= 1
+    ? (prices[0] ?? "")
+    : `${prices.slice(0, -1).join(", ")} or ${prices[prices.length - 1]}`;
+};
+
+const COUNT_WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
+const countWord = (count: number) => COUNT_WORDS[count] ?? String(count);
 
 /**
  * What is not built. On the pricing page on purpose — this is the page an owner
@@ -82,12 +104,12 @@ const ADD_ONS = [
   {
     name: "Getting your list in",
     detail:
-      "Send a spreadsheet, an old export, or photos of the price board. We turn it into the import file and run it with you on a call. No charge, on either plan.",
+      "Send a spreadsheet, an old export, or photos of the price board. We turn it into the import file and run it with you on a call. No charge, on any plan.",
   },
   {
-    name: "Extra counter on Standard",
+    name: "An extra counter",
     detail:
-      "Rs 1,500 per additional counter per month, up to the Premium ceiling. Beyond four counters, talk to us — the number has not been tested past that and we would rather say so.",
+      "Rs 1,500 per additional counter per month, beyond what your plan includes. Beyond four counters, talk to us — the number has not been tested past that and we would rather say so.",
   },
   {
     name: "Hardware",
@@ -101,11 +123,26 @@ const ADD_ONS = [
   },
 ];
 
+/** The two answers that quote the plans are worked out from them, so an edit
+ *  on `/admin/plans` cannot leave the FAQ saying something the cards do not. */
+const planFaqs = (plans: PricedPlan[], staff: (number | null)[]) => {
+  const unlimited = staff.every((limit) => limit === null);
+
+  return [
+    {
+      q: "Is there a free plan?",
+      a: `No. Flo has ${countWord(plans.length).toLowerCase()} ${plans.length === 1 ? "plan" : "plans"} — ${priceList(plans)} a month — because a register that half works is worse than none. Every demo is free, and the first month is refundable in full if the counter does not run better.`,
+    },
+    {
+      q: "Do you charge per staff member?",
+      a: unlimited
+        ? "Never. Staff accounts are unlimited on every plan, so hiring for the wedding season or Ramadan does not change your bill."
+        : "Never per head — each plan says how many staff accounts it includes, and the owner adds and removes them from the Staff screen. Hiring inside that number for the wedding season or Ramadan does not change your bill.",
+    },
+  ];
+};
+
 const FAQS = [
-  {
-    q: "Is there a free plan?",
-    a: "No. Flo has two plans — Rs 5,000 and Rs 10,000 a month — because a register that half works is worse than none. Every demo is free, and the first month is refundable in full if the counter does not run better.",
-  },
   {
     q: "What is genuinely not built yet?",
     a: "Offline billing, more than one branch, taking the payment itself through a wallet or a card network, FBR invoicing, and a sales-tax summary. Reports, buying, batch and expiry, and variants used to be on this list and are now on the counter. The full list is above and the order is on the roadmap. If one of them is the reason you would buy, do not buy yet — tell us instead, because that is how the order gets decided.",
@@ -130,24 +167,24 @@ const FAQS = [
     q: "Is there a contract?",
     a: "Monthly billing, cancel at the end of any period, and your data exports in full whenever you ask — including on the way out.",
   },
-  {
-    q: "Do you charge per staff member?",
-    a: "Never. Staff accounts are unlimited on both plans, so hiring for the wedding season or Ramadan does not change your bill.",
-  },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const { plans, staff } = await loadPlans();
+  const [freePlan, perHead] = planFaqs(plans, staff);
+  const faqs = [freePlan, ...FAQS, perHead];
+
   return (
     <>
       <PageHeader
         eyebrow="Pricing"
         title={
           <>
-            Two plans, priced{" "}
-            <span className="text-gradient">in rupees</span>
+            {plans.length > 0 ? `${countWord(plans.length)} ${plans.length === 1 ? "plan" : "plans"}` : "Plans"},
+            priced <span className="text-gradient">in rupees</span>
           </>
         }
-        lede="Rs 5,000 or Rs 10,000 a month. Everything on this page is built and running today — and what is not is listed further down, on the same page, before you decide."
+        lede={`${plans.length > 0 ? `${priceList(plans)} a month. ` : ""}Everything on this page is built and running today — and what is not is listed further down, on the same page, before you decide.`}
       >
         <Link href="/demo" className="btn btn-primary">
           Book a demo
@@ -160,33 +197,54 @@ export default function PricingPage() {
       {/* ---------- Plans ---------- */}
       <section className="section pt-4">
         <div className="shell">
-          <div className="mx-auto grid max-w-4xl items-start gap-4 lg:grid-cols-2">
-            {PLANS.map((plan, index) => (
+          {plans.length === 0 ? (
+            <p className="panel mx-auto max-w-2xl rounded-[22px] p-7 text-center text-[0.875rem] leading-relaxed text-mist-400">
+              The plans are being updated. Book a demo and we will quote you on
+              the call — in rupees, the same day.
+            </p>
+          ) : null}
+
+          <div
+            className={`mx-auto grid items-start gap-4 ${
+              plans.length >= 3 ? "max-w-6xl lg:grid-cols-3" : plans.length === 2 ? "max-w-4xl lg:grid-cols-2" : "max-w-md"
+            }`}
+          >
+            {plans.map((plan, index) => {
+              // The last tier is the one drawn lit, when there is more than one
+              // — and its badge is only drawn when it states a true difference.
+              const featured = plans.length > 1 && index === plans.length - 1;
+              const below = index > 0 ? plans[index - 1].counters : null;
+              const badge =
+                featured && below !== null && (plan.counters === null || plan.counters > below)
+                  ? `More than ${countWord(below).toLowerCase()} ${below === 1 ? "till" : "tills"}`
+                  : null;
+
+              return (
               <Reveal
-                key={plan.name}
+                key={plan.code}
                 className={`relative flex flex-col overflow-hidden rounded-[22px] p-7 ${
-                  plan.featured
+                  featured
                     ? "border border-iris-200/30 bg-gradient-to-br from-iris-500 via-iris-600 to-iris-700 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.28),0_34px_80px_-38px_rgb(79_70_229/0.9)] lg:-mt-4 lg:pb-9"
                     : "panel card-lift spotlight"
                 }`}
                 delay={index * 110}
                 y={32}
               >
-                {plan.featured ? (
-                  <>
-                    <div
-                      aria-hidden
-                      className="absolute -right-14 -top-16 h-52 w-52 rounded-full bg-white/20 blur-3xl"
-                    />
-                    <span className="relative self-start rounded-full border border-white/30 bg-white/15 px-3 py-1 font-display text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white">
-                      More than two tills
-                    </span>
-                  </>
+                {featured ? (
+                  <div
+                    aria-hidden
+                    className="absolute -right-14 -top-16 h-52 w-52 rounded-full bg-white/20 blur-3xl"
+                  />
+                ) : null}
+                {badge ? (
+                  <span className="relative mb-4 self-start rounded-full border border-white/30 bg-white/15 px-3 py-1 font-display text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-white">
+                    {badge}
+                  </span>
                 ) : null}
 
                 <h2
                   className={`relative font-display text-[1.25rem] font-bold ${
-                    plan.featured ? "mt-4 text-white" : ""
+                    featured ? "text-white" : ""
                   }`}
                 >
                   {plan.name}
@@ -194,7 +252,7 @@ export default function PricingPage() {
 
                 <p
                   className={`relative mt-1 text-[0.8125rem] leading-relaxed ${
-                    plan.featured ? "text-white/80" : "text-mist-400"
+                    featured ? "text-white/80" : "text-mist-400"
                   }`}
                 >
                   {plan.pitch}
@@ -203,41 +261,41 @@ export default function PricingPage() {
                 <p className="relative mt-6 flex items-baseline gap-2">
                   <span
                     className={`font-display text-[2.4rem] font-bold leading-none tracking-tight ${
-                      plan.featured ? "text-white" : "text-mist-50"
+                      featured ? "text-white" : "text-mist-50"
                     }`}
                   >
-                    {plan.price}
+                    {rupees(plan.price)}
                   </span>
                   <span
                     className={`text-[0.75rem] ${
-                      plan.featured ? "text-white/75" : "text-mist-500"
+                      featured ? "text-white/75" : "text-mist-500"
                     }`}
                   >
-                    {plan.cadence}
+                    per month
                   </span>
                 </p>
 
                 <Link
-                  href={plan.cta.href}
+                  href={`/checkout?plan=${encodeURIComponent(plan.code)}`}
                   className={`relative mt-6 w-full ${
-                    plan.featured
+                    featured
                       ? "btn btn-ghost border-white/40 bg-white/12 text-white"
                       : "btn btn-primary"
                   }`}
                 >
-                  {plan.cta.label}
+                  Get started
                 </Link>
 
                 <ul
                   className={`relative mt-7 grid gap-2.5 border-t pt-5 ${
-                    plan.featured ? "border-white/20" : "border-ink-700"
+                    featured ? "border-white/20" : "border-ink-700"
                   }`}
                 >
-                  {plan.features.map((feature) => (
+                  {plan.lines.map((feature) => (
                     <li
                       key={feature}
                       className={`flex items-start gap-2.5 text-[0.8125rem] leading-relaxed ${
-                        plan.featured ? "text-white/85" : "text-mist-300"
+                        featured ? "text-white/85" : "text-mist-300"
                       }`}
                     >
                       <svg
@@ -248,7 +306,7 @@ export default function PricingPage() {
                         <path
                           d="M3 8.4 6.4 11.8 13 5"
                           fill="none"
-                          stroke={plan.featured ? "#fff" : "var(--color-iris-600)"}
+                          stroke={featured ? "#fff" : "var(--color-iris-600)"}
                           strokeWidth="2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -259,7 +317,8 @@ export default function PricingPage() {
                   ))}
                 </ul>
               </Reveal>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -351,7 +410,7 @@ export default function PricingPage() {
           </Reveal>
 
           <div className="mt-10 grid gap-3">
-            {FAQS.map((faq, index) => (
+            {faqs.map((faq, index) => (
               <Reveal
                 key={faq.q}
                 as="details"

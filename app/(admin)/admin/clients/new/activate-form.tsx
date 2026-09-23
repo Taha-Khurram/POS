@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { InviteCard } from "@/components/admin/invite-card";
+import { OwnerLoginCard } from "@/components/admin/owner-login-card";
 import { ChartCard } from "@/components/pos/chart-card";
 import { IconAlert, IconCheck } from "@/components/pos/icons";
 import { SelectRow } from "@/components/pos/select-field";
@@ -12,12 +12,14 @@ import { rupees } from "@/lib/format";
 import {
   BILLING_CYCLES,
   CITY_MAX,
+  GRACE_DAYS,
   NOTES_MAX,
   PERSON_MAX,
   SHOP_NAME_MAX,
   checkClient,
   cycleMonths,
   dateInput,
+  limitOf,
   monthlyValue,
 } from "@/lib/platform/admin";
 import type { Plan } from "@/lib/platform/console";
@@ -60,22 +62,35 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
   const [agreedPrice, setAgreedPrice] = useState(
     plans[0] ? String(plans[0].listPrice) : "",
   );
-  const [branches, setBranches] = useState("1");
-  const [registers, setRegisters] = useState("1");
+  // A plan's ceilings are what a shop on it starts with (`PLAN_LIMITS`).
+  const ceilings = (chosen: Plan | undefined) => ({
+    branches: String(limitOf(chosen?.features ?? {}, "max_branches") ?? 1),
+    registers: String(limitOf(chosen?.features ?? {}, "max_registers") ?? 1),
+  });
+  const [branches, setBranches] = useState(() => ceilings(plans[0]).branches);
+  const [registers, setRegisters] = useState(() => ceilings(plans[0]).registers);
   const [trialDays, setTrialDays] = useState("0");
+  const [graceDays, setGraceDays] = useState(String(GRACE_DAYS));
   const [notes, setNotes] = useState("");
   const [more, setMore] = useState(false);
 
   // Whether the operator has typed over the guess. Once they have, changing the
   // plan must not quietly rewrite the figure they agreed on the phone.
   const touched = useRef(false);
+  // The same, for a counter count haggled up or down on the call.
+  const touchedCeilings = useRef(false);
 
   const plan = plans.find((entry) => entry.id === planId);
 
   const suggest = (nextPlanId: string, nextCycle: string) => {
-    if (touched.current) return;
     const chosen = plans.find((entry) => entry.id === nextPlanId);
     if (!chosen) return;
+    if (!touchedCeilings.current) {
+      const next = ceilings(chosen);
+      setBranches(next.branches);
+      setRegisters(next.registers);
+    }
+    if (touched.current) return;
     setAgreedPrice(String(chosen.listPrice * cycleMonths(nextCycle)));
   };
 
@@ -91,6 +106,7 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
     branches,
     registers,
     trialDays,
+    graceDays,
     notes,
   };
 
@@ -99,7 +115,7 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
   const list = plan ? plan.listPrice * cycleMonths(billingCycle) : 0;
   const discount = list > 0 ? Math.round(((list - price) / list) * 100) : 0;
 
-  // The invite is shown once and the form is cleared behind it, so the next
+  // The login is shown once and the form is cleared behind it, so the next
   // activation starts empty rather than re-submitting the shop just created.
   const settled = useRef<number | null>(null);
 
@@ -114,7 +130,9 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
     setCity("");
     setNotes("");
     setTrialDays("0");
+    setGraceDays(String(GRACE_DAYS));
     touched.current = false;
+    touchedCeilings.current = false;
   }, [state.savedAt]);
 
   if (plans.length === 0) {
@@ -134,12 +152,24 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
 
   return (
     <div className="space-y-4">
-      {state.invite ? <InviteCard invite={state.invite} /> : null}
+      {state.credentials ? <OwnerLoginCard credentials={state.credentials} /> : null}
+
+      {/* A failure part way — the client made, the plan refused — leaves a
+          client that exists. Say where it is rather than letting the operator
+          press Activate again and make a second one. */}
+      {state.error && state.tenantId ? (
+        <p className="pos-note pos-note-warn">
+          {state.error}{" "}
+          <Link href={`/admin/clients/${state.tenantId}`} className="font-semibold underline">
+            Open the client
+          </Link>
+        </p>
+      ) : null}
 
       <form action={action}>
         <ChartCard
           title="Activate a shop"
-          caption="Creates the shop, its subscription and a one-time sign-up link."
+          caption="For a deal closed off the site: creates the client, starts the plan and makes the owner's login."
           footer={
             <div className="flex w-full flex-wrap items-center justify-between gap-3">
               <p className="text-[0.75rem] text-graphite-500">
@@ -297,15 +327,19 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
                   className="pos-field"
                   value={registers}
                   inputMode="numeric"
-                  onChange={(event) => setRegisters(event.target.value)}
+                  onChange={(event) => {
+                    touchedCeilings.current = true;
+                    setRegisters(event.target.value);
+                  }}
                 />
                 <span className="pos-hint">
-                  The real ceiling — Settings refuses a shop the counter above it.
+                  From the plan. The real ceiling — Settings refuses a shop the
+                  counter above it.
                 </span>
               </label>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="block">
                 <span className="pos-label">Trial days</span>
                 <input
@@ -335,9 +369,24 @@ export function ActivateForm({ plans }: { plans: Plan[] }) {
                   className="pos-field"
                   value={branches}
                   inputMode="numeric"
-                  onChange={(event) => setBranches(event.target.value)}
+                  onChange={(event) => {
+                    touchedCeilings.current = true;
+                    setBranches(event.target.value);
+                  }}
                 />
                 <span className="pos-hint">Nothing reads this yet. One is right.</span>
+              </label>
+
+              <label className="block">
+                <span className="pos-label">Grace days</span>
+                <input
+                  name="grace_days"
+                  className="pos-field"
+                  value={graceDays}
+                  inputMode="numeric"
+                  onChange={(event) => setGraceDays(event.target.value)}
+                />
+                <span className="pos-hint">Past the renewal date before the till stops.</span>
               </label>
             </div>
 

@@ -49,6 +49,8 @@ export type NoticeFacts = {
     planName: string;
     /** Negative once the period has passed. */
     daysUntilExpiry: number;
+    /** When the till stops if nothing is paid — the period end plus grace. */
+    graceEndsAt: string;
     maxRegisters: number;
   } | null;
   counters: { id: string; name: string; isActive: boolean }[];
@@ -90,12 +92,30 @@ export function buildNotices(facts: NoticeFacts): Notice[] {
         module: "settings",
         ownerOnly: true,
       });
+    } else if (subscription.status === "paused") {
+      notices.push({
+        id: "billing-paused",
+        title: "Your plan is paused",
+        detail:
+          "The register will not take a new sale while it is paused, and the days you have paid for are kept. Message us on WhatsApp when you are open again.",
+        at: "Now",
+        tone: "info",
+        href: "/app/settings",
+        module: "settings",
+        ownerOnly: true,
+      });
     } else if (subscription.status === "past_due") {
+      // The date the till stops is the one fact the owner can act on, so it is
+      // the detail rather than a promise to send the invoice again.
+      const stops = new Date(subscription.graceEndsAt).toLocaleDateString("en-PK", {
+        day: "numeric",
+        month: "short",
+      });
+
       notices.push({
         id: "billing-past-due",
         title: "Payment is past due",
-        detail:
-          "The till keeps working. We will send the invoice again on the same WhatsApp number.",
+        detail: `The till keeps working until ${stops}, then stops taking new sales until the plan is paid. Message us on WhatsApp to renew.`,
         at: days < 0 ? `${plural(-days, "day", "days")} ago` : "Today",
         tone: "warn",
         href: "/app/settings",

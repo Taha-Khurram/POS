@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { writeReadError } from "@/lib/pos/read-error";
 import type {
+  AccountMethod,
   BillingCycle,
   FeatureFlags,
   PlatformRole,
@@ -205,6 +206,8 @@ export type Client = {
   graceDays: number;
   suspendedAt: string | null;
   cancelledAt: string | null;
+  /** When it was paused, while it is. Its days are frozen from here. */
+  pausedAt: string | null;
   monthlyValue: number;
   daysUntilExpiry: number;
   /** What tells a renewal call from a rescue call. */
@@ -216,8 +219,9 @@ export type Client = {
   counterCount: number;
   paidTotal: number;
   lastPaidAt: string | null;
-  /** An invite minted and not yet redeemed: sold, never signed in. */
-  inviteOpen: boolean;
+  /** Whether the owner has a login yet. Minted at activation, so false means
+   *  accepted and never activated — or a login somebody removed by hand. */
+  hasOwner: boolean;
 };
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -246,6 +250,7 @@ function toClient(row: Record<string, unknown>): Client {
     graceDays: num(row.grace_days),
     suspendedAt: (row.suspended_at as string | null) ?? null,
     cancelledAt: (row.cancelled_at as string | null) ?? null,
+    pausedAt: (row.paused_at as string | null) ?? null,
     monthlyValue: num(row.monthly_value),
     daysUntilExpiry: num(row.days_until_expiry),
     lastSaleAt: (row.last_sale_at as string | null) ?? null,
@@ -256,7 +261,7 @@ function toClient(row: Record<string, unknown>): Client {
     counterCount: num(row.counter_count),
     paidTotal: num(row.paid_total),
     lastPaidAt: (row.last_paid_at as string | null) ?? null,
-    inviteOpen: row.invite_open === true,
+    hasOwner: row.has_owner === true,
   };
 }
 
@@ -336,6 +341,8 @@ export type Plan = {
   pitch: string;
   listPrice: number;
   features: FeatureFlags;
+  /** Extra lines on `/pricing` for promises no flag can make (`0045`). */
+  highlights: string[];
   sortOrder: number;
   isActive: boolean;
 };
@@ -345,7 +352,7 @@ export async function listPlans(): Promise<Plan[]> {
 
   const { data, error } = await supabase
     .from("plans")
-    .select("id, code, name, pitch, list_price, features, sort_order, is_active")
+    .select("id, code, name, pitch, list_price, features, highlights, sort_order, is_active")
     .order("sort_order");
 
   if (error) {
@@ -360,6 +367,7 @@ export async function listPlans(): Promise<Plan[]> {
     pitch: text(row.pitch),
     listPrice: num(row.list_price),
     features: (row.features as FeatureFlags | null) ?? {},
+    highlights: Array.isArray(row.highlights) ? row.highlights.map(String) : [],
     sortOrder: num(row.sort_order),
     isActive: row.is_active === true,
   }));
@@ -371,7 +379,11 @@ export async function listPlans(): Promise<Plan[]> {
 
 export type Payment = {
   id: string;
-  tenantId: string;
+  /** Null while it sits against an order nobody has accepted yet. */
+  tenantId: string | null;
+  orderId: string | null;
+  /** `FLO-XXXXXX`, when it came in against a self-serve order. */
+  orderReference: string;
   shopName: string;
   amount: number;
   method: string;
@@ -385,7 +397,8 @@ export type Payment = {
 
 type PaymentRow = {
   id: string;
-  tenant_id: string;
+  tenant_id: string | null;
+  order_id: string | null;
   amount: number | string;
   method: string;
   reference: string | null;
@@ -395,6 +408,10 @@ type PaymentRow = {
   notes: string | null;
   recorded_by: string | null;
   tenants: { shop_name: string } | { shop_name: string }[] | null;
+  orders:
+    | { reference: string; shop_name: string }
+    | { reference: string; shop_name: string }[]
+    | null;
 };
 
 /** With no generated database types, supabase-js infers an array for a
@@ -407,7 +424,12 @@ function toPayment(row: PaymentRow): Payment {
   return {
     id: row.id,
     tenantId: row.tenant_id,
-    shopName: embedded(row.tenants)?.shop_name ?? "—",
+    orderId: row.order_id,
+    orderReference: embedded(row.orders)?.reference ?? "",
+    // Before acceptance there is no tenant, and the order's own name is the
+    // only one the shop has.
+    shopName:
+      embedded(row.tenants)?.shop_name ?? embedded(row.orders)?.shop_name ?? "—",
     amount: num(row.amount),
     method: row.method,
     reference: row.reference ?? "",
@@ -420,7 +442,7 @@ function toPayment(row: PaymentRow): Payment {
 }
 
 const PAYMENT_COLUMNS =
-  "id, tenant_id, amount, method, reference, paid_at, covers_period_start, covers_period_end, notes, recorded_by, tenants ( shop_name )";
+  "id, tenant_id, order_id, amount, method, reference, paid_at, covers_period_start, covers_period_end, notes, recorded_by, tenants ( shop_name ), orders ( reference, shop_name )";
 
 /** The last of everything taken, newest first. Capped, and the screen says so
  *  — a total quietly added up from a truncated list is worse than a caption. */
@@ -482,33 +504,26 @@ export type Order = {
   registers: number;
   quotedPrice: number;
   proofPath: string | null;
+  /** How the sheet draws it: a PDF cannot go in an `<img>`. Off the path's
+   *  extension, which the upload action writes from an allow-listed type. */
+  proofKind: "image" | "pdf" | null;
   proofUploadedAt: string | null;
   tenantId: string | null;
   rejectionReason: string;
   createdAt: string;
   verifiedAt: string | null;
+  /** Σ payments recorded against this order. Accepting it needs more than
+   *  nothing here — `create_client` refuses otherwise. */
+  paid: number;
 };
 
-export async function listOrders(): Promise<Order[]> {
-  const supabase = createClient(await cookies());
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      `id, reference, status, shop_name, owner_name, phone, email, city, shop_type,
+const ORDER_COLUMNS = `id, reference, status, shop_name, owner_name, phone, email, city, shop_type,
        plan_id, billing_cycle, branches, registers, quoted_price, proof_path,
        proof_uploaded_at, tenant_id, rejection_reason, created_at, verified_at,
-       plans ( name )`,
-    )
-    .order("created_at", { ascending: false })
-    .limit(200);
+       plans ( name )`;
 
-  if (error) {
-    console.error("[admin] orders read failed: %s", writeReadError(error));
-    return [];
-  }
-
-  return (data ?? []).map((row) => ({
+function toOrder(row: Record<string, unknown>, paid: number): Order {
+  return {
     id: String(row.id),
     reference: text(row.reference),
     status: text(row.status),
@@ -527,12 +542,76 @@ export async function listOrders(): Promise<Order[]> {
     registers: num(row.registers),
     quotedPrice: num(row.quoted_price),
     proofPath: (row.proof_path as string | null) ?? null,
+    proofKind: row.proof_path
+      ? /\.pdf$/i.test(String(row.proof_path))
+        ? "pdf"
+        : "image"
+      : null,
     proofUploadedAt: (row.proof_uploaded_at as string | null) ?? null,
     tenantId: row.tenant_id ? String(row.tenant_id) : null,
     rejectionReason: text(row.rejection_reason),
     createdAt: text(row.created_at),
     verifiedAt: (row.verified_at as string | null) ?? null,
-  }));
+    paid,
+  };
+}
+
+export async function listOrders(): Promise<Order[]> {
+  const supabase = createClient(await cookies());
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    console.error("[admin] orders read failed: %s", writeReadError(error));
+    return [];
+  }
+
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const ids = rows.map((row) => String(row.id));
+
+  // A second read rather than an aggregate embed: what has been paid against
+  // each order is the one figure that decides whether Accept is live.
+  const { data: paid } = ids.length
+    ? await supabase.from("payments").select("order_id, amount").in("order_id", ids)
+    : { data: [] };
+
+  const totals = new Map<string, number>();
+  for (const payment of paid ?? []) {
+    const key = String(payment.order_id);
+    totals.set(key, (totals.get(key) ?? 0) + num(payment.amount));
+  }
+
+  return rows.map((row) => toOrder(row, totals.get(String(row.id)) ?? 0));
+}
+
+/**
+ * The order a client was accepted from, if it came in through `/checkout`.
+ *
+ * The activation card is filled from it — the plan, cycle, counters and price
+ * the buyer chose — so accepting an order and then activating it is not the
+ * operator retyping what the shop already told us.
+ */
+export async function getClientOrder(tenantId: string): Promise<Order | null> {
+  const supabase = createClient(await cookies());
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error("[admin] client order read failed: %s", writeReadError(error));
+    return null;
+  }
+
+  return toOrder(data as Record<string, unknown>, 0);
 }
 
 /**
@@ -619,48 +698,8 @@ export async function listLeads(): Promise<Lead[]> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The invite, the notes, the people                                          */
+/* The notes, the people                                                      */
 /* -------------------------------------------------------------------------- */
-
-export type Invite = {
-  id: string;
-  email: string;
-  phone: string;
-  tenantRole: string;
-  expiresAt: string;
-  usedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-};
-
-/** Live means: minted, not used, not revoked, not expired. The unique index
- *  `invites_one_live_per_tenant_role` allows exactly one per role. */
-export async function getInvites(tenantId: string): Promise<Invite[]> {
-  const supabase = createClient(await cookies());
-
-  const { data, error } = await supabase
-    .from("invites")
-    .select("id, email, phone, tenant_role, expires_at, used_at, revoked_at, created_at")
-    .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  if (error) {
-    console.error("[admin] invites read failed: %s", writeReadError(error));
-    return [];
-  }
-
-  return (data ?? []).map((row) => ({
-    id: String(row.id),
-    email: text(row.email),
-    phone: text(row.phone),
-    tenantRole: text(row.tenant_role),
-    expiresAt: text(row.expires_at),
-    usedAt: (row.used_at as string | null) ?? null,
-    revokedAt: (row.revoked_at as string | null) ?? null,
-    createdAt: text(row.created_at),
-  }));
-}
 
 export type Note = {
   id: string;
@@ -693,20 +732,22 @@ export async function listNotes(tenantId: string): Promise<Note[]> {
 export type ShopUser = {
   id: string;
   fullName: string;
+  /** The login. Every account Flo mints carries it on `profiles`. */
+  email: string;
   tenantRole: string;
   isActive: boolean;
   createdAt: string;
 };
 
-/** Who can actually sign in to this shop. No email: `profiles` does not carry
- *  one and reading `auth.users` for it would be a service-role read of an
- *  account this console has no business holding a password reset over. */
+/** Who can actually sign in to this shop, and with what. The login is read off
+ *  `profiles.email`, which every minted account carries — never `auth.users`,
+ *  which would be a service-role read for a fact this row already holds. */
 export async function listShopUsers(tenantId: string): Promise<ShopUser[]> {
   const supabase = createClient(await cookies());
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, tenant_role, is_active, created_at")
+    .select("id, full_name, email, tenant_role, is_active, created_at")
     .eq("tenant_id", tenantId)
     .order("created_at");
 
@@ -718,6 +759,7 @@ export async function listShopUsers(tenantId: string): Promise<ShopUser[]> {
   return (data ?? []).map((row) => ({
     id: String(row.id),
     fullName: text(row.full_name) || "Unnamed",
+    email: text(row.email),
     tenantRole: text(row.tenant_role) || "—",
     isActive: row.is_active !== false,
     createdAt: text(row.created_at),
@@ -731,7 +773,12 @@ export async function listShopUsers(tenantId: string): Promise<ShopUser[]> {
 export type Operator = {
   userId: string;
   fullName: string;
+  email: string;
   platformRole: PlatformRole;
+  isActive: boolean;
+  /** The login also runs a shop. Such an account is never banned or deleted
+   *  from here — switching off their console must not shut their till. */
+  hasShop: boolean;
   createdAt: string;
 };
 
@@ -740,7 +787,7 @@ export async function listOperators(): Promise<Operator[]> {
 
   const { data, error } = await supabase
     .from("platform_admins")
-    .select("user_id, full_name, platform_role, created_at")
+    .select("user_id, full_name, email, platform_role, is_active, created_at")
     .order("created_at");
 
   if (error) {
@@ -748,10 +795,25 @@ export async function listOperators(): Promise<Operator[]> {
     return [];
   }
 
+  const ids = (data ?? []).map((row) => String(row.user_id));
+
+  // A second read rather than an embed: `platform_admins` and `profiles` both
+  // hang off `auth.users` and have no foreign key between them to embed on.
+  const { data: shops } = ids.length
+    ? await supabase.from("profiles").select("id, tenant_id").in("id", ids)
+    : { data: [] };
+
+  const withShop = new Set(
+    (shops ?? []).filter((row) => row.tenant_id).map((row) => String(row.id)),
+  );
+
   return (data ?? []).map((row) => ({
     userId: String(row.user_id),
     fullName: text(row.full_name) || "Unnamed",
+    email: text(row.email),
     platformRole: text(row.platform_role) as PlatformRole,
+    isActive: row.is_active !== false,
+    hasShop: withShop.has(String(row.user_id)),
     createdAt: text(row.created_at),
   }));
 }
@@ -846,4 +908,79 @@ export async function listAudit(tenantId?: string): Promise<AuditRow[]> {
     after: row.after ?? null,
     createdAt: text(row.created_at),
   }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Where a buyer sends the money                                              */
+/* -------------------------------------------------------------------------- */
+
+export type PaymentAccount = {
+  id: string;
+  method: AccountMethod;
+  accountTitle: string;
+  bankName: string;
+  accountNumber: string;
+  iban: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+const toAccount = (row: Record<string, unknown>): PaymentAccount => ({
+  id: String(row.id),
+  method: text(row.method) as AccountMethod,
+  accountTitle: text(row.account_title),
+  bankName: text(row.bank_name),
+  accountNumber: text(row.account_number),
+  iban: text(row.iban),
+  isActive: row.is_active === true,
+  sortOrder: num(row.sort_order),
+});
+
+const ACCOUNT_COLUMNS =
+  "id, method, account_title, bank_name, account_number, iban, is_active, sort_order";
+
+/** Every account, on or off, for `/admin/payment-accounts`. Operator's JWT. */
+export async function listPaymentAccounts(): Promise<PaymentAccount[]> {
+  const supabase = createClient(await cookies());
+
+  const { data, error } = await supabase
+    .from("payment_accounts")
+    .select(ACCOUNT_COLUMNS)
+    .order("sort_order")
+    .order("created_at");
+
+  if (error) {
+    console.error("[admin] payment accounts read failed: %s", writeReadError(error));
+    return [];
+  }
+
+  return (data ?? []).map(toAccount);
+}
+
+/**
+ * The accounts switched on, for `/order/[reference]` — a buyer with no session
+ * at all. On the service role, the way that page already reads the order, and
+ * filtered to `is_active` here rather than trusted to the caller: an account
+ * taken off because its wallet hit the monthly ceiling must never print.
+ *
+ * A failed read is an empty list, never a throw — the page falls back to
+ * "support will send the details", which is worse than the accounts and much
+ * better than an error page in front of somebody holding the money.
+ */
+export async function listPublicPaymentAccounts(): Promise<PaymentAccount[]> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("payment_accounts")
+    .select(ACCOUNT_COLUMNS)
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("created_at");
+
+  if (error) {
+    console.error("[order] payment accounts read failed: %s", writeReadError(error));
+    return [];
+  }
+
+  return (data ?? []).map(toAccount);
 }

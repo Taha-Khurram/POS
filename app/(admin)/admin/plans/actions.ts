@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
-import { PLAN_FEATURES, PLAN_LIMITS } from "@/lib/platform/admin";
+import {
+  BRANCHES_MAX,
+  HIGHLIGHTS_MAX,
+  HIGHLIGHT_MAX,
+  PLAN_FEATURES,
+  PLAN_LIMITS,
+  REGISTERS_MAX,
+} from "@/lib/platform/admin";
 import { requireBilling } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
@@ -19,6 +26,11 @@ import { IDLE, type AdminState } from "../state";
  * honours and says plainly that the rest are copy for `/pricing`, because the
  * honest version of "editable without a deploy" includes being told what an
  * edit does and does not do.
+ *
+ * Since `0045` an edit here is what `/pricing` prints: the name, the price, the
+ * pitch, the ceilings, a sentence per flag and the extra lines. Counters is
+ * what a new shop on the plan is activated with, and Staff is checked when an
+ * owner hires — see `PLAN_LIMITS`.
  *
  * Every write merges over the stored JSON rather than replacing it, the way
  * `0020` and `0021` did: a key added by a future migration, or by somebody at
@@ -48,19 +60,45 @@ function readFeatures(formData: FormData, stored: Record<string, unknown>) {
 
   for (const limit of PLAN_LIMITS) {
     const raw = text(formData.get(`limit:${limit.key}`));
-    // Empty means no ceiling, which is a real answer and is stored as null —
-    // `featureLimit` reads anything non-numeric as "no limit".
+    // Counters and branches become a subscription's not-null columns the day a
+    // shop is activated on this plan, so they have to be a number. Staff may
+    // be empty, which is a real answer — no ceiling — and is stored as null.
+    const ceiling =
+      limit.key === "max_registers" ? REGISTERS_MAX : limit.key === "max_branches" ? BRANCHES_MAX : null;
+
     if (!raw) {
+      if (ceiling !== null) return `${limit.label} needs a number — it is what a new shop on this plan starts with.`;
       features[limit.key] = null;
       continue;
     }
 
     const value = Number(raw);
-    if (!Number.isInteger(value) || value < 0) return `${limit.label} has to be a whole number, or empty for no limit.`;
+    const floor = ceiling === null ? 0 : 1;
+    if (!Number.isInteger(value) || value < floor) {
+      return ceiling === null
+        ? `${limit.label} has to be a whole number, or empty for no limit.`
+        : `${limit.label} has to be a whole number, at least 1.`;
+    }
+    if (ceiling !== null && value > ceiling) return `${limit.label} can be at most ${ceiling}.`;
     features[limit.key] = value;
   }
 
   return features;
+}
+
+/** One line per promise, blanks dropped. Each is printed on `/pricing` as
+ *  typed, so the bound is on what a card can carry, not on the database. */
+function readHighlights(formData: FormData) {
+  const lines = String(formData.get("highlights") ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+
+  if (lines.length > HIGHLIGHTS_MAX) return `At most ${HIGHLIGHTS_MAX} extra lines — a card longer than that is not read.`;
+  if (lines.some((line) => line.length > HIGHLIGHT_MAX)) {
+    return `Each line can be at most ${HIGHLIGHT_MAX} characters.`;
+  }
+  return lines;
 }
 
 export async function savePlan(
@@ -85,7 +123,7 @@ export async function savePlan(
 
   const { data: before } = await supabase
     .from("plans")
-    .select("code, name, pitch, list_price, features, sort_order, is_active")
+    .select("code, name, pitch, list_price, features, highlights, sort_order, is_active")
     .eq("id", planId)
     .maybeSingle();
 
@@ -98,13 +136,19 @@ export async function savePlan(
 
   if (typeof features === "string") return fail(features);
 
+  const highlights = readHighlights(formData);
+  if (typeof highlights === "string") return fail(highlights);
+
+  // No `is_active`: whether a plan is on sale has one writer, `togglePlan`.
+  // A checkbox here as well was rendered with the value from page load, so
+  // taking a plan off sale and then saving its price put it straight back on.
   const row = {
     name,
     pitch: pitch || null,
     list_price: price,
     sort_order: sortOrder,
-    is_active: text(formData.get("is_active")) === "on",
     features,
+    highlights,
   };
 
   const { error } = await supabase.from("plans").update(row).eq("id", planId);
@@ -129,7 +173,9 @@ export async function savePlan(
     savedAt: Date.now(),
     saved: {
       label: `${name} saved`,
-      detail: row.is_active ? undefined : "It is off, so nothing can be sold on it.",
+      detail: before.is_active
+        ? "/pricing shows it now."
+        : "It is off sale, so /pricing does not show it.",
     },
   };
 }
@@ -172,7 +218,9 @@ export async function createPlan(
       list_price: price,
       sort_order: Number(text(formData.get("sort_order")) || "0") || 0,
       is_active: false,
-      features: {},
+      // The two ceilings a subscription cannot be activated without, at their
+      // floor. Every flag stays off.
+      features: { max_branches: 1, max_registers: 1 },
     })
     .select("id")
     .single();

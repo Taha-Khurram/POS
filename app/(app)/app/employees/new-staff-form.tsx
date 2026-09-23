@@ -16,7 +16,7 @@ import {
 import { addStaff } from "./actions";
 import { NO_COUNTER, counterOptions } from "./counter-options";
 import { IDLE } from "./state";
-import { CredentialsCard } from "./credentials-card";
+import { CredentialsCard } from "@/components/pos/credentials-card";
 
 /**
  * Hiring somebody.

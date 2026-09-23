@@ -13,7 +13,7 @@ import { STAFF_NAME_MAX, STAFF_ROLES } from "@/lib/pos/staff-options";
 import { deleteStaff, resetStaffPassword, saveStaff } from "./actions";
 import { NO_COUNTER, counterOptions } from "./counter-options";
 import { IDLE } from "./state";
-import { CredentialsCard } from "./credentials-card";
+import { CredentialsCard } from "@/components/pos/credentials-card";
 
 /**
  * One staff member.

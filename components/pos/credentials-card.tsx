@@ -20,15 +20,21 @@ import { IconAlert, IconCheck, IconUser } from "@/components/pos/icons";
  * The warning is not decoration. An owner who closes this card assuming they
  * can come back for it later is an owner who has to reset the password of
  * somebody already standing at the till.
+ *
+ * Shared by `/app/employees` and `/admin/team` — a cashier's minted work
+ * address and an operator's own email are handed over the same way, so they
+ * are one card. `emailLabel` is the only thing that differs.
  */
 export function CredentialsCard({
   name,
   email,
   password,
+  emailLabel = "Work email",
 }: {
   name: string;
   email: string;
   password: string;
+  emailLabel?: string;
 }) {
   return (
     <section className="pos-card border-orchid-300 bg-orchid-50/70 p-4">
@@ -49,7 +55,7 @@ export function CredentialsCard({
       </header>
 
       <div className="mt-3.5 space-y-2">
-        <Field label="Work email" value={email} />
+        <Field label={emailLabel} value={email} />
         <Field label="Password" value={password} mono />
       </div>
 

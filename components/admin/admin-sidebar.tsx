@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { signOut } from "@/app/(app)/app/actions";
 import {
+  IconCard,
   IconCart,
   IconCash,
   IconClose,
@@ -61,7 +62,10 @@ const GROUPS: { label: string; items: Item[] }[] = [
   },
   {
     label: "The product",
-    items: [{ href: "/admin/plans", label: "Plans", icon: IconTag }],
+    items: [
+      { href: "/admin/plans", label: "Plans", icon: IconTag },
+      { href: "/admin/payment-accounts", label: "Payment accounts", icon: IconCard },
+    ],
   },
   {
     label: "Growth",

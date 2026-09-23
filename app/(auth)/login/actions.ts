@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { isWorkEmail } from "@/lib/pos/staff-options";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
 export type LoginState = { error: string | null };
@@ -23,7 +24,28 @@ export type LoginState = { error: string | null };
  */
 const ALLOWED_EMAILS = ["tahakhurramofficial@gmail.com"];
 
-/** Where a successful sign-in lands. There is exactly one destination. */
+/**
+ * Somebody `/admin/team` made, and has not switched off.
+ *
+ * The operators are the other list that grows without an edit here, for the
+ * reason staff are: the console creates the account and hands over the
+ * password, and a person who then cannot get past this screen was handed a
+ * password to nothing. Read on the service role because the caller is not
+ * signed in yet — and it answers only yes or no, so it tells a stranger
+ * nothing the single rejection message below does not already hide.
+ */
+async function isOperator(email: string): Promise<boolean> {
+  const { data } = await createAdminClient()
+    .from("platform_admins")
+    .select("user_id")
+    .eq("email", email)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  return Boolean(data);
+}
+
+/** Where a successful sign-in lands, for everybody but a console-only operator. */
 const AFTER_SIGN_IN = "/app";
 
 /**
@@ -50,7 +72,10 @@ export async function signIn(
     error: "That email and password do not match an account.",
   };
 
-  if (!ALLOWED_EMAILS.includes(email) && !isWorkEmail(email)) return rejected;
+  const listed = ALLOWED_EMAILS.includes(email) || isWorkEmail(email);
+  const operator = !listed && (await isOperator(email));
+
+  if (!listed && !operator) return rejected;
 
   const supabase = createClient(await cookies());
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -64,5 +89,7 @@ export async function signIn(
   // is a check that already handed out a session.
   if (error || !data.session) return rejected;
 
-  redirect(AFTER_SIGN_IN);
+  // The one fork: an account let in only because it works the console has no
+  // shop, and `/app` would greet it with a dashboard of nothing.
+  redirect(operator ? "/admin" : AFTER_SIGN_IN);
 }

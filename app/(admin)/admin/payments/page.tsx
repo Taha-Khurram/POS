@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { rupees } from "@/lib/format";
 import { requirePlatform } from "@/lib/platform/access";
-import { PAYMENTS_MAX, listClients, listPayments } from "@/lib/platform/console";
+import { PAYMENTS_MAX, listClients, listOrders, listPayments } from "@/lib/platform/console";
 
 import { PaymentsPanel } from "./payments-panel";
 
@@ -14,7 +14,17 @@ export const metadata: Metadata = {
 export default async function PaymentsPage() {
   const session = await requirePlatform();
 
-  const [payments, clients] = await Promise.all([listPayments(), listClients()]);
+  const [payments, clients, orders] = await Promise.all([
+    listPayments(),
+    listClients(),
+    listOrders(),
+  ]);
+
+  // Only the orders money can still land against. One already accepted has a
+  // client to pay against instead, and one rejected has nothing to buy.
+  const waiting = orders.filter(
+    (order) => order.status === "awaiting_payment" || order.status === "proof_submitted",
+  );
 
   const month = payments.filter(
     (payment) =>
@@ -37,6 +47,7 @@ export default async function PaymentsPage() {
       <PaymentsPanel
         payments={payments}
         clients={clients}
+        orders={waiting}
         readOnly={session.platformRole !== "super_admin"}
       />
     </div>

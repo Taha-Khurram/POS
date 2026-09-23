@@ -2,31 +2,36 @@ import "server-only";
 
 import { createAdminClient } from "@/utils/supabase/admin";
 
-export type SubscriptionStatus =
-  | "trialing"
-  | "active"
-  | "past_due"
-  | "suspended"
-  | "cancelled";
+import {
+  lapseOf,
+  type BillingCycle,
+  type FeatureFlags,
+  type SubscriptionStatus,
+} from "@/lib/platform/admin";
 
-export type BillingCycle = "monthly" | "quarterly" | "yearly";
-
-export type FeatureFlags = Record<string, unknown>;
+export type { BillingCycle, FeatureFlags, SubscriptionStatus };
 
 export type Entitlements = {
   tenantId: string;
   planCode: string;
   planName: string;
+  /**
+   * Where the shop stands *now*, through `lapseOf` — not the stored column.
+   * A period that ended at noon reads past due at 12:01 whether or not the
+   * hourly sweep has written it yet, and suspended once the grace runs out.
+   */
   status: SubscriptionStatus;
   billingCycle: BillingCycle;
   agreedPrice: number;
-  /** Can this shop bill today? Suspension and cancellation are the only noes. */
+  /** Can this shop bill right now? Trial, active and past-due-within-grace. */
   canOperate: boolean;
   maxBranches: number;
   maxRegisters: number;
   features: FeatureFlags;
   trialEndsAt: string | null;
   currentPeriodEnd: string;
+  /** When the till stops if nothing is paid: the period end plus grace. */
+  graceEndsAt: string;
   /** Negative once the period has passed. Drives the expiry banners. */
   daysUntilExpiry: number;
 };
@@ -65,6 +70,7 @@ export async function getEntitlements(
         max_registers,
         trial_ends_at,
         current_period_end,
+        grace_days,
         plans ( code, name, features )
       `,
     )
@@ -80,8 +86,12 @@ export async function getEntitlements(
 
   const features: FeatureFlags = { ...(plan?.features ?? {}) };
 
-  const status = data.status as SubscriptionStatus;
   const currentPeriodEnd = data.current_period_end as string;
+  const { status, graceEndsAt } = lapseOf(
+    data.status as SubscriptionStatus,
+    currentPeriodEnd,
+    Number(data.grace_days),
+  );
 
   return {
     tenantId,
@@ -98,6 +108,7 @@ export async function getEntitlements(
     features,
     trialEndsAt: (data.trial_ends_at as string | null) ?? null,
     currentPeriodEnd,
+    graceEndsAt,
     daysUntilExpiry: Math.ceil(
       (new Date(currentPeriodEnd).getTime() - Date.now()) / DAY_MS,
     ),
