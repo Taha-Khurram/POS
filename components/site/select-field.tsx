@@ -22,12 +22,15 @@ export function SiteSelectField({
   defaultValue,
   options,
   placeholder,
+  onChange,
 }: {
   name: string;
   label: string;
   defaultValue: string;
   options: readonly SelectOption[];
   placeholder?: string;
+  /** For a form that redraws something off the choice — checkout's total. */
+  onChange?: (value: string) => void;
 }) {
   const id = useId();
   const [chosen, setChosen] = useState(defaultValue);
@@ -43,7 +46,10 @@ export function SiteSelectField({
       <Select
         id={id}
         value={chosen}
-        onChange={setChosen}
+        onChange={(value) => {
+          setChosen(value);
+          onChange?.(value);
+        }}
         options={options}
         placeholder={placeholder}
         labelledBy={`${id}-label`}

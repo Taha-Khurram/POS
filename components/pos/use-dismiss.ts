@@ -36,3 +36,24 @@ export function useDismiss<T extends HTMLElement>() {
 
   return { ref, open, setOpen };
 }
+
+/** Clear air kept between an open menu and the edge of the window. */
+const EDGE_GUTTER = 12;
+
+/**
+ * A ref callback for a `.pos-menu`: if the menu would run off the bottom of the
+ * window and there is more room above its trigger, it is hung above instead
+ * (`data-drop="up"`). Measured on the real element as it mounts, before the
+ * browser paints, so it never flashes downward first — and written straight
+ * onto the node rather than into state, because it is layout, not data.
+ */
+export function placeMenu(node: HTMLElement | null) {
+  if (!node) return;
+  const anchor = node.offsetParent?.getBoundingClientRect();
+  const menu = node.getBoundingClientRect();
+  if (!anchor) return;
+
+  const below = window.innerHeight - anchor.bottom - EDGE_GUTTER;
+  const above = anchor.top - EDGE_GUTTER;
+  node.dataset.drop = menu.height > below && above > below ? "up" : "down";
+}

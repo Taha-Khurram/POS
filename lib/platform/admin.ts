@@ -242,7 +242,7 @@ export const ORDER_STATUSES = [
     id: "proof_submitted",
     label: "Proof sent",
     tone: "warn",
-    description: "Match it against the bank statement and record the payment.",
+    description: "Match it against the bank statement, then Verify & activate.",
   },
   // Stored as `verified` since `0001`. Since `0042` it means the order was
   // accepted into a client — which is not yet an activated shop.
@@ -315,7 +315,7 @@ export const PLATFORM_SCREENS = [
   {
     id: "orders",
     label: "Orders",
-    description: "Check a buyer's transfer and accept or reject the order.",
+    description: "Check a buyer's transfer, then activate the shop or reject the order.",
     href: "/admin/orders",
   },
   {

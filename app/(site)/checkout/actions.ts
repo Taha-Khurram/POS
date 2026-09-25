@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 
+import { attachProof, checkProof, hasFile } from "@/lib/platform/proof";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { pickOption, SHOP_TYPES } from "@/lib/pos/settings-options";
+import { SHOP_TYPES } from "@/lib/pos/settings-options";
 import { createAdminClient } from "@/utils/supabase/admin";
 
 const BILLING_CYCLES = ["monthly", "quarterly", "yearly"];
@@ -22,20 +23,25 @@ export async function createCheckoutOrder(formData: FormData) {
   const phone = text(formData.get("phone"));
   const email = text(formData.get("email"));
   const city = text(formData.get("city"));
-  const shopType = text(formData.get("shop_type"));
   const planCode = text(formData.get("plan_code"));
   const billingCycle = text(formData.get("billing_cycle"));
-  const branches = Number(text(formData.get("branches")) || "1");
-  const registers = Number(text(formData.get("registers")) || "1");
+  // One shop and one shop type: Flo runs a single branch of a supermarket, so
+  // neither is asked. The order row still takes both.
+  const branches = 1;
+  const shopType = SHOP_TYPES[0].id;
+  const proof = formData.get("proof");
 
-  // The console's own list rather than a second copy of it: this order becomes
-  // a `tenants` row, and `shop_type` there is a check constraint over exactly
-  // these ids.
-  if (!shopName || !ownerName || !phone || !city || !pickOption(SHOP_TYPES, shopType)) {
+  if (!shopName || !ownerName || !phone || !city) {
     redirect("/checkout?error=Please+complete+the+required+shop+details.");
   }
-  if (!BILLING_CYCLES.includes(billingCycle) || !Number.isInteger(branches) || branches < 1 || !Number.isInteger(registers) || registers < 1) {
-    redirect("/checkout?error=Choose+valid+plan+and+capacity+values.");
+  if (!BILLING_CYCLES.includes(billingCycle)) {
+    redirect("/checkout?error=Choose+how+often+you+want+to+pay.");
+  }
+  // Refused before the order exists, so a wrong file is not an order with a
+  // reference the buyer never saw.
+  if (hasFile(proof)) {
+    const complaint = checkProof(proof);
+    if (complaint) redirect(`/checkout?plan=${encodeURIComponent(planCode)}&error=${encodeURIComponent(complaint)}`);
   }
 
   const supabase = createAdminClient();
@@ -50,16 +56,11 @@ export async function createCheckoutOrder(formData: FormData) {
     redirect("/checkout?error=That+plan+is+not+available.");
   }
 
-  // The plan's Counters ceiling, set on /admin/plans and printed on /pricing.
-  // More than that is a different plan, or a conversation — not an order.
+  // Counters are not asked either: a shop on a plan starts with the plan's
+  // ceiling (`PLAN_LIMITS`), which is what activation would seed anyway. A shop
+  // that needs more than that needs a bigger plan, not a bigger number here.
   const ceiling = (plan.features as Record<string, unknown> | null)?.max_registers;
-  if (typeof ceiling === "number" && registers > ceiling) {
-    redirect(
-      `/checkout?plan=${encodeURIComponent(planCode)}&error=${encodeURIComponent(
-        `That plan covers up to ${ceiling} ${ceiling === 1 ? "counter" : "counters"}. Choose a bigger plan, or message us for more.`,
-      )}`,
-    );
-  }
+  const registers = typeof ceiling === "number" && ceiling >= 1 ? ceiling : 1;
 
   const multiplier = billingCycle === "quarterly" ? 3 : billingCycle === "yearly" ? 12 : 1;
   const quotedPrice = Number(plan.list_price) * branches * multiplier;
@@ -78,12 +79,20 @@ export async function createCheckoutOrder(formData: FormData) {
       registers,
       quoted_price: quotedPrice,
     })
-    .select("reference")
+    .select("id, reference")
     .single();
 
   if (orderError || !order) {
     redirect("/checkout?error=We+could+not+create+your+order.+Please+try+again.");
   }
 
-  redirect(`/order/${encodeURIComponent(order.reference)}`);
+  // The order stands either way. A screenshot that fails to attach is retried
+  // from the order page, which is where the buyer lands regardless.
+  const page = `/order/${encodeURIComponent(order.reference)}`;
+  if (hasFile(proof)) {
+    const error = await attachProof(String(order.id), proof);
+    redirect(error ? `${page}?error=${encodeURIComponent(`Your order is in, but ${error.charAt(0).toLowerCase()}${error.slice(1)} Try again below.`)}` : page);
+  }
+
+  redirect(page);
 }

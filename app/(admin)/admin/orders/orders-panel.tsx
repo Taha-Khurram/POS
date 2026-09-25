@@ -3,26 +3,28 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
+import { OwnerLoginCard } from "@/components/admin/owner-login-card";
 import { ProofPreview } from "@/components/admin/proof-preview";
 import { ChartCard } from "@/components/pos/chart-card";
 import { DataTable, type Column } from "@/components/pos/data-table";
 import { IconClose } from "@/components/pos/icons";
+import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
 import { rupees } from "@/lib/format";
-import { orderStatusOf, waLink, writeWhen } from "@/lib/platform/admin";
+import { PAYMENT_METHODS, orderStatusOf, waLink, writeWhen } from "@/lib/platform/admin";
 import type { Order } from "@/lib/platform/console";
 
-import { acceptOrder, rejectOrder } from "./actions";
+import { rejectOrder, verifyOrder } from "./actions";
 import { IDLE } from "../state";
 
 /**
  * The self-serve queue.
  *
  * An order is a claim of payment, not a payment. Open it beside your bank
- * statement and see the screenshot. If the money is there, record it in
- * Payments against this order, then accept it here, which makes the order a
- * client. If it is not, reject it with a reason the buyer reads on their own
- * order page. The plan is started from the client's record, not from here.
+ * statement and see the screenshot. If the money is there, Verify & activate
+ * records it, makes the client, starts the plan the buyer ordered and hands
+ * back the owner's login — one press, ending on the WhatsApp message. If it is
+ * not, reject it with a reason the buyer reads on their own order page.
  *
  * Opening a row is a sheet rather than a navigation, the same call
  * `/app/sales` makes: a queue somebody is working through must survive looking
@@ -148,12 +150,12 @@ function OrderSheet({
   readOnly: boolean;
   onClose: () => void;
 }) {
-  const [acceptState, acceptAction, accepting] = useActionState(acceptOrder, IDLE);
+  const [acceptState, acceptAction, accepting] = useActionState(verifyOrder, IDLE);
   const [rejectState, rejectAction, rejecting] = useActionState(rejectOrder, IDLE);
 
   useActionToast(acceptState, {
-    saved: acceptState.saved?.label ?? "Order accepted",
-    failed: "That order was not accepted",
+    saved: acceptState.saved?.label ?? "Shop activated",
+    failed: "That order was not activated",
   });
   useActionToast(rejectState, {
     saved: rejectState.saved?.label ?? "Order rejected",
@@ -165,6 +167,10 @@ function OrderSheet({
   const acceptedInto =
     acceptState.tenantId ?? (order.status === "verified" ? order.tenantId : null);
   const settled = acceptedInto !== null || order.status === "rejected";
+  // Money already on file (recorded from Payments, or a press that stopped
+  // part way) is not asked for twice — the action skips that step too.
+  const alreadyPaid = order.paid > 0;
+  const [method, setMethod] = useState("bank_transfer");
 
   return (
     <div
@@ -226,8 +232,9 @@ function OrderSheet({
             />
           ) : (
             <p className="pos-note pos-note-warn">
-              No screenshot was uploaded. Record a payment only if you can see
-              the transfer on the statement with this reference against it.
+              No screenshot was uploaded. Activate only if you can see the
+              transfer on the statement with this reference or their phone
+              number against it.
             </p>
           )}
 
@@ -240,15 +247,17 @@ function OrderSheet({
             Message them on WhatsApp
           </a>
 
-          {settled ? (
+          {acceptState.credentials ? (
+            <OwnerLoginCard credentials={acceptState.credentials} shopName={order.shopName} />
+          ) : settled ? (
             acceptedInto ? (
-              <div className="pos-note pos-note-good space-y-2">
+              <div className={`pos-note space-y-2 ${acceptState.error ? "pos-note-warn" : "pos-note-good"}`}>
                 <p>
-                  {order.status === "verified" && order.verifiedAt
-                    ? `Accepted ${writeWhen(order.verifiedAt).toLowerCase()}. `
-                    : "Accepted. "}
-                  It is a client now — activate the plan from their record, which
-                  also makes the owner&rsquo;s login.
+                  {acceptState.error
+                    ? acceptState.error
+                    : order.status === "verified" && order.verifiedAt
+                      ? `Accepted ${writeWhen(order.verifiedAt).toLowerCase()}. Its plan, payments and owner login are on the client's record.`
+                      : "Accepted. Its plan, payments and owner login are on the client's record."}
                 </p>
                 <Link
                   href={`/admin/clients/${acceptedInto}`}
@@ -275,13 +284,48 @@ function OrderSheet({
                   <p className="pos-note pos-note-bad">{acceptState.error}</p>
                 ) : null}
 
+                {alreadyPaid ? (
+                  <p className="pos-note">
+                    {rupees(order.paid)} is already recorded against this order.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="block">
+                      <span className="pos-label">Received</span>
+                      <input
+                        name="amount"
+                        className="pos-field"
+                        inputMode="decimal"
+                        defaultValue={String(order.quotedPrice)}
+                      />
+                    </label>
+
+                    <SelectRow
+                      label="Arrived by"
+                      value={method}
+                      onChange={setMethod}
+                      options={PAYMENT_METHODS}
+                    />
+                    <input type="hidden" name="method" value={method} />
+
+                    <label className="block">
+                      <span className="pos-label">TID or reference</span>
+                      <input name="reference" className="pos-field" placeholder="Optional" />
+                    </label>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="pos-btn pos-btn-primary w-full"
                   disabled={accepting}
                 >
-                  {accepting ? "Accepting…" : "Accept — make it a client"}
+                  {accepting ? "Activating…" : "Verify & activate"}
                 </button>
+                <p className="pos-hint">
+                  Records the payment, makes the client, starts the {order.planName || "ordered"} plan
+                  {" "}{order.billingCycle} at {rupees(order.quotedPrice)}, and makes the owner&rsquo;s login.
+                </p>
               </form>
 
               <form action={rejectAction} className="space-y-2 border-t border-orchid-100 pt-4">

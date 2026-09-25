@@ -1,10 +1,19 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 import { ChartCard } from "@/components/pos/chart-card";
 import { CredentialsCard } from "@/components/pos/credentials-card";
-import { IconKey, IconTrash } from "@/components/pos/icons";
+import {
+  IconCheck,
+  IconKey,
+  IconMore,
+  IconPause,
+  IconPencil,
+  IconTrash,
+  IconUser,
+} from "@/components/pos/icons";
+import { placeMenu, useDismiss } from "@/components/pos/use-dismiss";
 import { useActionToast } from "@/components/pos/toaster";
 import {
   OWNER_ONLY,
@@ -202,9 +211,14 @@ function OwnerRow({ operator, self }: { operator: Operator; self: boolean }) {
 
 /**
  * One member: which screens they have, and the five things that can happen to
- * them. Show login is first because it is the one pressed most — a member who
- * lost the WhatsApp message. Switching off comes before deleting on purpose: it
- * is undoable and keeps their name on the trail.
+ * them, behind one "⋯" menu rather than five buttons across the row. Show login
+ * is first because it is the one pressed most — a member who lost the WhatsApp
+ * message. Switching off comes before deleting on purpose: it is undoable and
+ * keeps their name on the trail, and Delete sits alone under a rule, in red.
+ *
+ * Every item still dispatches the same Server Action its old form did, with the
+ * same fields — built here rather than in a `<form>`, because a form inside a
+ * menu that closes on the click is unmounted before its submit lands.
  */
 function MemberRow({ operator }: { operator: Operator }) {
   const [screensState, screensAction, screensPending] = useActionState(setOperatorScreens, IDLE);
@@ -215,6 +229,17 @@ function MemberRow({ operator }: { operator: Operator }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [hidden, setHidden] = useState<number | null>(null);
+  const { ref: menuRef, open: menuOpen, setOpen: setMenuOpen } = useDismiss<HTMLDivElement>();
+  const [, startTransition] = useTransition();
+  const busy = revealPending || standingPending || resetPending || removePending;
+
+  const run = (dispatch: (body: FormData) => void, fields: Record<string, string> = {}) => {
+    const body = new FormData();
+    body.set("user_id", operator.userId);
+    for (const [name, value] of Object.entries(fields)) body.set(name, value);
+    setMenuOpen(false);
+    startTransition(() => dispatch(body));
+  };
   const [seen, setSeen] = useState<number | null>(null);
 
   // Close the editor once its save lands — during render, React's own answer
@@ -276,65 +301,96 @@ function MemberRow({ operator }: { operator: Operator }) {
           </span>
         </span>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {operator.hasShop ? null : (
-            <form action={revealAction}>
-              <input type="hidden" name="user_id" value={operator.userId} />
-              <button
-                type="submit"
-                className="pos-btn pos-btn-soft pos-btn-sm"
-                disabled={revealPending}
-              >
-                {revealPending ? "Opening…" : "Show login"}
-              </button>
-            </form>
-          )}
-
+        <div className="relative" ref={menuRef}>
           <button
             type="button"
-            className="pos-btn pos-btn-quiet pos-btn-sm"
-            onClick={() => setEditing((open) => !open)}
-            aria-expanded={editing}
+            className="pos-icon-btn h-8 w-8"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={`Actions for ${operator.fullName}`}
+            disabled={busy}
           >
-            {editing ? "Close" : "Edit access"}
+            {busy ? (
+              <span className="text-[0.75rem] leading-none text-graphite-500">…</span>
+            ) : (
+              <IconMore className="h-4 w-4" />
+            )}
           </button>
 
-          <form action={standingAction}>
-            <input type="hidden" name="user_id" value={operator.userId} />
-            <input type="hidden" name="is_active" value={operator.isActive ? "false" : "true"} />
-            <button
-              type="submit"
-              className="pos-btn pos-btn-quiet pos-btn-sm"
-              disabled={standingPending}
-            >
-              {operator.isActive ? "Switch off" : "Switch on"}
-            </button>
-          </form>
+          {menuOpen ? (
+            <div ref={placeMenu} className="pos-menu min-w-[13rem]" role="menu" aria-label={operator.fullName}>
+              {operator.hasShop ? null : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="pos-menu-item"
+                  onClick={() => run(revealAction)}
+                >
+                  <IconUser className="h-4 w-4" />
+                  Show login
+                </button>
+              )}
 
-          {operator.hasShop ? null : (
-            <form action={resetAction}>
-              <input type="hidden" name="user_id" value={operator.userId} />
               <button
-                type="submit"
-                className="pos-icon-btn h-7 w-7"
-                title="New password"
-                disabled={resetPending}
+                type="button"
+                role="menuitem"
+                className="pos-menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirming(false);
+                  setEditing(true);
+                }}
               >
-                <IconKey className="h-3.5 w-3.5" />
-                <span className="sr-only">New password for {operator.fullName}</span>
+                <IconPencil className="h-4 w-4" />
+                Edit access
               </button>
-            </form>
-          )}
 
-          <button
-            type="button"
-            className="pos-icon-btn h-7 w-7 text-signal-bad"
-            title="Delete"
-            onClick={() => setConfirming(true)}
-          >
-            <IconTrash className="h-3.5 w-3.5" />
-            <span className="sr-only">Delete {operator.fullName}</span>
-          </button>
+              {operator.hasShop ? null : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="pos-menu-item"
+                  onClick={() => run(resetAction)}
+                >
+                  <IconKey className="h-4 w-4" />
+                  New password
+                </button>
+              )}
+
+              <button
+                type="button"
+                role="menuitem"
+                className="pos-menu-item"
+                onClick={() =>
+                  run(standingAction, { is_active: operator.isActive ? "false" : "true" })
+                }
+              >
+                {operator.isActive ? (
+                  <IconPause className="h-4 w-4" />
+                ) : (
+                  <IconCheck className="h-4 w-4" />
+                )}
+                {operator.isActive ? "Switch off" : "Switch on"}
+              </button>
+
+              <div className="my-1 border-t border-orchid-100" role="separator" />
+
+              <button
+                type="button"
+                role="menuitem"
+                className="pos-menu-item text-signal-bad"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setEditing(false);
+                  setConfirming(true);
+                }}
+              >
+                <IconTrash className="h-4 w-4" />
+                {operator.hasShop ? "Remove from the team" : "Delete"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -361,9 +417,19 @@ function MemberRow({ operator }: { operator: Operator }) {
           <fieldset disabled={screensPending}>
             <ScreenPicker ticked={operator.screens} />
           </fieldset>
-          <button type="submit" className="pos-btn pos-btn-primary pos-btn-sm" disabled={screensPending}>
-            {screensPending ? "Saving…" : "Save access"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="pos-btn pos-btn-primary pos-btn-sm" disabled={screensPending}>
+              {screensPending ? "Saving…" : "Save access"}
+            </button>
+            <button
+              type="button"
+              className="pos-btn pos-btn-quiet pos-btn-sm"
+              onClick={() => setEditing(false)}
+              disabled={screensPending}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       ) : null}
 

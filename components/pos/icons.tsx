@@ -143,6 +143,16 @@ export const IconMenu = (props: IconProps) => (
   </Glyph>
 );
 
+/** A row's actions menu — three dots, the one glyph everybody already reads
+ *  as "more things you can do here". */
+export const IconMore = (props: IconProps) => (
+  <Glyph {...props}>
+    <circle cx="5" cy="12" r="1.3" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.3" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.3" fill="currentColor" />
+  </Glyph>
+);
+
 export const IconClose = (props: IconProps) => (
   <Glyph {...props}>
     <path d="M6 6l12 12M18 6 6 18" />

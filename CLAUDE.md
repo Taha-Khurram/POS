@@ -883,8 +883,18 @@ roster for every address so a member lands on `/admin` and not `/app`.
 operator's day is the order of the screens:
 
 1. A buyer checks out on the site and an **order** lands in `/admin/orders`.
+   `/checkout` is the whole purchase on one page: shop, plan and cycle, the
+   exact amount (`list_price × months`, the action's `quoted_price` restated
+   for the browser), Flo's accounts and an optional screenshot on the same
+   submit. Shop type and counters are not asked — one value each, the plan's
+   ceiling for counters. `/order/[reference]` is only a status page now, and
+   the place a buyer who paid later sends the screenshot; `attachProof` in
+   `lib/platform/proof.ts` is the one body both use. The transfer note on
+   checkout is the buyer's phone, because the reference does not exist until
+   the order does. `serverActions.bodySizeLimit` is 6 MB for that screenshot —
+   the 1 MB default refused most phone screenshots.
 2. The transfer is matched against the statement and **recorded against the
-   order** in Payments. `payments.tenant_id` is nullable for exactly this — a
+   order**. `payments.tenant_id` is nullable for exactly this — a
    payment can exist before its shop does — and `payments_owner_known` requires
    the tenant or the order. Such a row is invisible to every tenant JWT, because
    `tenant_id = claim` is never true of a null.
@@ -901,6 +911,17 @@ operator's day is the order of the screens:
    `generatePassword()` password, shown once in `OwnerLoginCard` with the
    WhatsApp message composed. It is a work address so `isWorkEmail` lets it past
    the sign-in allow-list, and it can reach `/app` and nothing else.
+
+**On the order queue, 2–5 are one press: Verify & activate** (`verifyOrder`
+in `orders/actions.ts`). It records the payment through `recordUnallocated`
+(`payments/record.ts`, `server-only` for `activate.ts`'s reason) unless money
+is already on the order, then runs the three steps below with the plan, cycle,
+counters and price the buyer ordered — a haggled price is changed on the
+client's record afterwards. Not one transaction, on purpose: every place it can
+stop is a state the console already draws, and pressing again picks up from
+there. It is gated on Orders alone, so ticking Orders for a member means working
+the queue end to end. Recording against an order from Payments still works and
+is simply skipped by the press.
 
 Between 3 and 4 a client has no subscription and is drawn **Not activated** —
 a state to finish, not a broken row. `/admin/clients/new` is steps 3–5 in one
@@ -1018,8 +1039,8 @@ is *of* — a trial is on the trading count and contributes nothing to the money
 and two numbers side by side that quietly describe different sets is how a
 console stops being believed.
 
-**Every activation path is the same three steps.** Accept on `/admin/orders`,
-Activate on a client's record and the direct form all call
+**Every activation path is the same three steps.** Verify & activate on
+`/admin/orders`, Activate on a client's record and the direct form all call
 `createClientRecord`, `startPlan` and `issueOwnerLogin` in `clients/activate.ts`,
 which is `server-only` and deliberately *not* in a `"use server"` module — every
 export of one is a callable endpoint, so a shared body taking its actor as an

@@ -160,6 +160,10 @@ const FAQS = [
     a: "Cash, card, Raast, Easypaisa, JazzCash and a bank transfer, and a bill can be split across them — two thousand on the card and the rest in notes is one bill with two tenders on it. All of them mean the machine or the app you already have: the cashier records how the money arrived, with its transaction number, so your day close reconciles against the statement. Flo does not process the payment and takes no cut of it.",
   },
   {
+    q: "How do I pay for Flo?",
+    a: "Press Get started on a plan. One page asks for your shop, shows the exact amount and our bank, Easypaisa and JazzCash accounts, and takes the screenshot once you have sent it. We match the transfer against our statement and send your shop's login on WhatsApp. Paid later? The order link you get lets you send the screenshot whenever you are ready.",
+  },
+  {
     q: "Is sales tax included in those figures?",
     a: "Prices are quoted before tax. Federal sales tax on services is added on your invoice at the prevailing rate, and we issue a proper tax invoice with our NTN and STRN so your accountant can claim it.",
   },

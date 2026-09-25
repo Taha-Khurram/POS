@@ -1632,6 +1632,13 @@
     animation: float-in 0.22s var(--ease-out-soft) both;
   }
 
+  /* Hung above the trigger when there is no room under it — set by
+     `placeMenu`, which measures before the menu is painted. */
+  .pos-menu[data-drop="up"] {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+
   .pos-menu-item {
     display: flex;
     width: 100%;

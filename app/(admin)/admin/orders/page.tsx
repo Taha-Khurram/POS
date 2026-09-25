@@ -25,9 +25,9 @@ export default async function OrdersPage() {
       <header>
         <h1 className="font-display text-[1.5rem] leading-tight font-bold">Orders</h1>
         <p className="mt-1 text-[0.8125rem] text-graphite-500">
-          Somebody filled in the checkout and says they have paid. Match it
-          against the statement, record the payment against the order, then
-          accept it — accepting makes it a client, ready to activate.
+          Somebody checked out on the site and says they have paid. Match the
+          transfer against the statement, then Verify &amp; activate — one press
+          records it, starts their plan and makes the owner&rsquo;s login.
         </p>
       </header>
 
