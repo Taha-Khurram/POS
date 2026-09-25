@@ -851,10 +851,33 @@ screenshot in the private `payment-proofs` bucket: storage has no policy for the
 platform role, and the alternative is a bucket every signed-in account can read.
 
 **Every write is a service-role Server Action that re-checks for itself.**
-`requireBilling()` returns a sentence rather than a 404, because a form has to
-say something back. A `support` operator reads every screen, works the leads and
-writes notes, and is refused anything that touches money — checked in the
-action, not trusted from the rail.
+`requireWrite(screens)` and `requireOwnerWrite()` return a sentence rather than
+a 404, because a form has to say something back — checked in the action, not
+trusted from the rail.
+
+**A team member is the screens the owner ticked** (`0047`). `super_admin` is the
+Flo owner and gets everything; `support` is every member, and
+`platform_admins.screens` says which of `PLATFORM_SCREENS` (Overview, Clients,
+Orders, Payments, Leads) they may open and work — a ticked screen is its reads
+*and* its buttons. `OWNER_ONLY` is never grantable: Team, the audit trail (and a
+client's Activity tab, which is the trail cut to one shop), Plans, Payment
+accounts and "Your own shop". `requirePlatform` re-reads the member's row —
+standing *and* screens — on every request, so un-ticking a tab bites on the
+next click. `requireScreen` gates a page and 404s; `/admin` itself redirects a
+member without Overview to their first screen. This is presentation plus the
+action gate: RLS still admits any active operator to the platform read
+policies, except `audit_log` (`audit_log_read_owner`) and `platform_admins`.
+
+`/admin/team` takes a name and the ticks and mints both halves of the login —
+`<name>@team.flopos.pk` and a `generatePassword()` password. **The password is
+kept**, reversing `0041`'s "stored nowhere" at the owner's call: sealed with
+AES-256-GCM in `lib/platform/sealed.ts` (key HKDF'd from the service-role key)
+into `operator_credentials`, a table with RLS forced and no policy at all, so
+Show login can bring it back. Every reveal, sign-in, failed sign-in and sign-out
+of a console account is an audit row, filed `platform_admin` because a console
+session carries `console: true`. Because team usernames are `*.flopos.pk`,
+`isWorkEmail` lets them past the sign-in allow-list, and `signIn` asks the
+roster for every address so a member lands on `/admin` and not `/app`.
 
 **Money first, then a client, then a plan** (`0042`). The order of the
 operator's day is the order of the screens:

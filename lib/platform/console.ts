@@ -3,13 +3,21 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import { writeReadError } from "@/lib/pos/read-error";
-import type {
-  AccountMethod,
-  BillingCycle,
-  FeatureFlags,
-  PlatformRole,
-  SubscriptionStatus,
+import {
+  isPlatformScreen,
+  type AccountMethod,
+  type BillingCycle,
+  type FeatureFlags,
+  type PlatformRole,
+  type PlatformScreen,
+  type SubscriptionStatus,
 } from "@/lib/platform/admin";
+import {
+  AUDIT_PAGE_SIZE,
+  areaPrefixes,
+  auditWindow,
+  type AuditFilters,
+} from "@/lib/platform/audit";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
@@ -775,6 +783,8 @@ export type Operator = {
   fullName: string;
   email: string;
   platformRole: PlatformRole;
+  /** What `/admin/team` ticked. Empty for the owner, who has every screen. */
+  screens: PlatformScreen[];
   isActive: boolean;
   /** The login also runs a shop. Such an account is never banned or deleted
    *  from here — switching off their console must not shut their till. */
@@ -787,7 +797,7 @@ export async function listOperators(): Promise<Operator[]> {
 
   const { data, error } = await supabase
     .from("platform_admins")
-    .select("user_id, full_name, email, platform_role, is_active, created_at")
+    .select("user_id, full_name, email, platform_role, screens, is_active, created_at")
     .order("created_at");
 
   if (error) {
@@ -812,6 +822,7 @@ export async function listOperators(): Promise<Operator[]> {
     fullName: text(row.full_name) || "Unnamed",
     email: text(row.email),
     platformRole: text(row.platform_role) as PlatformRole,
+    screens: ((row.screens as string[] | null) ?? []).filter(isPlatformScreen),
     isActive: row.is_active !== false,
     hasShop: withShop.has(String(row.user_id)),
     createdAt: text(row.created_at),
@@ -825,8 +836,16 @@ export type AuditRow = {
   actorKind: string;
   tenantId: string | null;
   shopName: string;
+  /** The actor's own name off the team roster or the shop's staff list, or
+   *  empty when the account has since gone. The email is still the identity. */
+  actorName: string;
   subjectType: string;
   subjectId: string;
+  /** The person an entry is about — a team member suspended, a cashier added —
+   *  read live, because most entries store an id and not a name. */
+  subjectName: string;
+  /** The plan behind a `plan_id` in the payload, for "activated on Standard". */
+  planName: string;
   before: unknown;
   after: unknown;
   createdAt: string;
@@ -834,8 +853,13 @@ export type AuditRow = {
 
 export const AUDIT_MAX = 500;
 
+const AUDIT_COLUMNS = `id, action, actor_email, actor_kind, tenant_id, subject_type, subject_id,
+       before, after, created_at`;
+
+type Reader = ReturnType<typeof createClient>;
+
 /**
- * The trail, newest first.
+ * The trail for one shop, newest first — a client's Activity tab.
  *
  * Capped and said out loud on the screen. `audit_log` is append-only by trigger
  * and grows for ever; a console that silently showed the last five hundred rows
@@ -847,10 +871,7 @@ export async function listAudit(tenantId?: string): Promise<AuditRow[]> {
 
   let query = supabase
     .from("audit_log")
-    .select(
-      `id, action, actor_email, actor_kind, tenant_id, subject_type, subject_id,
-       before, after, created_at`,
-    )
+    .select(AUDIT_COLUMNS)
     .order("created_at", { ascending: false })
     .limit(AUDIT_MAX);
 
@@ -863,51 +884,245 @@ export async function listAudit(tenantId?: string): Promise<AuditRow[]> {
     return [];
   }
 
-  const rows = data ?? [];
+  return withNames(supabase, data ?? []);
+}
 
-  /**
-   * The shop names, in a second read rather than a PostgREST embed.
-   *
-   * `0014` dropped `audit_log`'s foreign keys to both `auth.users` and
-   * `tenants` on purpose — the table is append-only by statement trigger, and
-   * an `on delete set null` made Postgres try to rewrite the log whenever an
-   * account or a shop was deleted, which the trigger refused and which took the
-   * delete down with it. No constraint means no relationship for PostgREST to
-   * embed through, so an `audit_log ( tenants ( shop_name ) )` select fails
-   * outright with PGRST200.
-   *
-   * Which is also the right behaviour to preserve: an entry about a shop that
-   * has since been deleted keeps its `tenant_id` and simply has no name to
-   * show, rather than disappearing from the trail.
-   */
-  const ids = [
-    ...new Set(rows.map((row) => row.tenant_id).filter(Boolean)),
-  ] as string[];
+export type AuditPage = {
+  rows: AuditRow[];
+  /** Every entry the filters match, not just this page's. */
+  total: number;
+  /** The page actually read — a link to page 9 of a list that now has 3 is
+   *  answered with page 3 rather than an empty table. */
+  page: number;
+  pages: number;
+  /** The name behind `filters.shop`, for the chip that says it is on. */
+  shopName: string;
+};
 
-  const names = new Map<string, string>();
+/**
+ * One page of the trail, filtered in Postgres.
+ *
+ * The whole-trail screen pages on the server rather than holding a window in
+ * the browser the way `/app/sales` does: a shop's history is bounded by the
+ * days somebody picks, and this table is every change anybody has ever made,
+ * for ever. `count: "exact"` rides on the same query, so the pager and the
+ * caption quote the real total rather than "500+".
+ */
+export async function searchAudit(filters: AuditFilters): Promise<AuditPage> {
+  const supabase = createClient(await cookies());
 
-  if (ids.length > 0) {
-    const { data: shops } = await supabase
-      .from("tenants")
-      .select("id, shop_name")
-      .in("id", ids);
+  const shopName = filters.shop ? await shopNameOf(supabase, filters.shop) : "";
 
-    for (const shop of shops ?? []) names.set(String(shop.id), text(shop.shop_name));
+  // The search box matches the shop's name too, which the log does not hold —
+  // so it is turned into the ids of the shops whose names match first.
+  const pattern = searchPattern(filters.q);
+  let shopIds: string[] = [];
+  let emails: string[] = [];
+
+  // The same goes for people: the sentence on screen says "Muhammad Ibrahim",
+  // and the log only holds his email.
+  if (pattern) {
+    const [shops, team, staff] = await Promise.all([
+      supabase.from("tenants").select("id").ilike("shop_name", pattern).limit(50),
+      supabase.from("platform_admins").select("email").ilike("full_name", pattern).limit(50),
+      supabase.from("profiles").select("email").ilike("full_name", pattern).limit(50),
+    ]);
+    shopIds = (shops.data ?? []).map((row) => String(row.id));
+    emails = [...(team.data ?? []), ...(staff.data ?? [])]
+      .map((row) => text(row.email))
+      .filter((email) => /^[^\s",()]+$/.test(email));
   }
 
-  return rows.map((row) => ({
-    id: String(row.id),
-    action: text(row.action),
-    actorEmail: text(row.actor_email) || "system",
-    actorKind: text(row.actor_kind),
-    tenantId: row.tenant_id ? String(row.tenant_id) : null,
-    shopName: row.tenant_id ? (names.get(String(row.tenant_id)) ?? "") : "",
-    subjectType: text(row.subject_type),
-    subjectId: text(row.subject_id),
-    before: row.before ?? null,
-    after: row.after ?? null,
-    createdAt: text(row.created_at),
-  }));
+  const { since, until } = auditWindow(filters);
+  const prefixes = areaPrefixes(filters.area);
+
+  const read = (page: number) => {
+    let query = supabase
+      .from("audit_log")
+      .select(AUDIT_COLUMNS, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE - 1);
+
+    if (filters.shop) query = query.eq("tenant_id", filters.shop);
+    if (filters.who) query = query.eq("actor_kind", filters.who);
+    if (since) query = query.gte("created_at", since);
+    if (until) query = query.lt("created_at", until);
+
+    if (prefixes.length > 0) {
+      query = query.or(prefixes.map((prefix) => `action.like.${prefix}.*`).join(","));
+    }
+
+    if (pattern) {
+      const like = pattern.replace(/%/g, "*");
+      query = query.or(
+        [
+          `action.ilike.${like}`,
+          `actor_email.ilike.${like}`,
+          `subject_type.ilike.${like}`,
+          `subject_id.ilike.${like}`,
+          ...(shopIds.length > 0 ? [`tenant_id.in.(${shopIds.join(",")})`] : []),
+          ...(emails.length > 0
+            ? [`actor_email.in.(${emails.map((email) => `"${email}"`).join(",")})`]
+            : []),
+        ].join(","),
+      );
+    }
+
+    return query;
+  };
+
+  let page = filters.page;
+  let { data, error, count } = await read(page);
+
+  // PostgREST answers a range past the end with 416 rather than an empty page.
+  // Read the last page that exists instead.
+  if (error?.code === "PGRST103" && page > 1) {
+    const { count: total } = await read(1);
+    page = Math.max(1, Math.ceil((total ?? 0) / AUDIT_PAGE_SIZE));
+    ({ data, error, count } = await read(page));
+  }
+
+  if (error) {
+    console.error("[admin] audit read failed: %s", writeReadError(error));
+    return { rows: [], total: 0, page: 1, pages: 1, shopName };
+  }
+
+  const total = count ?? 0;
+
+  return {
+    rows: await withNames(supabase, data ?? []),
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE)),
+    shopName,
+  };
+}
+
+/**
+ * The search box's words as one `ilike` pattern, each word in order with
+ * anything between: "note removed" finds `tenant.note_removed`, which is how
+ * somebody who has never seen the stored spelling types it.
+ *
+ * Everything but letters, digits and the few characters an email or an action
+ * holds is dropped — commas, brackets and quotes are PostgREST's own syntax
+ * inside an `or()` filter, and a search box is not a way to write one.
+ */
+function searchPattern(q: string): string {
+  const words = q
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}@._+-]+/gu, " ")
+    .split(" ")
+    .filter(Boolean);
+
+  return words.length > 0 ? `%${words.join("%")}%` : "";
+}
+
+async function shopNameOf(supabase: Reader, id: string): Promise<string> {
+  const { data } = await supabase
+    .from("tenants")
+    .select("shop_name")
+    .eq("id", id)
+    .maybeSingle();
+  return data ? text(data.shop_name) : "";
+}
+
+/**
+ * The names behind the ids, in follow-up reads rather than PostgREST embeds.
+ *
+ * `0014` dropped `audit_log`'s foreign keys to both `auth.users` and
+ * `tenants` on purpose — the table is append-only by statement trigger, and
+ * an `on delete set null` made Postgres try to rewrite the log whenever an
+ * account or a shop was deleted, which the trigger refused and which took the
+ * delete down with it. No constraint means no relationship for PostgREST to
+ * embed through, so an `audit_log ( tenants ( shop_name ) )` select fails
+ * outright with PGRST200.
+ *
+ * Which is also the right behaviour to preserve: an entry about a shop or a
+ * person who has since been deleted keeps its ids and simply has no name to
+ * show, rather than disappearing from the trail. Every lookup is one `in`
+ * read over the ids on the page, so twenty rows cost the same as one.
+ */
+async function withNames(
+  supabase: Reader,
+  rows: Record<string, unknown>[],
+): Promise<AuditRow[]> {
+  const unique = (values: unknown[]) =>
+    [...new Set(values.filter((value) => typeof value === "string" && value))] as string[];
+
+  const field = (value: unknown, key: string): unknown =>
+    value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+
+  const shopIds = unique(rows.map((row) => row.tenant_id));
+  const actorEmails = unique(rows.map((row) => row.actor_email));
+  const teamIds = unique(
+    rows.filter((row) => row.subject_type === "platform_admin").map((row) => row.subject_id),
+  );
+  const profileIds = unique(
+    rows.filter((row) => row.subject_type === "profile").map((row) => row.subject_id),
+  );
+  const planIds = unique(
+    rows.flatMap((row) => [field(row.after, "plan_id"), field(row.before, "plan_id")]),
+  );
+
+  const none = Promise.resolve({ data: [] as Record<string, unknown>[] });
+
+  const [shops, teamByEmail, staffByEmail, team, staff, plans] = await Promise.all([
+    shopIds.length
+      ? supabase.from("tenants").select("id, shop_name").in("id", shopIds)
+      : none,
+    actorEmails.length
+      ? supabase.from("platform_admins").select("email, full_name").in("email", actorEmails)
+      : none,
+    actorEmails.length
+      ? supabase.from("profiles").select("email, full_name").in("email", actorEmails)
+      : none,
+    teamIds.length
+      ? supabase.from("platform_admins").select("user_id, full_name").in("user_id", teamIds)
+      : none,
+    profileIds.length
+      ? supabase.from("profiles").select("id, full_name").in("id", profileIds)
+      : none,
+    planIds.length ? supabase.from("plans").select("id, name").in("id", planIds) : none,
+  ]);
+
+  const map = (list: Record<string, unknown>[] | null, key: string, value: string) =>
+    new Map((list ?? []).map((row) => [String(row[key]), text(row[value])]));
+
+  const shopName = map(shops.data, "id", "shop_name");
+  // The roster first: a console operator who also has a shop is named as the
+  // console knows them.
+  const actorName = new Map([
+    ...map(staffByEmail.data, "email", "full_name"),
+    ...map(teamByEmail.data, "email", "full_name"),
+  ]);
+  const subjectName = new Map([
+    ...map(staff.data, "id", "full_name"),
+    ...map(team.data, "user_id", "full_name"),
+  ]);
+  const planName = map(plans.data, "id", "name");
+
+  return rows.map((row) => {
+    const tenantId = row.tenant_id ? String(row.tenant_id) : null;
+    const planId = text(field(row.after, "plan_id")) || text(field(row.before, "plan_id"));
+
+    return {
+      id: String(row.id),
+      action: text(row.action),
+      actorEmail: text(row.actor_email) || "system",
+      actorKind: text(row.actor_kind),
+      tenantId,
+      shopName: tenantId ? (shopName.get(tenantId) ?? "") : "",
+      actorName: actorName.get(text(row.actor_email)) ?? "",
+      subjectType: text(row.subject_type),
+      subjectId: text(row.subject_id),
+      subjectName: subjectName.get(text(row.subject_id)) ?? "",
+      planName: planName.get(planId) ?? "",
+      before: row.before ?? null,
+      after: row.after ?? null,
+      createdAt: text(row.created_at),
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------- */

@@ -19,7 +19,7 @@ import {
   IconTag,
   type IconProps,
 } from "@/components/pos/icons";
-import type { PlatformRole } from "@/lib/platform/admin";
+import { isOwner, type PlatformRole, type PlatformScreen } from "@/lib/platform/admin";
 
 /**
  * The counts that sit on the rail as badges.
@@ -39,8 +39,9 @@ type Item = {
   icon: (props: IconProps) => React.ReactElement;
   /** Which count, if any, rides on this row. */
   count?: keyof RailCounts;
-  /** Rows only the full-access account gets. */
-  billing?: boolean;
+  /** The grantable screen this row is, or `owner` for the Flo owner's alone.
+   *  The page gates itself either way; this only decides what is drawn. */
+  screen: PlatformScreen | "owner";
 };
 
 /**
@@ -54,30 +55,30 @@ const GROUPS: { label: string; items: Item[] }[] = [
   {
     label: "Money",
     items: [
-      { href: "/admin", label: "Overview", icon: IconDashboard, count: "expiring" },
-      { href: "/admin/clients", label: "Clients", icon: IconStore },
-      { href: "/admin/orders", label: "Orders", icon: IconCart, count: "ordersToVerify" },
-      { href: "/admin/payments", label: "Payments", icon: IconCash },
+      { href: "/admin", label: "Overview", icon: IconDashboard, count: "expiring", screen: "overview" },
+      { href: "/admin/clients", label: "Clients", icon: IconStore, screen: "clients" },
+      { href: "/admin/orders", label: "Orders", icon: IconCart, count: "ordersToVerify", screen: "orders" },
+      { href: "/admin/payments", label: "Payments", icon: IconCash, screen: "payments" },
     ],
   },
   {
     label: "The product",
     items: [
-      { href: "/admin/plans", label: "Plans", icon: IconTag },
-      { href: "/admin/payment-accounts", label: "Payment accounts", icon: IconCard },
+      { href: "/admin/plans", label: "Plans", icon: IconTag, screen: "owner" },
+      { href: "/admin/payment-accounts", label: "Payment accounts", icon: IconCard, screen: "owner" },
     ],
   },
   {
     label: "Growth",
     items: [
-      { href: "/admin/leads", label: "Leads", icon: IconCustomers, count: "leadsNew" },
+      { href: "/admin/leads", label: "Leads", icon: IconCustomers, count: "leadsNew", screen: "leads" },
     ],
   },
   {
     label: "Trust",
     items: [
-      { href: "/admin/audit", label: "Audit trail", icon: IconHistory },
-      { href: "/admin/team", label: "Team", icon: IconEmployees, billing: true },
+      { href: "/admin/audit", label: "Audit trail", icon: IconHistory, screen: "owner" },
+      { href: "/admin/team", label: "Team", icon: IconEmployees, screen: "owner" },
     ],
   },
 ];
@@ -87,6 +88,7 @@ export function AdminSidebar({
   tight,
   email,
   role,
+  screens,
   counts,
   onNavigate,
   onClose,
@@ -95,6 +97,7 @@ export function AdminSidebar({
   tight: boolean;
   email: string | null;
   role: PlatformRole;
+  screens: PlatformScreen[];
   counts: RailCounts;
   onNavigate: () => void;
   onClose: () => void;
@@ -103,7 +106,9 @@ export function AdminSidebar({
 
   const groups = GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.billing || role === "super_admin"),
+    items: group.items.filter((item) =>
+      item.screen === "owner" ? isOwner(role) : screens.includes(item.screen),
+    ),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -166,6 +171,7 @@ export function AdminSidebar({
         {/* The way back to the shop floor. An operator who also runs a shop is
             both accounts at once, and the two consoles are otherwise one
             address bar apart with no door between them. */}
+        {isOwner(role) ? (
         <div className="mt-6 border-t border-orchid-100 pt-3">
           <Link
             href="/app"
@@ -177,6 +183,7 @@ export function AdminSidebar({
             <span className="pos-rail-text flex-1">Your own shop</span>
           </Link>
         </div>
+        ) : null}
       </nav>
 
       <div className="flex-none border-t border-orchid-100 p-2.5">
@@ -185,7 +192,7 @@ export function AdminSidebar({
 
           <div className="pos-rail-text min-w-0 flex-1">
             <p className="truncate text-[0.8125rem] font-semibold text-graphite-900">
-              {role === "super_admin" ? "Full access" : "Support"}
+              {isOwner(role) ? "Flo owner" : "Team member"}
             </p>
             <p className="truncate text-[0.6875rem] text-graphite-500">
               {email ?? "Signed in"}

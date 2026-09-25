@@ -26,8 +26,11 @@ export type AuditEntry = {
  * activation the operator just took money for. It logs loudly instead, and
  * Sentry picks it up in Part 7.
  */
+/** A console session says so, and the row is filed as `platform_admin`. */
+type Actor = SessionContext & { console?: true };
+
 export async function recordAudit(
-  actor: SessionContext | null,
+  actor: Actor | null,
   entry: AuditEntry,
 ): Promise<void> {
   try {
@@ -57,13 +60,13 @@ export async function recordAudit(
 }
 
 /**
- * Every signed-in actor is a tenant user now — the platform console, and the
- * `platform_admin` kind that went with it, are gone. The kind is kept on the
- * row because `audit_log` is append-only: history written by the old console
- * still carries it, and re-labelling it is not possible by design.
+ * Who the row says acted. A console session carries `console: true` (see
+ * `PlatformSession`), which is the one thing that tells an owner working
+ * `/admin` apart from the same login working their own till — both have a
+ * `platformRole`, so the claim alone cannot say which door they came through.
  */
-const actorKind = (actor: SessionContext | null): AuditActorKind =>
-  actor ? "tenant_user" : "system";
+const actorKind = (actor: Actor | null): AuditActorKind =>
+  !actor ? "system" : actor.console ? "platform_admin" : "tenant_user";
 
 /**
  * `x-forwarded-for` is a list; the client is the first entry. Stored as `inet`,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
-import { requireBilling } from "@/lib/platform/access";
+import { requireOwnerWrite } from "@/lib/platform/access";
 import {
   checkAccount,
   isWallet,
@@ -43,7 +43,7 @@ export async function saveAccount(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const accountId = text(formData.get("account_id"));
@@ -156,7 +156,7 @@ export async function toggleAccount(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const accountId = text(formData.get("account_id"));
@@ -212,7 +212,7 @@ export async function deleteAccount(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const accountId = text(formData.get("account_id"));

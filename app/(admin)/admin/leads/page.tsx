@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
 import { listLeads } from "@/lib/platform/console";
 
 import { LeadsPanel } from "./leads-panel";
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LeadsPage() {
-  await requirePlatform();
+  await requireScreen("leads");
   const leads = await listLeads();
 
   const fresh = leads.filter((lead) => lead.status === "new").length;

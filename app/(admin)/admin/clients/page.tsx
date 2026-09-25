@@ -4,7 +4,7 @@ import Link from "next/link";
 import { IconPlus } from "@/components/pos/icons";
 import { rupees } from "@/lib/format";
 import { standingOf } from "@/lib/platform/admin";
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
 import { listClients } from "@/lib/platform/console";
 
 import { ClientsPanel } from "./clients-panel";
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ClientsPage() {
-  const session = await requirePlatform();
+  const session = await requireScreen("clients");
   const clients = await listClients();
 
   // Trading is everyone the till still charges for, trials included. MRR is
@@ -42,7 +42,7 @@ export default async function ClientsPage() {
           </p>
         </div>
 
-        {session.platformRole === "super_admin" ? (
+        {session.screens.includes("clients") ? (
           <Link href="/admin/clients/new" className="pos-btn pos-btn-primary">
             <IconPlus className="h-4 w-4" />
             Activate a shop

@@ -18,13 +18,16 @@ import { createClient } from "@/utils/supabase/server";
  * all work.
  *
  * The gate is the same two layers as every other `/admin` read:
- * `requirePlatform()` 404s anybody without a platform role, and the order row is
- * read through the operator's own JWT, so RLS decides whether its path is
- * visible at all. Only the signing is the service role, because storage has no
+ * `requirePlatform()` 404s anybody without a platform role (and the check
+ * below anybody not given Orders or Clients), and the order row is read
+ * through the operator's own JWT, so RLS decides whether its path is visible
+ * at all. Only the signing is the service role, because storage has no
  * policy for the platform role and should not grow one.
  */
 export async function GET(_request: NextRequest, ctx: RouteContext<"/admin/orders/[id]/proof">) {
-  await requirePlatform();
+  // Drawn on the order sheet and on a client's record, so either screen opens it.
+  const session = await requirePlatform();
+  if (!session.screens.some((screen) => screen === "orders" || screen === "clients")) notFound();
 
   const { id } = await ctx.params;
 

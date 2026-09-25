@@ -27,7 +27,7 @@ import { IDLE, type AdminState } from "../state";
  * shared body that takes its actor as a parameter would be an unauthenticated
  * route to activating a tenant as anybody. It lives here, behind
  * `server-only`, and every Server Action that reaches it does its own
- * `requireBilling()` first and hands in the session it was given.
+ * `requireWrite()` first and hands in the session it was given.
  *
  * `0042` split what `activate_tenant` used to do in one breath, because it is
  * not one decision:

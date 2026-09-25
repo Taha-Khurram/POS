@@ -22,9 +22,10 @@ export type AdminState = {
    * A freshly minted password — an operator's on `/admin/team`, a shop owner's
    * at activation or on "New password".
    *
-   * Returned once, on the response to the action that made it, and stored
+   * Returned on the response to the action that made it. An owner's is stored
    * nowhere — GoTrue keeps a hash, the audit entry records that it happened and
-   * not what it was. Lost means a new one, which stops the old one working.
+   * not what it was, and lost means a new one. A team member's is also kept
+   * sealed since `0047`, so Show login on `/admin/team` can return it again.
    *
    * `phone` and `message` ride along for an owner: the login goes to the shop
    * on WhatsApp, already composed, because it is shown exactly once.

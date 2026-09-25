@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { requirePlatform } from "@/lib/platform/access";
+import { requireSuperAdmin } from "@/lib/platform/access";
 import { listClients, listPlans } from "@/lib/platform/console";
 
 import { PlansPanel } from "./plans-panel";
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  * the editor marks the ones the product does not do yet.
  */
 export default async function PlansPage() {
-  const session = await requirePlatform();
+  await requireSuperAdmin();
 
   const [plans, clients] = await Promise.all([listPlans(), listClients()]);
 
@@ -44,7 +44,7 @@ export default async function PlansPage() {
       <PlansPanel
         plans={plans}
         counts={counts}
-        readOnly={session.platformRole !== "super_admin"}
+        readOnly={false}
       />
     </div>
   );

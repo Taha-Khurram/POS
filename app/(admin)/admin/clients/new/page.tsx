@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { IconChevron } from "@/components/pos/icons";
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
 import { listPlans } from "@/lib/platform/console";
 
 import { ActivateForm } from "./activate-form";
@@ -25,8 +24,7 @@ export const metadata: Metadata = {
  * shop that was promised it last month.
  */
 export default async function NewClientPage() {
-  const session = await requirePlatform();
-  if (session.platformRole !== "super_admin") notFound();
+  await requireScreen("clients");
 
   const plans = await listPlans();
 

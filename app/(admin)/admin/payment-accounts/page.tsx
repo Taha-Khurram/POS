@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { requirePlatform } from "@/lib/platform/access";
-import { canBill } from "@/lib/platform/admin";
+import { requireSuperAdmin } from "@/lib/platform/access";
 import { listPaymentAccounts } from "@/lib/platform/console";
 
 import { AccountsPanel } from "./accounts-panel";
@@ -20,7 +19,7 @@ export const metadata: Metadata = {
  * on WhatsApp — and cannot change a digit of it.
  */
 export default async function PaymentAccountsPage() {
-  const session = await requirePlatform();
+  await requireSuperAdmin();
   const accounts = await listPaymentAccounts();
 
   return (
@@ -36,7 +35,7 @@ export default async function PaymentAccountsPage() {
         </p>
       </header>
 
-      <AccountsPanel accounts={accounts} readOnly={!canBill(session.platformRole)} />
+      <AccountsPanel accounts={accounts} readOnly={false} />
     </div>
   );
 }

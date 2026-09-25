@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
 import { isMethod } from "@/lib/platform/admin";
-import { requireBilling, type PlatformSession } from "@/lib/platform/access";
+import { requireWrite, type PlatformSession } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
 
@@ -46,7 +46,8 @@ export async function recordPayment(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  // Recorded from Payments and from a client's record alike.
+  const gate = await requireWrite(["payments", "clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -243,7 +244,8 @@ export async function deletePayment(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  // Recorded from Payments and from a client's record alike.
+  const gate = await requireWrite(["payments", "clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const paymentId = text(formData.get("payment_id"));

@@ -12,7 +12,7 @@ import {
   writeDay,
   type SubscriptionStatus,
 } from "@/lib/platform/admin";
-import { requireBilling, requirePlatform } from "@/lib/platform/access";
+import { requireWrite } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
 import { activateShop, issueOwnerLogin, startPlan } from "./activate";
@@ -23,7 +23,7 @@ import { activateShop, issueOwnerLogin, startPlan } from "./activate";
  * Service role throughout, because `0001_init.sql` revoked insert/update/delete
  * on every platform table from `authenticated` outright — rule 3, so there is
  * one auditable write path rather than a policy surface to get wrong. That
- * makes `requireBilling()` at the top of each action the whole of access
+ * makes `requireWrite(["clients"])` at the top of each action the whole of access
  * control, and it is checked in the action rather than trusted from the rail:
  * a control the browser does not draw is not an endpoint nobody can call.
  *
@@ -74,7 +74,7 @@ export async function activateClient(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   return activateShop(formData, gate.session);
@@ -92,7 +92,7 @@ export async function activateSubscription(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -115,7 +115,7 @@ export async function resetOwnerLogin(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -143,7 +143,7 @@ export async function updateClient(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -219,7 +219,7 @@ export async function updateSubscription(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -303,7 +303,7 @@ export async function setPeriodEnd(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -374,7 +374,7 @@ export async function setSubscriptionStatus(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -471,7 +471,7 @@ export async function pauseClient(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -524,7 +524,7 @@ export async function extendPeriod(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["clients"]);
   if (!gate.ok) return fail(gate.error);
 
   const tenantId = text(formData.get("tenant_id"));
@@ -592,15 +592,16 @@ export async function extendPeriod(
  * Free text, timestamped: who introduced you, what they haggled to, which
  * printer they bought.
  *
- * A support account may write one. It is the one thing on this screen that is
- * not billing, and a support person who cannot leave a note is a support person
- * who keeps the context in their own head.
+ * Anybody given Clients may write one — a member who cannot leave a note is a
+ * member who keeps the context in their own head.
  */
 export async function addNote(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const session = await requirePlatform();
+  const gate = await requireWrite(["clients"]);
+  if (!gate.ok) return fail(gate.error);
+  const { session } = gate;
 
   const tenantId = text(formData.get("tenant_id"));
   const body = longText(formData.get("body"));
@@ -641,7 +642,9 @@ export async function deleteNote(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const session = await requirePlatform();
+  const gate = await requireWrite(["clients"]);
+  if (!gate.ok) return fail(gate.error);
+  const { session } = gate;
 
   const tenantId = text(formData.get("tenant_id"));
   const noteId = text(formData.get("note_id"));

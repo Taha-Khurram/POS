@@ -234,6 +234,23 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* An open dialog holds the page still behind it — every one of them, from
+     one rule, rather than each sheet remembering to lock the body itself (a
+     handful did; most did not, and the list scrolled under the backdrop).
+     `aria-modal` is what marks a real modal here: the bell and the filter
+     panels are popovers, say `role="dialog"` without it, and must not freeze
+     the page they are pinned to. */
+  html:has(.pos-modal, [aria-modal="true"]) {
+    overflow: hidden;
+  }
+
+  /* The console always keeps room for the scrollbar, so locking the page does
+     not take the bar away and slide everything sideways by its width. Scoped
+     to `.pos-root` because the marketing site has no dialogs to lock for. */
+  html:has(.pos-root) {
+    scrollbar-gutter: stable;
+  }
+
   body {
     background-color: var(--color-ink-950);
     color: var(--color-mist-200);
@@ -1147,6 +1164,17 @@
     max-height: min(17rem, 60dvh);
     overflow-y: auto;
     top: calc(100% + 6px);
+  }
+
+  /* `.pos-menu` is declared further down with the same specificity, so its
+     `right: 0` and `min-width: 230px` used to win: a trigger narrower than
+     230px got a menu that ran off its right edge, and one near the edge of the
+     page pushed a horizontal scrollbar onto it and slid the whole screen left.
+     Doubling the class is what makes "exactly as wide as the trigger" true. */
+  .pos-menu.pos-select-menu {
+    left: 0;
+    right: auto;
+    min-width: 0;
   }
 
   /* Hung above the field, for a trigger sitting near the foot of the window.

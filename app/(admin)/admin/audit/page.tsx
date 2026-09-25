@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
-import { requirePlatform } from "@/lib/platform/access";
-import { AUDIT_MAX, listAudit } from "@/lib/platform/console";
+import { requireSuperAdmin } from "@/lib/platform/access";
+import { parseAuditFilters } from "@/lib/platform/audit";
+import { searchAudit } from "@/lib/platform/console";
 
 import { AuditPanel } from "./audit-panel";
 
@@ -18,10 +19,15 @@ export const metadata: Metadata = {
  * `audit_log` is append-only by trigger rather than by policy, because the
  * service role has `bypassrls` and the console writes with it. Nothing in this
  * codebase can edit a row here, which is what makes the screen worth having.
+ *
+ * Every filter is in the URL and every page is read on the server
+ * (`searchAudit`), so the trail is never capped: page 40 is as reachable as
+ * page 1, and "every failed sign-in this week" is a link.
  */
-export default async function AuditPage() {
-  await requirePlatform();
-  const rows = await listAudit();
+export default async function AuditPage({ searchParams }: PageProps<"/admin/audit">) {
+  await requireSuperAdmin();
+  const filters = parseAuditFilters(await searchParams);
+  const result = await searchAudit(filters);
 
   return (
     <div className="space-y-4">
@@ -35,7 +41,7 @@ export default async function AuditPage() {
         </p>
       </header>
 
-      <AuditPanel rows={rows} capped={rows.length >= AUDIT_MAX} />
+      <AuditPanel filters={{ ...filters, page: result.page }} result={result} />
     </div>
   );
 }

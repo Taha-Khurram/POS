@@ -5,9 +5,13 @@ import { useActionState, useState } from "react";
 import { ChartCard } from "@/components/pos/chart-card";
 import { CredentialsCard } from "@/components/pos/credentials-card";
 import { IconKey, IconTrash } from "@/components/pos/icons";
-import { SelectRow } from "@/components/pos/select-field";
 import { useActionToast } from "@/components/pos/toaster";
-import { PLATFORM_ROLES, writeDay } from "@/lib/platform/admin";
+import {
+  OWNER_ONLY,
+  PLATFORM_SCREENS,
+  writeDay,
+  type PlatformScreen,
+} from "@/lib/platform/admin";
 import type { Operator } from "@/lib/platform/console";
 import { STAFF_NAME_MAX } from "@/lib/pos/staff-options";
 
@@ -15,23 +19,20 @@ import {
   addOperator,
   removeOperator,
   resetOperatorPassword,
+  revealOperatorLogin,
   setOperatorActive,
-  setOperatorRole,
+  setOperatorScreens,
 } from "./actions";
-import { IDLE } from "../state";
+import { IDLE, type AdminState } from "../state";
 
 /**
- * Who may work this console.
+ * Who may work this console, and which screens each of them gets.
  *
- * Two levels and no more. Full access does everything; support reads every
- * screen, works the leads and writes notes, and cannot touch a plan, a payment
- * or a shop's standing. The split is money, which is the only split worth
- * having at this size — and every action checks it for itself rather than
- * trusting this screen not to draw a button.
- *
- * The console makes the account: an email, a name, a level, and Flo mints the
- * password, shown once on the same card `/app/employees` hands a cashier's over
- * with. Nothing on this screen can read it back afterwards.
+ * Two questions and one button: a name, the screens to tick, Create. Flo mints
+ * the username and the password and shows them straight away; Show login on
+ * the row brings them back whenever the owner needs to send them again. Every
+ * action checks the owner for itself, and every one of them — Show login
+ * included — is a line in the audit trail.
  */
 export function TeamPanel({
   operators,
@@ -41,138 +42,199 @@ export function TeamPanel({
   selfId: string;
 }) {
   const [state, action, pending] = useActionState(addOperator, IDLE);
-  const [role, setRole] = useState("support");
   const [dismissed, setDismissed] = useState<number | null>(null);
+  // A new form after every success, so the name box and the ticks clear.
+  const [formKey, setFormKey] = useState(0);
+  const [seen, setSeen] = useState<number | null>(null);
+
+  if (state.savedAt !== seen) {
+    setSeen(state.savedAt);
+    if (state.savedAt && !state.error) setFormKey((key) => key + 1);
+  }
 
   useActionToast(state, {
-    saved: state.saved?.label ?? "Account created",
-    failed: "That account was not created",
+    saved: state.saved?.label ?? "Login created",
+    failed: "That login was not created",
   });
 
-  const active = operators.filter((operator) => operator.isActive).length;
-  const off = operators.length - active;
+  const members = operators.filter((operator) => operator.platformRole !== "super_admin");
+  const off = members.filter((operator) => !operator.isActive).length;
 
   return (
     <div className="space-y-4">
-      <ChartCard
-        title="Who works the console"
-        caption={`${operators.length} ${operators.length === 1 ? "person" : "people"}${
-          off ? `, ${off} switched off` : ""
-        }.`}
-      >
-        <ul className="space-y-2">
-          {operators.map((operator) => (
-            <OperatorRow
-              key={operator.userId}
-              operator={operator}
-              self={operator.userId === selfId}
-            />
-          ))}
-        </ul>
-      </ChartCard>
-
-      {state.credentials && state.savedAt !== dismissed ? (
-        <div className="space-y-2">
-          <CredentialsCard {...state.credentials} emailLabel="Email" />
-          <button
-            type="button"
-            className="pos-btn pos-btn-quiet pos-btn-sm"
-            onClick={() => setDismissed(state.savedAt)}
-          >
-            I have sent it — hide this
-          </button>
-        </div>
-      ) : null}
-
-      <form action={action}>
+      <form action={action} key={formKey}>
         <ChartCard
-          title="Add somebody"
-          caption="Flo makes the account and the password. You hand them over."
+          title="Add a team member"
+          caption="Type their name and tick what they may open. Flo makes the username and password."
           footer={
             <button type="submit" className="pos-btn pos-btn-primary" disabled={pending}>
-              {pending ? "Creating…" : "Create account"}
+              {pending ? "Creating…" : "Create login"}
             </button>
           }
         >
           <fieldset disabled={pending} className="space-y-4">
             {state.error ? <p className="pos-note pos-note-bad">{state.error}</p> : null}
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <label className="block">
-                <span className="pos-label">Email they sign in with</span>
-                <input
-                  name="email"
-                  type="email"
-                  required
-                  className="pos-field"
-                  autoComplete="off"
-                />
-              </label>
-
-              <label className="block">
-                <span className="pos-label">Name</span>
-                <input
-                  name="full_name"
-                  required
-                  maxLength={STAFF_NAME_MAX}
-                  className="pos-field"
-                  autoComplete="off"
-                />
-              </label>
-
-              <SelectRow
-                label="What they may do"
-                value={role}
-                onChange={setRole}
-                options={PLATFORM_ROLES.map((entry) => ({
-                  id: entry.id,
-                  label: entry.label,
-                  description: entry.description,
-                }))}
+            <label className="block max-w-sm">
+              <span className="pos-label">Their name</span>
+              <input
+                name="full_name"
+                required
+                maxLength={STAFF_NAME_MAX}
+                className="pos-field"
+                autoComplete="off"
+                placeholder="Ali Raza"
               />
-            </div>
-            <input type="hidden" name="platform_role" value={role} />
+            </label>
 
-            {/* One child: `.pos-note` is a flex row, and bare text beside an
-                <em> becomes three columns. */}
-            <p className="pos-note">
-              <span>
-                Nothing is emailed — the password is shown once, here, for you to
-                send. If the address already signs in to a shop, it is given the
-                console and keeps its own password. Switching somebody off or
-                removing them takes effect from their next click.
-              </span>
-            </p>
+            <ScreenPicker />
           </fieldset>
         </ChartCard>
       </form>
+
+      {state.credentials && state.savedAt !== dismissed ? (
+        <Credentials
+          credentials={state.credentials}
+          onHide={() => setDismissed(state.savedAt)}
+        />
+      ) : null}
+
+      <ChartCard
+        title="Your team"
+        caption={
+          members.length === 0
+            ? "Nobody yet — just you."
+            : `${members.length} ${members.length === 1 ? "person" : "people"}${
+                off ? `, ${off} switched off` : ""
+              }.`
+        }
+      >
+        <ul className="space-y-2">
+          {operators.map((operator) =>
+            operator.platformRole === "super_admin" ? (
+              <OwnerRow
+                key={operator.userId}
+                operator={operator}
+                self={operator.userId === selfId}
+              />
+            ) : (
+              <MemberRow key={operator.userId} operator={operator} />
+            ),
+          )}
+        </ul>
+      </ChartCard>
     </div>
   );
 }
 
 /**
- * One operator: their level, and the three things that can happen to them.
- *
- * Switching off comes before deleting on purpose — it is undoable, it keeps
- * their name on the roster and the trail, and it is the answer for anybody who
- * might be back. Delete asks twice and says what it does to *this* account,
- * because the answer differs for a login that also runs a shop.
+ * The screens as tiles to tick, and the list nobody but the owner gets —
+ * printed under them so nobody goes looking for an Audit trail box.
  */
-function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) {
-  const [roleState, roleAction] = useActionState(setOperatorRole, IDLE);
+function ScreenPicker({ ticked = [] }: { ticked?: readonly PlatformScreen[] }) {
+  return (
+    <div>
+      <p className="pos-label">What they may open</p>
+
+      <div className="mt-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {PLATFORM_SCREENS.map((screen) => (
+          <label
+            key={screen.id}
+            className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-orchid-100 bg-paper-50 px-3 py-2.5 transition-colors hover:border-orchid-300 has-[:checked]:border-orchid-400 has-[:checked]:bg-orchid-50"
+          >
+            <input
+              type="checkbox"
+              name="screens"
+              value={screen.id}
+              defaultChecked={ticked.includes(screen.id)}
+              className="mt-0.5 h-4 w-4 flex-none accent-orchid-700"
+            />
+            <span className="min-w-0">
+              <span className="block text-[0.8125rem] font-semibold text-graphite-900">
+                {screen.label}
+              </span>
+              <span className="block text-[0.6875rem] leading-snug text-graphite-500">
+                {screen.description}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      <p className="mt-2 text-[0.6875rem] text-graphite-500">
+        Only you, always: {OWNER_ONLY.join(", ")}.
+      </p>
+    </div>
+  );
+}
+
+function Credentials({
+  credentials,
+  onHide,
+}: {
+  credentials: NonNullable<AdminState["credentials"]>;
+  onHide: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <CredentialsCard {...credentials} emailLabel="Username" kept />
+      <button type="button" className="pos-btn pos-btn-quiet pos-btn-sm" onClick={onHide}>
+        Hide
+      </button>
+    </div>
+  );
+}
+
+function OwnerRow({ operator, self }: { operator: Operator; self: boolean }) {
+  return (
+    <li className="rounded-xl border border-orchid-100 px-3 py-2">
+      <span className="text-[0.8125rem] text-graphite-900">
+        {operator.fullName}
+        <span className="pos-badge pos-badge-info ml-2">Flo owner</span>
+        {self ? <span className="pos-badge ml-2">You</span> : null}
+      </span>
+      <span className="block truncate text-[0.6875rem] text-graphite-500">
+        {operator.email ? `${operator.email} · ` : ""}Every screen
+      </span>
+    </li>
+  );
+}
+
+/**
+ * One member: which screens they have, and the five things that can happen to
+ * them. Show login is first because it is the one pressed most — a member who
+ * lost the WhatsApp message. Switching off comes before deleting on purpose: it
+ * is undoable and keeps their name on the trail.
+ */
+function MemberRow({ operator }: { operator: Operator }) {
+  const [screensState, screensAction, screensPending] = useActionState(setOperatorScreens, IDLE);
   const [standing, standingAction, standingPending] = useActionState(setOperatorActive, IDLE);
+  const [reveal, revealAction, revealPending] = useActionState(revealOperatorLogin, IDLE);
   const [reset, resetAction, resetPending] = useActionState(resetOperatorPassword, IDLE);
   const [removal, removeAction, removePending] = useActionState(removeOperator, IDLE);
+  const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [hidden, setHidden] = useState<number | null>(null);
+  const [seen, setSeen] = useState<number | null>(null);
 
-  useActionToast(roleState, {
-    saved: roleState.saved?.label ?? "Access changed",
+  // Close the editor once its save lands — during render, React's own answer
+  // for state that follows an action's result.
+  if (screensState.savedAt !== seen) {
+    setSeen(screensState.savedAt);
+    if (screensState.savedAt && !screensState.error) setEditing(false);
+  }
+
+  useActionToast(screensState, {
+    saved: screensState.saved?.label ?? "Access saved",
     failed: "That did not save",
   });
   useActionToast(standing, {
     saved: standing.saved?.label ?? "Saved",
     failed: "That did not save",
+  });
+  useActionToast(reveal, {
+    saved: reveal.saved?.label ?? "Login shown",
+    failed: "No login to show",
   });
   useActionToast(reset, {
     saved: reset.saved?.label ?? "New password made",
@@ -182,6 +244,10 @@ function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) 
     saved: removal.saved?.label ?? "Removed",
     failed: "That account was not removed",
   });
+
+  // Whichever of the two was pressed last is the one on screen.
+  const shown = (reset.savedAt ?? 0) > (reveal.savedAt ?? 0) ? reset : reveal;
+  const labels = PLATFORM_SCREENS.filter((screen) => operator.screens.includes(screen.id));
 
   return (
     <li
@@ -194,7 +260,6 @@ function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) 
           <span className={operator.isActive ? "" : "text-graphite-500"}>
             {operator.fullName}
           </span>
-          {self ? <span className="pos-badge pos-badge-info ml-2">You</span> : null}
           {operator.isActive ? null : (
             <span className="pos-badge pos-badge-warn ml-2">Switched off</span>
           )}
@@ -211,71 +276,96 @@ function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) 
           </span>
         </span>
 
-        <form action={roleAction} className="flex items-center gap-1.5">
-          <input type="hidden" name="user_id" value={operator.userId} />
-
-          {PLATFORM_ROLES.map((entry) => (
-            <button
-              key={entry.id}
-              type="submit"
-              name="platform_role"
-              value={entry.id}
-              disabled={operator.platformRole === entry.id}
-              className={`pos-btn pos-btn-sm ${
-                operator.platformRole === entry.id ? "pos-btn-primary" : "pos-btn-quiet"
-              }`}
-              title={entry.description}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </form>
-
-        {self ? null : (
-          <div className="flex items-center gap-1.5">
-            <form action={standingAction}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {operator.hasShop ? null : (
+            <form action={revealAction}>
               <input type="hidden" name="user_id" value={operator.userId} />
-              <input
-                type="hidden"
-                name="is_active"
-                value={operator.isActive ? "false" : "true"}
-              />
               <button
                 type="submit"
                 className="pos-btn pos-btn-soft pos-btn-sm"
-                disabled={standingPending}
+                disabled={revealPending}
               >
-                {operator.isActive ? "Switch off" : "Switch on"}
+                {revealPending ? "Opening…" : "Show login"}
               </button>
             </form>
+          )}
 
-            {operator.hasShop ? null : (
-              <form action={resetAction}>
-                <input type="hidden" name="user_id" value={operator.userId} />
-                <button
-                  type="submit"
-                  className="pos-icon-btn h-7 w-7"
-                  title="New password"
-                  disabled={resetPending}
-                >
-                  <IconKey className="h-3.5 w-3.5" />
-                  <span className="sr-only">New password for {operator.fullName}</span>
-                </button>
-              </form>
-            )}
+          <button
+            type="button"
+            className="pos-btn pos-btn-quiet pos-btn-sm"
+            onClick={() => setEditing((open) => !open)}
+            aria-expanded={editing}
+          >
+            {editing ? "Close" : "Edit access"}
+          </button>
 
+          <form action={standingAction}>
+            <input type="hidden" name="user_id" value={operator.userId} />
+            <input type="hidden" name="is_active" value={operator.isActive ? "false" : "true"} />
             <button
-              type="button"
-              className="pos-icon-btn h-7 w-7 text-signal-bad"
-              title="Delete"
-              onClick={() => setConfirming(true)}
+              type="submit"
+              className="pos-btn pos-btn-quiet pos-btn-sm"
+              disabled={standingPending}
             >
-              <IconTrash className="h-3.5 w-3.5" />
-              <span className="sr-only">Delete {operator.fullName}</span>
+              {operator.isActive ? "Switch off" : "Switch on"}
             </button>
-          </div>
-        )}
+          </form>
+
+          {operator.hasShop ? null : (
+            <form action={resetAction}>
+              <input type="hidden" name="user_id" value={operator.userId} />
+              <button
+                type="submit"
+                className="pos-icon-btn h-7 w-7"
+                title="New password"
+                disabled={resetPending}
+              >
+                <IconKey className="h-3.5 w-3.5" />
+                <span className="sr-only">New password for {operator.fullName}</span>
+              </button>
+            </form>
+          )}
+
+          <button
+            type="button"
+            className="pos-icon-btn h-7 w-7 text-signal-bad"
+            title="Delete"
+            onClick={() => setConfirming(true)}
+          >
+            <IconTrash className="h-3.5 w-3.5" />
+            <span className="sr-only">Delete {operator.fullName}</span>
+          </button>
+        </div>
       </div>
+
+      {editing ? null : (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {labels.length ? (
+            labels.map((screen) => (
+              <span key={screen.id} className="pos-badge">
+                {screen.label}
+              </span>
+            ))
+          ) : (
+            <span className="text-[0.6875rem] text-graphite-500">No screens</span>
+          )}
+        </div>
+      )}
+
+      {editing ? (
+        <form action={screensAction} className="mt-2 space-y-3 border-t border-orchid-100 pt-3">
+          <input type="hidden" name="user_id" value={operator.userId} />
+          {screensState.error ? (
+            <p className="pos-note pos-note-bad">{screensState.error}</p>
+          ) : null}
+          <fieldset disabled={screensPending}>
+            <ScreenPicker ticked={operator.screens} />
+          </fieldset>
+          <button type="submit" className="pos-btn pos-btn-primary pos-btn-sm" disabled={screensPending}>
+            {screensPending ? "Saving…" : "Save access"}
+          </button>
+        </form>
+      ) : null}
 
       {confirming ? (
         <form
@@ -286,7 +376,7 @@ function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) 
           <p className="min-w-0 flex-1 text-[0.75rem] leading-relaxed text-graphite-700">
             {operator.hasShop
               ? "Their console access goes. Their login and their shop are left exactly as they are."
-              : "The account is deleted for good — that email and password will open nothing. What they did stays in the trail. If they might be back, switch them off instead."}
+              : "The login is deleted for good. What they did stays in the audit trail. If they might be back, switch them off instead."}
           </p>
           <button
             type="submit"
@@ -305,16 +395,9 @@ function OperatorRow({ operator, self }: { operator: Operator; self: boolean }) 
         </form>
       ) : null}
 
-      {reset.credentials && reset.savedAt !== hidden ? (
-        <div className="mt-2 space-y-2">
-          <CredentialsCard {...reset.credentials} emailLabel="Email" />
-          <button
-            type="button"
-            className="pos-btn pos-btn-quiet pos-btn-sm"
-            onClick={() => setHidden(reset.savedAt)}
-          >
-            I have sent it — hide this
-          </button>
+      {shown.credentials && shown.savedAt !== hidden ? (
+        <div className="mt-2">
+          <Credentials credentials={shown.credentials} onHide={() => setHidden(shown.savedAt)} />
         </div>
       ) : null}
     </li>

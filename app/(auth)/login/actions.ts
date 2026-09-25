@@ -3,6 +3,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { recordAudit } from "@/lib/audit";
+import type { SessionContext } from "@/lib/auth";
 import { isWorkEmail } from "@/lib/pos/staff-options";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
@@ -31,10 +33,10 @@ const ALLOWED_EMAILS = ["tahakhurramofficial@gmail.com"];
  * reason staff are: the console creates the account and hands over the
  * password, and a person who then cannot get past this screen was handed a
  * password to nothing. Read on the service role because the caller is not
- * signed in yet — and it answers only yes or no, so it tells a stranger
- * nothing the single rejection message below does not already hide.
+ * signed in yet — and nothing it finds reaches the caller, so it tells a
+ * stranger nothing the single rejection message below does not already hide.
  */
-async function isOperator(email: string): Promise<boolean> {
+async function operatorId(email: string): Promise<string | null> {
   const { data } = await createAdminClient()
     .from("platform_admins")
     .select("user_id")
@@ -42,7 +44,31 @@ async function isOperator(email: string): Promise<boolean> {
     .eq("is_active", true)
     .maybeSingle();
 
-  return Boolean(data);
+  return data ? String(data.user_id) : null;
+}
+
+/**
+ * The audit trail records every console account's sign-ins, and the attempts
+ * that failed — the one row a person trying somebody else's password leaves.
+ * Written as a console actor (`console: true`) so the trail files it beside
+ * everything else they do there.
+ */
+async function recordSignIn(userId: string, email: string, ok: boolean) {
+  const actor: SessionContext & { console: true } = {
+    userId,
+    email,
+    tenantId: null,
+    tenantRole: null,
+    branchId: null,
+    platformRole: null,
+    console: true,
+  };
+
+  await recordAudit(actor, {
+    action: ok ? "platform_admin.signed_in" : "platform_admin.sign_in_failed",
+    subjectType: "platform_admin",
+    subjectId: userId,
+  });
 }
 
 /** Where a successful sign-in lands, for everybody but a console-only operator. */
@@ -72,10 +98,13 @@ export async function signIn(
     error: "That email and password do not match an account.",
   };
 
-  const listed = ALLOWED_EMAILS.includes(email) || isWorkEmail(email);
-  const operator = !listed && (await isOperator(email));
+  const owner = ALLOWED_EMAILS.includes(email);
+  // Asked of every address, not only unlisted ones: a team member's username
+  // is `ali@team.flopos.pk`, which `isWorkEmail` already lets through as if it
+  // were a cashier's — and a cashier lands on `/app`.
+  const operator = await operatorId(email);
 
-  if (!listed && !operator) return rejected;
+  if (!owner && !isWorkEmail(email) && !operator) return rejected;
 
   const supabase = createClient(await cookies());
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -87,9 +116,14 @@ export async function signIn(
   // refuses them here and this never has to ask `profiles` whether they are
   // still employed. That matters: a check made after the session cookie is set
   // is a check that already handed out a session.
-  if (error || !data.session) return rejected;
+  if (error || !data.session) {
+    if (operator) await recordSignIn(operator, email, false);
+    return rejected;
+  }
+
+  if (operator) await recordSignIn(operator, email, true);
 
   // The one fork: an account let in only because it works the console has no
   // shop, and `/app` would greet it with a dashboard of nothing.
-  redirect(operator ? "/admin" : AFTER_SIGN_IN);
+  redirect(operator && !owner ? "/admin" : AFTER_SIGN_IN);
 }

@@ -11,7 +11,7 @@ import {
   PLAN_LIMITS,
   REGISTERS_MAX,
 } from "@/lib/platform/admin";
-import { requireBilling } from "@/lib/platform/access";
+import { requireOwnerWrite } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
 
@@ -105,7 +105,7 @@ export async function savePlan(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const planId = text(formData.get("plan_id"));
@@ -192,7 +192,7 @@ export async function createPlan(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const code = text(formData.get("code")).toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -266,7 +266,7 @@ export async function togglePlan(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireOwnerWrite();
   if (!gate.ok) return fail(gate.error);
 
   const planId = text(formData.get("plan_id"));

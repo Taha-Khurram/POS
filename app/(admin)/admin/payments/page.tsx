@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { rupees } from "@/lib/format";
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
 import { PAYMENTS_MAX, listClients, listOrders, listPayments } from "@/lib/platform/console";
 
 import { PaymentsPanel } from "./payments-panel";
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PaymentsPage() {
-  const session = await requirePlatform();
+  const session = await requireScreen("payments");
 
   const [payments, clients, orders] = await Promise.all([
     listPayments(),
@@ -48,7 +48,7 @@ export default async function PaymentsPage() {
         payments={payments}
         clients={clients}
         orders={waiting}
-        readOnly={session.platformRole !== "super_admin"}
+        readOnly={!session.screens.includes("payments")}
       />
     </div>
   );

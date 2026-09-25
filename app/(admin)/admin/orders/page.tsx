@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
 import { listOrders } from "@/lib/platform/console";
 
 import { OrdersPanel } from "./orders-panel";
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
-  const session = await requirePlatform();
+  const session = await requireScreen("orders");
 
   const orders = await listOrders();
 
@@ -33,7 +33,7 @@ export default async function OrdersPage() {
 
       <OrdersPanel
         orders={orders}
-        readOnly={session.platformRole !== "super_admin"}
+        readOnly={!session.screens.includes("orders")}
       />
     </div>
   );

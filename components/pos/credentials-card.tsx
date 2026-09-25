@@ -30,11 +30,15 @@ export function CredentialsCard({
   email,
   password,
   emailLabel = "Work email",
+  kept = false,
 }: {
   name: string;
   email: string;
   password: string;
   emailLabel?: string;
+  /** `/admin/team` keeps a member's password sealed so Show login can bring
+   *  it back; everywhere else it is shown exactly once. */
+  kept?: boolean;
 }) {
   return (
     <section className="pos-card border-orchid-300 bg-orchid-50/70 p-4">
@@ -61,19 +65,28 @@ export function CredentialsCard({
 
       <p className="mt-3 flex items-start gap-2 text-[0.75rem] leading-relaxed text-graphite-700">
         <IconAlert className="mt-0.5 h-3.5 w-3.5 flex-none text-signal-warn" />
-        <span>
-          This is the only time the password is shown. We keep a scrambled copy
-          we cannot read back, so if it is lost the fix is a new one from{" "}
-          <strong className="font-semibold">New password</strong> on their card —
-          which changes it for them too.
-        </span>
+        {kept ? (
+          <span>
+            You can see this again any time with{" "}
+            <strong className="font-semibold">Show login</strong> on their row. If
+            somebody else may have seen it, press{" "}
+            <strong className="font-semibold">New password</strong> instead.
+          </span>
+        ) : (
+          <span>
+            This is the only time the password is shown. We keep a scrambled copy
+            we cannot read back, so if it is lost the fix is a new one from{" "}
+            <strong className="font-semibold">New password</strong> on their card —
+            which changes it for them too.
+          </span>
+        )}
       </p>
 
       <CopyButton
         className="pos-btn pos-btn-primary mt-3.5 w-full sm:w-auto"
         value={
           `Flo sign-in for ${name}\n\n` +
-          `Email: ${email}\n` +
+          `${emailLabel}: ${email}\n` +
           `Password: ${password}\n\n` +
           `Sign in at flo-pos. Do not share this with anyone else.`
         }

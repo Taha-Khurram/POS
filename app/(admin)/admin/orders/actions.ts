@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
-import { requireBilling } from "@/lib/platform/access";
+import { requireWrite } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
 import { createClientRecord } from "../clients/activate";
@@ -41,7 +41,7 @@ export async function acceptOrder(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["orders"]);
   if (!gate.ok) return fail(gate.error);
 
   const orderId = text(formData.get("order_id"));
@@ -96,7 +96,7 @@ export async function rejectOrder(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const gate = await requireBilling();
+  const gate = await requireWrite(["orders"]);
   if (!gate.ok) return fail(gate.error);
 
   const orderId = text(formData.get("order_id"));

@@ -12,7 +12,7 @@ import { IconMenu, IconRail } from "@/components/pos/icons";
 import { ThemeToggle } from "@/components/pos/theme-toggle";
 import { ToastProvider } from "@/components/pos/toaster";
 import { FloMark } from "@/components/site/flo-mark";
-import type { PlatformRole } from "@/lib/platform/admin";
+import type { PlatformRole, PlatformScreen } from "@/lib/platform/admin";
 
 import { AdminSidebar, type RailCounts } from "./admin-sidebar";
 
@@ -38,6 +38,7 @@ import { AdminSidebar, type RailCounts } from "./admin-sidebar";
 export function AdminShell({
   email,
   role,
+  screens,
   counts,
   initialTight,
   theme,
@@ -45,6 +46,8 @@ export function AdminShell({
 }: {
   email: string | null;
   role: PlatformRole;
+  /** What the rail draws — every screen for the owner. */
+  screens: PlatformScreen[];
   /** The two queues, counted by the layout in the same call as the overview. */
   counts: RailCounts;
   initialTight: boolean;
@@ -132,6 +135,7 @@ export function AdminShell({
           tight={tight}
           email={email}
           role={role}
+          screens={screens}
           counts={counts}
           onNavigate={() => setDrawer(false)}
           onClose={() => setDrawer(false)}

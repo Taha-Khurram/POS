@@ -20,13 +20,15 @@ import { rupees } from "@/lib/format";
 import type { Explainer } from "@/lib/pos/report";
 import {
   EXPLAIN,
+  isOwner,
   lapseOf,
   standingOf,
   writeDay,
   writeExpiry,
   writeWhen,
 } from "@/lib/platform/admin";
-import { requirePlatform } from "@/lib/platform/access";
+import { requireScreen } from "@/lib/platform/access";
+import { describeEntry } from "@/lib/platform/audit";
 import {
   getClient,
   getClientOrder,
@@ -84,15 +86,16 @@ const isTab = (value: unknown): value is TabId =>
  * actions updates a row that does not exist yet, so asking for it falls back
  * to the Overview, where the activation card is the one thing to do.
  *
- * A support account gets every screen and none of the controls, and the cards
- * say so where the buttons would have been. That is presentation; each action
- * checks `requireBilling()` for itself.
+ * A team member given Clients gets the whole record except Activity, which is
+ * the audit trail and the owner's alone. Each action checks `requireWrite()`
+ * for itself.
  */
 export default async function ClientPage({
   params,
   searchParams,
 }: PageProps<"/admin/clients/[id]">) {
-  const session = await requirePlatform();
+  const session = await requireScreen("clients");
+  const owner = isOwner(session.platformRole);
   const { id } = await params;
   const query = await searchParams;
 
@@ -106,10 +109,12 @@ export default async function ClientPage({
     listNotes(client.tenantId),
     listShopUsers(client.tenantId),
     getShopDetails(client.tenantId),
-    listAudit(client.tenantId),
+    // The Activity tab is the audit trail cut to one shop, so it is the
+    // owner's alone — and `audit_log_read_owner` would hand a member nothing.
+    owner ? listAudit(client.tenantId) : Promise.resolve<AuditRow[]>([]),
   ]);
 
-  const readOnly = session.platformRole !== "super_admin";
+  const readOnly = !session.screens.includes("clients");
   const activated = client.status !== null;
   // The badge says what the till is doing now, through the same `lapseOf` the
   // register reads — not whatever the sweep last wrote.
@@ -120,7 +125,9 @@ export default async function ClientPage({
   );
   const held = payments.reduce((sum, payment) => sum + payment.amount, 0);
 
-  const tabs = TABS.filter((item) => item.id !== "standing" || activated);
+  const tabs = TABS.filter(
+    (item) => (item.id !== "standing" || activated) && (item.id !== "activity" || owner),
+  );
   const asked: TabId = isTab(query.tab) ? query.tab : "overview";
   const tab: TabId = tabs.some((item) => item.id === asked) ? asked : "overview";
   const hrefOf = (to: TabId) =>
@@ -339,18 +346,27 @@ function Figure({
 }
 
 function AuditTable({ rows }: { rows: AuditRow[] }) {
+  // The same sentence the audit trail draws, so an entry reads the one way
+  // wherever an operator meets it.
   const columns: Column<AuditRow>[] = [
     {
       key: "what",
-      header: "What",
-      cell: (row) => (
-        <span className="font-mono text-[0.75rem] text-graphite-900">{row.action}</span>
-      ),
-    },
-    {
-      key: "who",
-      header: "Who",
-      cell: (row) => <span className="text-graphite-700">{row.actorEmail}</span>,
+      header: "What happened",
+      cell: (row) => {
+        const line = describeEntry(row);
+        return (
+          <span className="block whitespace-normal">
+            <span className="text-graphite-900">
+              <span className="font-semibold">{line.actor}</span> {line.did}
+            </span>
+            {line.detail ? (
+              <span className="mt-0.5 block text-[0.75rem] text-graphite-500">
+                {line.detail}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       key: "when",

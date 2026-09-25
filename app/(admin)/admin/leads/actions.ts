@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { recordAudit } from "@/lib/audit";
 import { isLeadStatus, leadStatusOf } from "@/lib/platform/admin";
-import { requirePlatform } from "@/lib/platform/access";
+import { requireWrite } from "@/lib/platform/access";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { IDLE, type AdminState } from "../state";
 
@@ -26,7 +26,9 @@ export async function updateLead(
   _previous: AdminState,
   formData: FormData,
 ): Promise<AdminState> {
-  const session = await requirePlatform();
+  const gate = await requireWrite(["leads"]);
+  if (!gate.ok) return fail(gate.error);
+  const { session } = gate;
 
   const leadId = text(formData.get("lead_id"));
   const status = text(formData.get("status"));

@@ -280,34 +280,78 @@ export const isLeadStatus = (value: string): value is LeadStatus =>
 
 export type PlatformRole = "super_admin" | "support";
 
-export const PLATFORM_ROLES = [
-  {
-    id: "super_admin",
-    label: "Full access",
-    description: "Activates shops, changes plans, takes money.",
-  },
-  {
-    id: "support",
-    label: "Support",
-    description: "Reads everything, answers WhatsApp. Touches no billing.",
-  },
-] as const satisfies readonly Option<PlatformRole>[];
-
-export const isPlatformRole = (value: string): value is PlatformRole =>
-  PLATFORM_ROLES.some((role) => role.id === value);
+/**
+ * `super_admin` is the Flo owner and `support` is everybody the owner adds on
+ * `/admin/team`. The names are `0001_init.sql`'s and stay; what a `support`
+ * row may do stopped being a level in `0047` and became the screens ticked for
+ * it, below.
+ */
+export const isOwner = (role: PlatformRole | null) => role === "super_admin";
 
 /**
- * What a support account may not do.
+ * The screens the owner can hand a team member (`0047`).
  *
- * The split is money, and only money: anything that changes what a shop pays,
- * what it is entitled to, or whether it can trade. A support account exists so
- * somebody can answer a WhatsApp question at 11 pm without being able to
- * activate a free year for their cousin — so it reads every screen, writes
- * notes and works the leads list, and every action in `clients/actions.ts`,
- * `plans/actions.ts`, `orders/actions.ts` and `payments/actions.ts` checks for
- * `super_admin` itself rather than trusting the rail not to draw the button.
+ * A ticked screen is the whole screen — its reads and its buttons — because a
+ * tab somebody may look at and not use is a tab they ring the owner about. The
+ * keys are the migration's check constraint, and have to stay identical to it.
+ *
+ * Everything not on this list belongs to the owner alone: `OWNER_ONLY`.
  */
-export const canBill = (role: PlatformRole | null) => role === "super_admin";
+export type PlatformScreen = "overview" | "clients" | "orders" | "payments" | "leads";
+
+export const PLATFORM_SCREENS = [
+  {
+    id: "overview",
+    label: "Overview",
+    description: "The money strip, the trend and who needs a call.",
+    href: "/admin",
+  },
+  {
+    id: "clients",
+    label: "Clients",
+    description: "Every shop: activate, change a plan, record a payment, reset a login.",
+    href: "/admin/clients",
+  },
+  {
+    id: "orders",
+    label: "Orders",
+    description: "Check a buyer's transfer and accept or reject the order.",
+    href: "/admin/orders",
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    description: "Record money that landed and match it to a shop.",
+    href: "/admin/payments",
+  },
+  {
+    id: "leads",
+    label: "Leads",
+    description: "Call back demo requests and mark how it went.",
+    href: "/admin/leads",
+  },
+] as const satisfies readonly (Option<PlatformScreen> & { href: string })[];
+
+/**
+ * Never grantable. Team and the audit trail because they are how the owner
+ * watches the team; Plans because a price there is printed on `/pricing` the
+ * same minute; Payment accounts because a wrong IBAN is a buyer's money in a
+ * stranger's account; and the owner's own shop because it is theirs.
+ */
+export const OWNER_ONLY = ["Team", "Audit trail", "Plans", "Payment accounts", "Your own shop"];
+
+export const isPlatformScreen = (value: string): value is PlatformScreen =>
+  PLATFORM_SCREENS.some((screen) => screen.id === value);
+
+/** The owner gets every screen; a member gets what was ticked, in rail order. */
+export const screensOf = (role: PlatformRole, stored: readonly string[]): PlatformScreen[] =>
+  PLATFORM_SCREENS.map((screen) => screen.id).filter(
+    (id) => isOwner(role) || stored.includes(id),
+  );
+
+/** Where a member lands: the first screen they were given, or null if none. */
+export const homeOf = (screens: readonly PlatformScreen[]): string | null =>
+  PLATFORM_SCREENS.find((screen) => screens.includes(screen.id))?.href ?? null;
 
 /* -------------------------------------------------------------------------- */
 /* The plan's feature list                                                    */

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 
 import { PlatformTrend } from "@/components/admin/platform-trend";
 import { ChartCard } from "@/components/pos/chart-card";
@@ -16,7 +17,7 @@ import {
 import { KpiCard } from "@/components/pos/kpi-card";
 import { rupees } from "@/lib/format";
 import { delta } from "@/lib/pos/dashboard";
-import { EXPLAIN, standingOf, writeExpiry, writeWhen } from "@/lib/platform/admin";
+import { EXPLAIN, homeOf, standingOf, writeExpiry, writeWhen } from "@/lib/platform/admin";
 import { requirePlatform } from "@/lib/platform/access";
 import { getOverview, listClients, type Client } from "@/lib/platform/console";
 
@@ -57,7 +58,16 @@ export const metadata: Metadata = {
  * merely sold.
  */
 export default async function AdminHomePage() {
-  await requirePlatform();
+  const session = await requirePlatform();
+
+  // `/admin` is where every sign-in lands, so a member who was not given the
+  // Overview is sent on to the first screen they were given rather than
+  // shown a page that does not exist.
+  if (!session.screens.includes("overview")) {
+    const home = homeOf(session.screens);
+    if (!home) notFound();
+    redirect(home);
+  }
 
   const [overview, clients] = await Promise.all([getOverview(), listClients()]);
 

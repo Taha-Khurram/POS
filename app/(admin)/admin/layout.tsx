@@ -58,6 +58,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       <AdminShell
         email={session.email}
         role={session.platformRole}
+        screens={session.screens}
         counts={{
           ordersToVerify: overview.ordersToVerify,
           leadsNew: overview.leadsNew,
